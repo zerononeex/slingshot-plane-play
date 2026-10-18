@@ -1,0 +1,23 @@
+Slingshot Plane — asset credits
+================================
+
+3D MODELS
+---------
+None yet. The plane, trees, rocks, clouds, coins, flags and slingshot are all
+built in code from three.js primitives (see site/js/plane.js and site/js/world.js).
+
+The build sandbox could not reach Kenney (kenney.nl), Quaternius (quaternius.com)
+or Poly Pizza (poly.pizza), and no CC0 aeroplane model was found in the mirrors it
+could reach, so no GLB model ships in v0. When a CC0 plane model is added, list it
+here like this:
+
+  plane.glb — "<model name>" by <author>, <source URL>, licence CC0 1.0
+
+CODE LIBRARIES
+--------------
+three.js r170 (site/vendor/three.module.min.js) — MIT licence, © three.js authors.
+See site/vendor/three.LICENSE.txt.
+
+SOUND
+-----
+All sounds are synthesised live with the WebAudio API (site/js/audio.js). No audio files.

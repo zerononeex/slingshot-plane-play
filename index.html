@@ -1,6 +1,176 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#9fdcff">
 <title>Slingshot Plane</title>
-<style>body{font-family:system-ui;background:#79b5e0;color:#123;text-align:center;padding:3rem 1rem}h1{font-size:2rem}</style>
-</head><body><h1>🛩️ Slingshot Plane</h1><p>Coming soon — the plane is still on the slingshot.</p></body></html>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<style>
+  :root {
+    --ink: #24324a;
+    --sky: #9fdcff;
+    --gold: #ffc61a;
+    --go: #3ccf5a;
+    --go-dark: #24a33f;
+    --pink: #ff4fa3;
+    --panel: rgba(255, 255, 255, 0.92);
+    --font: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: var(--sky);
+    font-family: var(--font); color: var(--ink);
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    overscroll-behavior: none;
+  }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .screen, #hud { position: fixed; inset: 0; }
+  .screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2.2vh; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    text-align: center;
+  }
+  .screen[hidden], #hud[hidden], [hidden] { display: none !important; }
+  .panel {
+    background: var(--panel); border-radius: 28px; padding: 3vh 24px;
+    box-shadow: 0 8px 0 rgba(0, 0, 0, 0.12); width: min(92vw, 460px);
+    display: flex; flex-direction: column; align-items: center; gap: 2vh;
+  }
+  h1 {
+    margin: 0; font-size: clamp(40px, 7vh, 72px); line-height: 1; color: #fff;
+    text-shadow: 0 4px 0 var(--pink), 0 8px 0 rgba(0, 0, 0, 0.15);
+    letter-spacing: 1px;
+  }
+  h2 { margin: 0; font-size: clamp(30px, 5vh, 52px); line-height: 1.05; }
+  .stat-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .stat { background: #fff; border-radius: 18px; padding: 8px 16px; font-size: clamp(18px, 2.6vh, 26px); font-weight: 800; box-shadow: 0 4px 0 rgba(0,0,0,0.1); }
+  .stat small { display: block; font-size: 0.6em; opacity: 0.6; font-weight: 700; }
+  .coin-dot { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%; background: var(--gold); border: 3px solid #e59f00; vertical-align: -0.05em; margin-right: 0.25em; }
+  button {
+    font-family: inherit; font-weight: 900; border: 0; border-radius: 22px; cursor: pointer;
+    color: #fff; background: var(--go); box-shadow: 0 7px 0 var(--go-dark);
+    font-size: clamp(22px, 3.4vh, 34px); padding: 16px 28px; min-height: 64px; touch-action: manipulation;
+  }
+  button:active { transform: translateY(5px); box-shadow: 0 2px 0 var(--go-dark); }
+  button:disabled { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; color: #eef1f4; cursor: default; transform: none; }
+  .big { font-size: clamp(36px, 6vh, 60px); padding: 2.2vh 56px; border-radius: 30px; }
+  .alt { background: #4fa8ff; box-shadow: 0 7px 0 #2f7fd1; }
+  .alt:active { box-shadow: 0 2px 0 #2f7fd1; }
+  #btn-engine { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; font-size: clamp(18px, 2.8vh, 28px); }
+  #btn-engine:disabled { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; }
+  #btn-engine b { font-weight: 900; }
+  .pips { display: flex; gap: 8px; }
+  .pip { width: 22px; height: 22px; border-radius: 50%; background: #dfe5ea; border: 3px solid #c3ccd4; }
+  .pip.on { background: #ff8a3d; border-color: #d9661b; }
+
+  /* HUD */
+  #hud { pointer-events: none; }
+  .hud-top {
+    position: absolute; left: 0; right: 0; top: max(12px, env(safe-area-inset-top));
+    display: flex; justify-content: space-between; align-items: flex-start; padding: 0 14px;
+  }
+  .chip { background: var(--panel); border-radius: 20px; padding: 8px 16px; font-weight: 900; font-size: clamp(22px, 3.6vh, 36px); box-shadow: 0 4px 0 rgba(0,0,0,0.12); }
+  #hud-dist { position: absolute; left: 50%; transform: translateX(-50%); font-size: clamp(30px, 5vh, 52px); }
+  #btn-pause { pointer-events: auto; min-height: 0; width: 60px; height: 60px; padding: 0; font-size: 26px; border-radius: 18px; background: var(--panel); color: var(--ink); box-shadow: 0 4px 0 rgba(0,0,0,0.15); }
+  .speed { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(18px, env(safe-area-inset-bottom)); width: min(70vw, 420px); }
+  .speed-label { font-weight: 900; font-size: 18px; text-align: center; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+  .bar { height: 26px; border-radius: 14px; background: rgba(255,255,255,0.75); overflow: hidden; border: 4px solid #fff; }
+  #speed-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ccf5a, #ffc61a); border-radius: 10px; transition: width 0.1s linear; }
+  #speed-fill.slow { background: #ff6b6b; }
+  #aim { position: absolute; inset: 0; }
+  .aim-hint { position: absolute; left: 0; right: 0; bottom: 18vh; text-align: center; }
+  .aim-hint .chip { display: inline-block; font-size: clamp(22px, 3.4vh, 34px); }
+  .arrow { font-size: 48px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.2); animation: nudge 1s ease-in-out infinite; }
+  @keyframes nudge { 50% { transform: translateY(14px); } }
+  .power { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); width: 34px; height: 36vh; border-radius: 18px; background: rgba(255,255,255,0.75); border: 4px solid #fff; overflow: hidden; display: flex; align-items: flex-end; }
+  #power-fill { width: 100%; height: 0; background: linear-gradient(0deg, #ffc61a, #ff4f4f); }
+  #power-fill.weak { background: #b9c2cc; }
+  #stick { position: fixed; width: 0; height: 0; pointer-events: none; }
+  #stick::before { content: ""; position: absolute; width: 150px; height: 150px; left: -75px; top: -75px; border-radius: 50%; border: 5px solid rgba(255,255,255,0.6); }
+  #stick-knob { position: absolute; left: 0; top: 0; width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.75); transform: translate(-50%, -50%); }
+  #pause { background: rgba(36, 50, 74, 0.35); }
+  .newbest { background: var(--pink); color: #fff; border-radius: 16px; padding: 6px 16px; font-weight: 900; font-size: clamp(20px, 3vh, 30px); transform: rotate(-4deg); }
+  .msg { font-size: clamp(18px, 2.6vh, 26px); font-weight: 800; margin: 0; }
+  .btn-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  @media (orientation: landscape) and (max-height: 520px) {
+    .screen { gap: 1.4vh; }
+    .panel { padding: 2vh 20px; gap: 1.4vh; }
+    h1 { font-size: 11vh; }
+    .big { font-size: 8vh; padding: 1.6vh 40px; }
+  }
+</style>
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<section id="title" class="screen">
+  <h1>Slingshot<br>Plane</h1>
+  <div class="stat-row">
+    <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="title-coins">0</span></div>
+    <div class="stat"><small>BEST</small><span id="title-best">0</span> m</div>
+  </div>
+  <button id="btn-fly" class="big">FLY!</button>
+  <div class="panel">
+    <div class="pips" id="engine-pips"></div>
+    <button id="btn-engine">ENGINE</button>
+  </div>
+</section>
+
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div class="chip"><span class="coin-dot"></span><span id="hud-coins">0</span></div>
+    <div class="chip" id="hud-dist">0 m</div>
+    <button id="btn-pause" aria-label="Pause">❚❚</button>
+  </div>
+  <div id="aim">
+    <div class="power"><div id="power-fill"></div></div>
+    <div class="aim-hint">
+      <div class="arrow">▼</div>
+      <div class="chip">Pull back, then let go!</div>
+    </div>
+  </div>
+  <div id="hud-flight" hidden>
+    <div class="speed">
+      <div class="speed-label">SPEED</div>
+      <div class="bar"><div id="speed-fill"></div></div>
+    </div>
+  </div>
+</div>
+<div id="stick" hidden><div id="stick-knob"></div></div>
+
+<section id="pause" class="screen" hidden>
+  <div class="panel">
+    <h2>Paused</h2>
+    <button id="btn-resume" class="big">PLAY</button>
+    <button id="btn-pause-home" class="alt">HOME</button>
+  </div>
+</section>
+
+<section id="results" class="screen" hidden>
+  <div class="panel">
+    <div class="newbest" id="res-newbest" hidden>NEW BEST!</div>
+    <h2>You flew <span id="res-dist">0</span> m!</h2>
+    <p class="msg" id="res-msg"></p>
+    <div class="stat-row">
+      <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
+      <div class="stat"><small>DISTANCE BONUS</small>+<span id="res-bonus">0</span></div>
+      <div class="stat"><small>EARNED</small><span class="coin-dot"></span><span id="res-total">0</span></div>
+    </div>
+    <div class="stat"><small>BEST</small><span id="res-best">0</span> m</div>
+    <div class="btn-row">
+      <button id="btn-again" class="big">FLY AGAIN</button>
+      <button id="btn-home" class="alt">HOME</button>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
