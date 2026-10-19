@@ -50,14 +50,44 @@ export const FLIGHT = {
   tumbleTime: 1.6,      // s of tumbling before results
 };
 
-// ENGINE upgrade. Index 0 = level 1. `cost` = coins to BUY that level.
+// ENGINE upgrade = "fly longer once you're up". Index 0 = level 1.
+// `cost` = coins to BUY that level. Since v0.2 the engine changes ONLY decay
+// (launch power moved to the SLINGSHOT upgrade).
 export const ENGINE = [
-  { level: 1, launchMax: 30, decay: 0.90, cost: 0 },
-  { level: 2, launchMax: 34, decay: 0.78, cost: 40 },
-  { level: 3, launchMax: 38, decay: 0.66, cost: 100 },
-  { level: 4, launchMax: 43, decay: 0.54, cost: 200 },
-  { level: 5, launchMax: 48, decay: 0.42, cost: 400 },
+  { level: 1, decay: 0.90, cost: 0 },
+  { level: 2, decay: 0.78, cost: 40 },
+  { level: 3, decay: 0.66, cost: 100 },
+  { level: 4, decay: 0.54, cost: 200 },
+  { level: 5, decay: 0.42, cost: 400 },
 ];
+
+// SLINGSHOT upgrade = "a stronger launch". launchMax = m/s at full pull.
+// momentum = seconds after launch with no decay/drag (dive/climb still work).
+// The rest is how the slingshot on the ramp looks at that level.
+export const SLING = [
+  { level: 1, launchMax: 30, momentum: 0,   cost: 0,   bandColor: 0xd9b77a, bandScale: 1.0, doubleBands: false, frameScale: 1.0 }, // plain rope
+  { level: 2, launchMax: 35, momentum: 2.0, cost: 40,  bandColor: 0xe0342f, bandScale: 1.3, doubleBands: false, frameScale: 1.0 }, // red
+  { level: 3, launchMax: 40, momentum: 2.5, cost: 100, bandColor: 0xe0342f, bandScale: 1.3, doubleBands: true,  frameScale: 1.0 }, // double red
+  { level: 4, launchMax: 46, momentum: 3.0, cost: 200, bandColor: 0xffc61a, bandScale: 1.6, doubleBands: true,  frameScale: 1.0 }, // golden
+  { level: 5, launchMax: 52, momentum: 3.5, cost: 400, bandColor: 0xffc61a, bandScale: 1.9, doubleBands: true,  frameScale: 1.6 }, // golden + chunky frame
+];
+
+// PLANE PARTS — one-time buys, in this order. Start = body + propeller only.
+export const PARTS = [
+  { id: 'leftWing',  name: 'LEFT WING',  cost: 50,  blurb: 'A wing lifts you up — but one wing pulls you left!' },
+  { id: 'rightWing', name: 'RIGHT WING', cost: 120, blurb: 'Two wings balance you and lift you even more.' },
+  { id: 'tail',      name: 'TAIL',       cost: 250, blurb: 'The tail keeps you steady and quick.' },
+];
+
+// What the parts do to the flight. No parts = exactly the v0 flight.
+export const PART_PHYSICS = {
+  // sinkMul scales the extra stall sink; climbCostMul scales the speed lost to climbing.
+  noWings:   { sinkMul: 1.0,  climbCostMul: 1.0 },
+  leftWing:  { sinkMul: 0.85, climbCostMul: 0.85, driftSpeed: -1.8, rollDeg: 6 }, // gentle pull + roll to the LEFT
+  bothWings: { sinkMul: 0.75, climbCostMul: 0.75 },
+  tail:      { stallSpeed: 9, stallSinkMul: 0.7, responseMul: 1.15 },
+  noTailWobbleDeg: 2, // visual sway (roll + pitch) without a tail; the tail removes it
+};
 
 // Coins.
 export const COINS = {

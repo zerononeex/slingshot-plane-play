@@ -60,12 +60,40 @@
   .big { font-size: clamp(36px, 6vh, 60px); padding: 2.2vh 56px; border-radius: 30px; }
   .alt { background: #4fa8ff; box-shadow: 0 7px 0 #2f7fd1; }
   .alt:active { box-shadow: 0 2px 0 #2f7fd1; }
-  #btn-engine { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; font-size: clamp(18px, 2.8vh, 28px); }
-  #btn-engine:disabled { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; }
-  #btn-engine b { font-weight: 900; }
-  .pips { display: flex; gap: 8px; }
-  .pip { width: 22px; height: 22px; border-radius: 50%; background: #dfe5ea; border: 3px solid #c3ccd4; }
+  .upgrades { display: flex; gap: 12px; width: 100%; }
+  .upgrade { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+  .up-btn { width: 100%; padding: 10px 6px; min-height: 0; font-size: clamp(16px, 2.3vh, 24px); line-height: 1.2; }
+  .up-btn b { font-weight: 900; }
+  #btn-engine { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; }
+  #btn-sling { background: #b45cff; box-shadow: 0 7px 0 #8a35d6; }
+  .up-btn:disabled, #btn-engine:disabled, #btn-sling:disabled { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; }
+  .up-note { font-size: clamp(12px, 1.6vh, 16px); font-weight: 800; opacity: 0.65; }
+  .pips { display: flex; gap: 6px; }
+  .pip { width: 18px; height: 18px; border-radius: 50%; background: #dfe5ea; border: 3px solid #c3ccd4; }
   .pip.on { background: #ff8a3d; border-color: #d9661b; }
+  #sling-pips .pip.on { background: #b45cff; border-color: #8a35d6; }
+  .build { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+  .build-title { font-weight: 900; font-size: clamp(16px, 2.2vh, 22px); letter-spacing: 1px; }
+  .parts { display: flex; gap: 8px; }
+  .part {
+    flex: 1; min-width: 0; min-height: 0; padding: 8px 4px; border-radius: 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-size: clamp(13px, 1.8vh, 18px); line-height: 1.15; color: var(--ink);
+    background: #fff; box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea;
+  }
+  .part:active { transform: translateY(3px); box-shadow: 0 2px 0 #c3ccd4; }
+  .part-icon { font-size: 1.4em; color: #ffb000; }
+  .part-name { font-weight: 900; }
+  .part-cost { font-weight: 900; font-size: 1.1em; }
+  .part-note { font-weight: 700; font-size: 0.75em; opacity: 0.7; }
+  .part.owned { background: #e6f9ea; border-color: var(--go); box-shadow: 0 5px 0 var(--go-dark); }
+  .part.owned .part-cost { color: var(--go-dark); font-size: 1.4em; }
+  .part.next { border-color: #ffc61a; animation: glow 1.2s ease-in-out infinite; }
+  .part.next:disabled { animation: none; }
+  .part.locked { opacity: 0.5; filter: grayscale(1); }
+  .part:disabled { cursor: default; transform: none; color: var(--ink); background: #fff; box-shadow: 0 5px 0 #c3ccd4; }
+  .part.owned:disabled { background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
+  @keyframes glow { 50% { box-shadow: 0 5px 0 #e59f00, 0 0 18px 4px rgba(255, 198, 26, 0.85); } }
 
   /* HUD */
   #hud { pointer-events: none; }
@@ -81,6 +109,8 @@
   .bar { height: 26px; border-radius: 14px; background: rgba(255,255,255,0.75); overflow: hidden; border: 4px solid #fff; }
   #speed-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ccf5a, #ffc61a); border-radius: 10px; transition: width 0.1s linear; }
   #speed-fill.slow { background: #ff6b6b; }
+  #speed-fill.momentum { background: linear-gradient(90deg, #ffd23f, #ffb000); box-shadow: 0 0 14px 4px rgba(255, 198, 26, 0.9); }
+  .bar:has(#speed-fill.momentum) { border-color: #ffd23f; box-shadow: 0 0 16px rgba(255, 198, 26, 0.9); }
   #aim { position: absolute; inset: 0; }
   .aim-hint { position: absolute; left: 0; right: 0; bottom: 18vh; text-align: center; }
   .aim-hint .chip { display: inline-block; font-size: clamp(22px, 3.4vh, 34px); }
@@ -118,8 +148,26 @@
   </div>
   <button id="btn-fly" class="big">FLY!</button>
   <div class="panel">
-    <div class="pips" id="engine-pips"></div>
-    <button id="btn-engine">ENGINE</button>
+    <div class="upgrades">
+      <div class="upgrade">
+        <div class="pips" id="sling-pips"></div>
+        <button id="btn-sling" class="up-btn">SLINGSHOT</button>
+        <div class="up-note">A stronger launch</div>
+      </div>
+      <div class="upgrade">
+        <div class="pips" id="engine-pips"></div>
+        <button id="btn-engine" class="up-btn">ENGINE</button>
+        <div class="up-note">Fly longer once you're up</div>
+      </div>
+    </div>
+    <div class="build">
+      <div class="build-title">BUILD YOUR PLANE</div>
+      <div class="parts">
+        <button class="part" data-part="leftWing"><span class="part-icon">◀▬</span><span class="part-name">LEFT WING</span><span class="part-cost"></span><span class="part-note"></span></button>
+        <button class="part" data-part="rightWing"><span class="part-icon">▬▶</span><span class="part-name">RIGHT WING</span><span class="part-cost"></span><span class="part-note"></span></button>
+        <button class="part" data-part="tail"><span class="part-icon">▲</span><span class="part-name">TAIL</span><span class="part-cost"></span><span class="part-note"></span></button>
+      </div>
+    </div>
   </div>
 </section>
 

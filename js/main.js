@@ -1,9 +1,13 @@
 // Game shell: screens, input, camera, and the frame loop.
 import * as THREE from 'three';
-import { PLANE_TUNE, LAUNCH, FLIGHT, ENGINE, RENDER } from './config.js';
-import { createFlight, stepFlight, flightParams, launchSpeedFor } from './physics.js';
+import { PLANE_TUNE, LAUNCH, FLIGHT, SLING, PARTS, PART_PHYSICS, RENDER } from './config.js';
+import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects } from './physics.js';
 import { groundAt } from './terrain.js';
-import { engineStats, nextEngineCost, canBuyEngine, buyEngine, applyRun, runPayout, MAX_ENGINE } from './economy.js';
+import {
+  engineStats, nextEngineCost, canBuyEngine, buyEngine, MAX_ENGINE,
+  slingStats, nextSlingCost, canBuySling, buySling, MAX_SLING,
+  nextPart, canBuyPart, buyPart, applyRun, runPayout,
+} from './economy.js';
 import { loadSave, writeSave } from './save.js';
 import { buildPlane } from './plane.js';
 import { createWorld } from './world.js';
@@ -13,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const DEG = Math.PI / 180;
 const STEP = 1 / 60;
 const PULL_BACK_M = 5;            // how far the plane slides back at full pull
-const TOP_SPEED = ENGINE[ENGINE.length - 1].launchMax;
+const TOP_SPEED = SLING[SLING.length - 1].launchMax;
 
 // ---------- renderer / scene ----------
 const canvas = $('game');
@@ -58,41 +62,73 @@ function showScreen(id) {
   $('hud').hidden = !(id === 'hud');
 }
 
-function refreshTitle() {
-  $('title-coins').textContent = save.coins;
-  $('title-best').textContent = save.best;
-  const cost = nextEngineCost(save.engine);
-  const btn = $('btn-engine');
+function renderUpgrade(name, btnId, pipsId, level, max, cost, canBuy) {
+  const btn = $(btnId);
   if (cost === null) {
-    btn.innerHTML = `ENGINE <b>Lv ${save.engine}</b> · MAX ★`;
+    btn.innerHTML = `${name}<br><b>Lv ${level}</b> · MAX ★`;
     btn.disabled = true;
   } else {
-    btn.innerHTML = `ENGINE <b>Lv ${save.engine} ▸ ${save.engine + 1}</b> · <span class="coin-dot"></span>${cost}`;
-    btn.disabled = !canBuyEngine(save);
+    btn.innerHTML = `${name}<br><b>Lv ${level} ▸ ${level + 1}</b> · <span class="coin-dot"></span>${cost}`;
+    btn.disabled = !canBuy;
   }
-  const pips = $('engine-pips');
+  const pips = $(pipsId);
   pips.textContent = '';
-  for (let i = 1; i <= MAX_ENGINE; i++) {
+  for (let i = 1; i <= max; i++) {
     const p = document.createElement('span');
-    p.className = i <= save.engine ? 'pip on' : 'pip';
+    p.className = i <= level ? 'pip on' : 'pip';
     pips.appendChild(p);
   }
 }
 
-$('btn-engine').addEventListener('click', () => {
-  const next = buyEngine(save);
+function renderParts() {
+  const next = nextPart(save.parts);
+  for (const part of PARTS) {
+    const card = document.querySelector(`.part[data-part="${part.id}"]`);
+    const owned = !!save.parts[part.id];
+    const isNext = next && next.id === part.id;
+    card.className = `part ${owned ? 'owned' : isNext ? 'next' : 'locked'}`;
+    card.disabled = owned || !isNext || !canBuyPart(save, part.id);
+    card.querySelector('.part-cost').innerHTML = owned
+      ? '✓'
+      : isNext ? `<span class="coin-dot"></span>${part.cost}` : '🔒';
+    card.querySelector('.part-note').textContent = owned || isNext ? part.blurb : `Buy the ${next.name} first`;
+  }
+}
+
+// Make the 3D scene match the save: owned parts on the plane, sling look on the ramp.
+function applyLooks() {
+  plane.setParts(save.parts);
+  world.setSlingLook(slingStats(save.slingLevel));
+}
+
+function refreshTitle() {
+  $('title-coins').textContent = save.coins;
+  $('title-best').textContent = save.best;
+  renderUpgrade('ENGINE', 'btn-engine', 'engine-pips', save.engine, MAX_ENGINE, nextEngineCost(save.engine), canBuyEngine(save));
+  renderUpgrade('SLINGSHOT', 'btn-sling', 'sling-pips', save.slingLevel, MAX_SLING, nextSlingCost(save.slingLevel), canBuySling(save));
+  renderParts();
+  applyLooks();
+}
+
+function purchase(next) {
   if (!next) return;
   save = next;
   writeSave(save);
   sfx.coin();
   refreshTitle();
-});
+}
+$('btn-engine').addEventListener('click', () => purchase(buyEngine(save)));
+$('btn-sling').addEventListener('click', () => purchase(buySling(save)));
+for (const card of document.querySelectorAll('.part')) {
+  card.addEventListener('click', () => purchase(buyPart(save, card.dataset.part)));
+}
 
 // ---------- run state ----------
 let mode = 'title';      // title | aim | fly | results
 let paused = false;
 let flight = null;
 let params = null;
+let effects = null;
 let runCoins = 0;
 let flop = false;
 let endTimer = 0;
@@ -108,8 +144,9 @@ function restPose(d) {
 
 function startRun() {
   world.reset();
-  const st = engineStats(save.engine);
-  params = flightParams(FLIGHT, st);
+  effects = partEffects(save.parts, PART_PHYSICS);
+  params = flightParams(FLIGHT, engineStats(save.engine), effects);
+  applyLooks();
   flight = null;
   runCoins = 0;
   flop = false;
@@ -130,11 +167,11 @@ function startRun() {
 }
 
 function launch() {
-  const st = engineStats(save.engine);
+  const sling = slingStats(save.slingLevel);
   flop = pull < LAUNCH.weakPull;
-  const speed = launchSpeedFor(pull, LAUNCH, st);
+  const speed = launchSpeedFor(pull, LAUNCH, sling);
   const p = restPose(-pull * PULL_BACK_M);
-  flight = createFlight({ speed, y: p.y, d: p.d, pitchDeg: flop ? 0 : LAUNCH.pitchDeg });
+  flight = createFlight({ speed, y: p.y, d: p.d, pitchDeg: flop ? 0 : LAUNCH.pitchDeg, momentum: flop ? 0 : sling.momentum });
   mode = 'fly';
   $('aim').hidden = true;
   $('hud-flight').hidden = false;
@@ -318,6 +355,7 @@ function updateHud() {
   const fill = $('speed-fill');
   fill.style.width = `${Math.min(100, (sp / TOP_SPEED) * 100)}%`;
   fill.classList.toggle('slow', !!flight && flight.mode === 'air' && flight.stalled);
+  fill.classList.toggle('momentum', !!flight && flight.momentumLeft > 0);
 }
 
 // ---------- loop ----------
@@ -367,9 +405,13 @@ function stepGame(dt) {
 
   const bankMax = 50 * DEG;
   const onGround = flight.mode !== 'air';
-  const bank = onGround ? 0 : (flight.vx / params.lateralSpeed) * bankMax;
+  // Bank from steering only (not the one-wing drift), plus the one-wing roll and no-tail wobble.
+  const steerVx = flight.vx - params.driftSpeed;
+  const t = performance.now() / 1000;
+  const wob = onGround ? 0 : effects.wobbleDeg * DEG;
+  const bank = onGround ? 0 : (steerVx / params.lateralSpeed) * bankMax - effects.rollDeg * DEG + wob * Math.sin(t * 2.3);
   const yaw = -Math.atan2(flight.vx, Math.max(1, flight.speed)) * 0.6;
-  placePlane(flight, flight.pitch, bank, yaw);
+  placePlane(flight, flight.pitch + wob * Math.sin(t * 1.7 + 1), bank, yaw);
 
   if (flight.mode === 'tumble' && !flight.ended) {
     tumbleSpin += dt * 9;

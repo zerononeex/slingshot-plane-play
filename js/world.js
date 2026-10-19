@@ -225,40 +225,60 @@ export function createWorld(scene) {
   // Fork: two arms leaning out from a stem at the front of the deck.
   const forkD = DECK.end - 0.2;
   const tips = [];
+  const arms = [];
+  const knobs = [];
+  const knobMat = lam(0xff5d5d);
   for (const side of [-1, 1]) {
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 2.0, 6), darkWood);
     arm.position.set(side * 1.65, LAUNCH.deckHeight + 0.95, -forkD);
     arm.rotation.z = -side * 0.2;
     launch.add(arm);
+    arms.push(arm);
     const tip = new THREE.Vector3(side * 1.85, LAUNCH.deckHeight + 1.95, -forkD);
     tips.push(tip);
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 4), lam(0xff5d5d));
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 4), knobMat);
     knob.position.copy(tip);
     launch.add(knob);
+    knobs.push(knob);
   }
   scene.add(launch);
 
+  // Bands: a main pair plus a second, lower pair that appears from level 3.
   const bandMat = lam(0xd23a3a);
   const bandGeo = new THREE.CylinderGeometry(0.07, 0.07, 1, 5).translate(0, 0.5, 0);
-  const bands = tips.map(() => {
+  const anchors = [...tips, ...tips.map((t) => t.clone().add(new THREE.Vector3(0, -0.32, 0)))];
+  const attachOffsets = [0, 0, -0.12, -0.12];
+  const bands = anchors.map(() => {
     const b = new THREE.Mesh(bandGeo, bandMat);
     scene.add(b);
     return b;
   });
+  let bandThickness = 1;
   const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.15), lam(0x6b3b1f));
   scene.add(pouch);
   const _dir = new THREE.Vector3();
+  const _end = new THREE.Vector3();
   const UP = new THREE.Vector3(0, 1, 0);
-  // Stretch both bands from the fork tips to `p` (a world point).
+  // Stretch the bands from the fork tips to `p` (a world point).
   function setBands(p) {
     pouch.position.copy(p);
     bands.forEach((b, i) => {
-      _dir.subVectors(p, tips[i]);
+      _end.copy(p).y += attachOffsets[i];
+      _dir.subVectors(_end, anchors[i]);
       const len = _dir.length();
-      b.position.copy(tips[i]);
-      b.scale.set(1, Math.max(0.01, len), 1);
+      b.position.copy(anchors[i]);
+      b.scale.set(bandThickness, Math.max(0.01, len), bandThickness);
       b.quaternion.setFromUnitVectors(UP, _dir.multiplyScalar(1 / Math.max(len, 1e-4)));
     });
+  }
+  // The slingshot evolves with its upgrade level (look numbers live in config SLING).
+  function setSlingLook(look) {
+    bandMat.color.setHex(look.bandColor);
+    bandThickness = look.bandScale;
+    bands[2].visible = bands[3].visible = look.doubleBands;
+    for (const a of arms) a.scale.set(look.frameScale, 1, look.frameScale);
+    for (const k of knobs) k.scale.setScalar(look.frameScale);
+    knobMat.color.setHex(look.level >= 4 ? 0xffc61a : 0xff5d5d); // golden knobs with golden bands
   }
   const restPoint = new THREE.Vector3(0, LAUNCH.deckHeight + 1.1, -forkD);
 
@@ -318,5 +338,5 @@ export function createWorld(scene) {
     update(0, 0, 0);
   }
 
-  return { update, collectCoins, reset, setBands, restPoint, forkD };
+  return { update, collectCoins, reset, setBands, setSlingLook, restPoint, forkD };
 }

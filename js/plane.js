@@ -32,24 +32,31 @@ export function buildPlane(tune) {
   cockpit.position.set(0, 0.3, -0.2);
   model.add(cockpit);
 
-  // Main wing (one slab through the body) with slightly rounded tips.
+  // Wings: separate left/right halves, each shown only when owned.
   const span = 3.2 * tune.wingScale;
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(span, 0.1, 0.75), wingMat);
-  wing.position.set(0, -0.08, -0.35);
-  model.add(wing);
-  for (const side of [-1, 1]) {
+  const makeWing = (side) => {
+    const g = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(span / 2, 0.1, 0.75), wingMat);
+    slab.position.set(side * span / 4, -0.08, -0.35);
+    g.add(slab);
     const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 0.1, 8), wingMat);
     tip.position.set(side * span / 2, -0.08, -0.35);
-    model.add(tip);
-  }
+    g.add(tip);
+    model.add(g);
+    return g;
+  };
+  const leftWing = makeWing(-1);  // -x = screen-left from the chase camera
+  const rightWing = makeWing(1);
 
   // Tail.
+  const tail = new THREE.Group();
   const stab = new THREE.Mesh(new THREE.BoxGeometry(1.3 * tune.wingScale, 0.08, 0.4), wingMat);
   stab.position.set(0, 0.05, 1.0);
-  model.add(stab);
+  tail.add(stab);
   const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.45), wingMat);
   fin.position.set(0, 0.38, 1.0);
-  model.add(fin);
+  tail.add(fin);
+  model.add(tail);
 
   // Propeller.
   const prop = new THREE.Group();
@@ -63,5 +70,13 @@ export function buildPlane(tune) {
   model.add(prop);
 
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
-  return { root, model, prop };
+
+  // Show exactly the owned parts.
+  function setParts(parts) {
+    leftWing.visible = !!parts.leftWing;
+    rightWing.visible = !!parts.rightWing;
+    tail.visible = !!parts.tail;
+  }
+  setParts({});
+  return { root, model, prop, setParts };
 }

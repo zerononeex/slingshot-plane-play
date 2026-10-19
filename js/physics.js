@@ -4,18 +4,46 @@
 const DEG = Math.PI / 180;
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
-// Merge the shared FLIGHT numbers with the current engine level's numbers.
-export function flightParams(flight, engine) {
-  return { ...flight, decay: engine.decay };
+// What the owned plane parts do. No parts = all neutral = the v0 flight.
+export function partEffects(parts, pp) {
+  const p = parts ?? {};
+  const wings = p.leftWing && p.rightWing ? pp.bothWings : p.leftWing ? pp.leftWing : pp.noWings;
+  return {
+    sinkMul: wings.sinkMul,
+    climbCostMul: wings.climbCostMul,
+    driftSpeed: wings.driftSpeed ?? 0,   // only ever non-zero with the left wing alone
+    rollDeg: wings.rollDeg ?? 0,
+    stallSpeed: p.tail ? pp.tail.stallSpeed : null,
+    stallSinkMul: p.tail ? pp.tail.stallSinkMul : 1,
+    responseMul: p.tail ? pp.tail.responseMul : 1,
+    wobbleDeg: p.tail ? 0 : pp.noTailWobbleDeg,
+  };
 }
 
-export function launchSpeedFor(pull, launch, engine) {
+// Merge the shared FLIGHT numbers with the engine level and the plane parts.
+// The engine only changes decay; launch power comes from the slingshot.
+export function flightParams(flight, engine, effects = null) {
+  const e = effects ?? { sinkMul: 1, climbCostMul: 1, driftSpeed: 0, stallSpeed: null, stallSinkMul: 1, responseMul: 1 };
+  return {
+    ...flight,
+    decay: engine.decay,
+    sinkMul: e.sinkMul,
+    climbCostMul: e.climbCostMul,
+    driftSpeed: e.driftSpeed,
+    stallSpeed: e.stallSpeed ?? flight.stallSpeed,
+    stallSink: flight.stallSink * e.stallSinkMul,
+    pitchRateDeg: flight.pitchRateDeg * e.responseMul,
+    lateralResponse: flight.lateralResponse * e.responseMul,
+  };
+}
+
+export function launchSpeedFor(pull, launch, sling) {
   if (pull < launch.weakPull) return launch.flopSpeed;
   const t = clamp((pull - launch.weakPull) / (1 - launch.weakPull), 0, 1);
-  return launch.minSpeed + t * (engine.launchMax - launch.minSpeed);
+  return launch.minSpeed + t * (sling.launchMax - launch.minSpeed);
 }
 
-export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0 }) {
+export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 0 }) {
   return {
     x, y, d,
     speed,
@@ -26,6 +54,7 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0 }) {
     stalled: false,
     bounces: 0,
     tumbleT: 0,
+    momentumLeft: momentum, // s of slingshot momentum left (no decay/drag)
     ended: null,      // null | 'landed' | 'tumble'
     events: [],       // 'bounce' | 'touchdown' | 'tumble' — drained by the game each frame
   };
@@ -35,14 +64,15 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0 }) {
 // groundAt(x, d) returns ground height in metres.
 export function stepFlight(s, input, dt, P, groundAt) {
   if (s.ended) return s;
+  if (s.momentumLeft > 0) s.momentumLeft = Math.max(0, s.momentumLeft - dt);
   if (s.mode === 'air') stepAir(s, input, dt, P, groundAt);
   else if (s.mode === 'ground') stepGround(s, input, dt, P, groundAt);
   else stepTumble(s, dt, P, groundAt);
   return s;
 }
 
-function steerLateral(s, input, dt, P, scale) {
-  const target = clamp(input.x, -1, 1) * P.lateralSpeed * scale;
+function steerLateral(s, input, dt, P, scale, drift = 0) {
+  const target = clamp(input.x, -1, 1) * P.lateralSpeed * scale + drift;
   s.vx += (target - s.vx) * Math.min(1, P.lateralResponse * dt);
   s.x += s.vx * dt;
   if (s.x > P.corridorHalfWidth) { s.x = P.corridorHalfWidth; s.vx = Math.min(s.vx, 0); }
@@ -61,13 +91,17 @@ function stepAir(s, input, dt, P, groundAt) {
   const maxTurn = P.pitchRateDeg * DEG * dt;
   s.pitch += clamp(target - s.pitch, -maxTurn, maxTurn);
 
-  // Energy: diving (pitch < 0) adds speed, climbing removes it; decay + drag always bleed.
-  const accel = -P.gravity * Math.sin(s.pitch) - P.decay - P.drag * s.speed * s.speed;
+  // Energy: diving (pitch < 0) adds speed, climbing removes it (wings make climbing cheaper).
+  // Decay + drag bleed speed, except while slingshot momentum lasts.
+  const sin = Math.sin(s.pitch);
+  const energy = -P.gravity * sin * (sin > 0 ? P.climbCostMul ?? 1 : 1);
+  const bleed = s.momentumLeft > 0 ? 0 : P.decay + P.drag * s.speed * s.speed;
+  const accel = energy - bleed;
   s.speed = Math.max(P.minAirSpeed, s.speed + accel * dt);
 
   const forward = s.speed * Math.cos(s.pitch);
-  s.vy = s.speed * Math.sin(s.pitch) - clamp(stallAmt, 0, 1) * P.stallSink;
-  steerLateral(s, input, dt, P, 1);
+  s.vy = s.speed * Math.sin(s.pitch) - clamp(stallAmt, 0, 1) * P.stallSink * (P.sinkMul ?? 1);
+  steerLateral(s, input, dt, P, 1, P.driftSpeed ?? 0);
   s.d += forward * dt;
   s.y = Math.min(P.ceiling, s.y + s.vy * dt);
 
