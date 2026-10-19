@@ -30,4 +30,8 @@ export const sfx = {
   launch: () => blip('sine', 180, 720, 0.25, 0.25),
   bounce: () => blip('sine', 420, 160, 0.18, 0.25),
   bonk: () => blip('square', 300, 90, 0.3, 0.12),
+  poing: () => blip('sine', 260, 1400, 0.35, 0.3),
+  scrape: () => blip('sawtooth', 140, 90, 0.12, 0.06),
+  cheer: () => { blip('triangle', 660, 990, 0.15, 0.18); setTimeout(() => blip('triangle', 990, 1320, 0.2, 0.18), 140); },
+  secret: () => { blip('triangle', 784, 1046, 0.12, 0.2); setTimeout(() => blip('triangle', 1046, 1568, 0.25, 0.2), 120); },
 };

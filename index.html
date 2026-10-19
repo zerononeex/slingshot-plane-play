@@ -60,40 +60,89 @@
   .big { font-size: clamp(36px, 6vh, 60px); padding: 2.2vh 56px; border-radius: 30px; }
   .alt { background: #4fa8ff; box-shadow: 0 7px 0 #2f7fd1; }
   .alt:active { box-shadow: 0 2px 0 #2f7fd1; }
-  .upgrades { display: flex; gap: 12px; width: 100%; }
-  .upgrade { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
-  .up-btn { width: 100%; padding: 10px 6px; min-height: 0; font-size: clamp(16px, 2.3vh, 24px); line-height: 1.2; }
-  .up-btn b { font-weight: 900; }
-  #btn-engine { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; }
-  #btn-sling { background: #b45cff; box-shadow: 0 7px 0 #8a35d6; }
-  .up-btn:disabled, #btn-engine:disabled, #btn-sling:disabled { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; }
-  .up-note { font-size: clamp(12px, 1.6vh, 16px); font-weight: 800; opacity: 0.65; }
+  /* Title + shop */
+  .shop-btn { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; }
+  .shop-btn:active { box-shadow: 0 2px 0 #d9661b; }
+  .stage-chip { font-weight: 800; font-size: clamp(14px, 2vh, 20px); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+  #shop { justify-content: flex-start; gap: 1vh; padding-top: max(12px, env(safe-area-inset-top)); }
+  .shop-top { width: min(96vw, 760px); display: flex; justify-content: space-between; align-items: center; }
+  .back-btn { min-height: 0; padding: 10px 18px; font-size: clamp(18px, 2.4vh, 24px); }
+  .wallet { font-size: clamp(24px, 3.6vh, 36px); }
+  .shop-stage { flex: 0 0 24vh; }  /* the 3D plane shows through here */
+  .shop-panel {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    width: min(96vw, 760px); background: var(--panel); border-radius: 26px; padding: 12px;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.12); display: flex; flex-direction: column; gap: 10px;
+  }
+  .shop-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (min-aspect-ratio: 1/1) { .shop-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .shop-stage { flex-basis: 30vh; } }
+  .parts-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .shop-section { font-weight: 900; font-size: clamp(15px, 2vh, 20px); letter-spacing: 1px; text-align: left; padding-left: 4px; }
+  .card {
+    display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 10px; row-gap: 2px;
+    align-items: center; text-align: left; padding: 10px; border-radius: 18px; min-height: 0;
+    background: #fff; color: var(--ink); box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea;
+    font-size: clamp(13px, 1.7vh, 17px); font-weight: 700;
+  }
+  .card:active { transform: translateY(3px); box-shadow: 0 2px 0 #c3ccd4; }
+  .card .icon { grid-row: 1 / span 3; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 26px; background: #f1f4f7; }
+  .card .name { font-weight: 900; font-size: 1.1em; }
+  .card .effect { opacity: 0.7; font-size: 0.85em; line-height: 1.15; }
+  .card .price { font-weight: 900; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .card .pips { display: inline-flex; gap: 3px; }
+  .card .pip { width: 11px; height: 11px; border-width: 2px; }
   .pips { display: flex; gap: 6px; }
   .pip { width: 18px; height: 18px; border-radius: 50%; background: #dfe5ea; border: 3px solid #c3ccd4; }
   .pip.on { background: #ff8a3d; border-color: #d9661b; }
-  #sling-pips .pip.on { background: #b45cff; border-color: #8a35d6; }
-  .build { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-  .build-title { font-weight: 900; font-size: clamp(16px, 2.2vh, 22px); letter-spacing: 1px; }
-  .parts { display: flex; gap: 8px; }
-  .part {
-    flex: 1; min-width: 0; min-height: 0; padding: 8px 4px; border-radius: 18px;
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-    font-size: clamp(13px, 1.8vh, 18px); line-height: 1.15; color: var(--ink);
-    background: #fff; box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea;
-  }
-  .part:active { transform: translateY(3px); box-shadow: 0 2px 0 #c3ccd4; }
-  .part-icon { font-size: 1.4em; color: #ffb000; }
-  .part-name { font-weight: 900; }
-  .part-cost { font-weight: 900; font-size: 1.1em; }
-  .part-note { font-weight: 700; font-size: 0.75em; opacity: 0.7; }
-  .part.owned { background: #e6f9ea; border-color: var(--go); box-shadow: 0 5px 0 var(--go-dark); }
-  .part.owned .part-cost { color: var(--go-dark); font-size: 1.4em; }
-  .part.next { border-color: #ffc61a; animation: glow 1.2s ease-in-out infinite; }
-  .part.next:disabled { animation: none; }
-  .part.locked { opacity: 0.5; filter: grayscale(1); }
-  .part:disabled { cursor: default; transform: none; color: var(--ink); background: #fff; box-shadow: 0 5px 0 #c3ccd4; }
-  .part.owned:disabled { background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
+  .card.buyable { border-color: #ffc61a; animation: glow 1.2s ease-in-out infinite; }
+  .card.maxed { background: #e6f9ea; border-color: var(--go); box-shadow: 0 5px 0 var(--go-dark); }
+  .card.locked { opacity: 0.55; filter: grayscale(1); }
+  .card:disabled { cursor: default; transform: none; color: var(--ink); background: #fff; box-shadow: 0 5px 0 #c3ccd4; }
+  .card.maxed:disabled { background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
   @keyframes glow { 50% { box-shadow: 0 5px 0 #e59f00, 0 0 18px 4px rgba(255, 198, 26, 0.85); } }
+  .paints { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding-bottom: 4px; }
+  .swatch {
+    min-height: 0; width: 92px; padding: 8px 4px; border-radius: 16px; background: #fff; color: var(--ink);
+    box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .swatch .dot { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(0,0,0,0.15); }
+  .swatch.current { border-color: var(--go); background: #e6f9ea; }
+  .swatch:disabled { opacity: 0.5; cursor: default; transform: none; color: var(--ink); background: #fff; box-shadow: 0 5px 0 #c3ccd4; }
+  .rainbow-dot { background: conic-gradient(red, orange, yellow, lime, cyan, blue, violet, red); }
+
+  /* Launch speedometer */
+  .speedo { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); width: min(64vw, 340px); }
+  .speedo svg { width: 100%; display: block; overflow: visible; }
+  .speedo-rim { fill: rgba(255,255,255,0.88); stroke: var(--band, #d9b77a); stroke-width: 7; }
+  .speedo.full .speedo-rim { animation: rim 0.35s ease-in-out infinite; }
+  @keyframes rim { 50% { stroke-width: 12; stroke: #ffffff; } }
+  #speedo-zones path { fill: none; stroke-width: 14; }
+  #speedo-ticks line { stroke: var(--ink); stroke-width: 3; }
+  #speedo-needle line { stroke: var(--band, #e0342f); stroke-width: 7; stroke-linecap: round; }
+  #speedo-needle circle { fill: var(--ink); }
+  .speedo.full #speedo-shake { animation: tremble 0.08s linear infinite; }
+  @keyframes tremble { 50% { transform: rotate(1.6deg); } }
+  #speedo-needle, #speedo-shake { transform-origin: 100px 100px; }
+  .speedo-read { position: absolute; left: 0; right: 0; top: 64%; text-align: center; font-weight: 900; font-size: clamp(26px, 4.4vh, 44px); line-height: 1; }
+  .speedo-read small { display: block; font-size: 0.4em; opacity: 0.6; }
+
+  /* Flight buttons + banners */
+  .boost-btn, .eject-btn { position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%; padding: 0; min-height: 0; }
+  .boost-btn { right: max(16px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 60px); width: 116px; height: 116px; background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; font-size: 22px; }
+  .boost-btn svg { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); transform: rotate(-90deg); }
+  .boost-btn span { position: relative; }
+  .fuel-bg { fill: none; stroke: rgba(255,255,255,0.4); stroke-width: 8; }
+  .fuel-ring { fill: none; stroke: #ffe14d; stroke-width: 8; stroke-dasharray: 276.5; stroke-dashoffset: 0; stroke-linecap: round; }
+  .boost-btn.on { background: #ff5d2d; transform: scale(0.95); }
+  .boost-btn.empty { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; }
+  .eject-btn { left: max(16px, env(safe-area-inset-left)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px); width: 96px; height: 96px; background: #e8262c; box-shadow: 0 7px 0 #a8161b; font-size: 20px; border: 5px solid #ffd400; }
+  .banner {
+    position: absolute; left: 50%; top: 15vh; transform: translateX(-50%); white-space: nowrap;
+    background: var(--gold); color: var(--ink); font-weight: 900; font-size: clamp(22px, 4vh, 40px);
+    padding: 10px 22px; border-radius: 20px; box-shadow: 0 6px 0 #e59f00; animation: pop 0.35s ease-out;
+  }
+  @keyframes pop { 0% { transform: translateX(-50%) scale(0.4); } 80% { transform: translateX(-50%) scale(1.1); } 100% { transform: translateX(-50%) scale(1); } }
+  .verdict { margin: 0; font-weight: 900; font-size: clamp(20px, 3vh, 30px); color: #e59f00; }
 
   /* HUD */
   #hud { pointer-events: none; }
@@ -112,13 +161,10 @@
   #speed-fill.momentum { background: linear-gradient(90deg, #ffd23f, #ffb000); box-shadow: 0 0 14px 4px rgba(255, 198, 26, 0.9); }
   .bar:has(#speed-fill.momentum) { border-color: #ffd23f; box-shadow: 0 0 16px rgba(255, 198, 26, 0.9); }
   #aim { position: absolute; inset: 0; }
-  .aim-hint { position: absolute; left: 0; right: 0; bottom: 18vh; text-align: center; }
+  .aim-hint { position: absolute; left: 0; right: 0; top: 18vh; text-align: center; }
   .aim-hint .chip { display: inline-block; font-size: clamp(22px, 3.4vh, 34px); }
   .arrow { font-size: 48px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.2); animation: nudge 1s ease-in-out infinite; }
   @keyframes nudge { 50% { transform: translateY(14px); } }
-  .power { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); width: 34px; height: 36vh; border-radius: 18px; background: rgba(255,255,255,0.75); border: 4px solid #fff; overflow: hidden; display: flex; align-items: flex-end; }
-  #power-fill { width: 100%; height: 0; background: linear-gradient(0deg, #ffc61a, #ff4f4f); }
-  #power-fill.weak { background: #b9c2cc; }
   #stick { position: fixed; width: 0; height: 0; pointer-events: none; }
   #stick::before { content: ""; position: absolute; width: 150px; height: 150px; left: -75px; top: -75px; border-radius: 50%; border: 5px solid rgba(255,255,255,0.6); }
   #stick-knob { position: absolute; left: 0; top: 0; width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.75); transform: translate(-50%, -50%); }
@@ -145,29 +191,25 @@
   <div class="stat-row">
     <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="title-coins">0</span></div>
     <div class="stat"><small>BEST</small><span id="title-best">0</span> m</div>
+    <div class="stat"><small>SECRETS</small><span id="title-secrets">0/3</span></div>
   </div>
   <button id="btn-fly" class="big">FLY!</button>
-  <div class="panel">
-    <div class="upgrades">
-      <div class="upgrade">
-        <div class="pips" id="sling-pips"></div>
-        <button id="btn-sling" class="up-btn">SLINGSHOT</button>
-        <div class="up-note">A stronger launch</div>
-      </div>
-      <div class="upgrade">
-        <div class="pips" id="engine-pips"></div>
-        <button id="btn-engine" class="up-btn">ENGINE</button>
-        <div class="up-note">Fly longer once you're up</div>
-      </div>
-    </div>
-    <div class="build">
-      <div class="build-title">BUILD YOUR PLANE</div>
-      <div class="parts">
-        <button class="part" data-part="leftWing"><span class="part-icon">◀▬</span><span class="part-name">LEFT WING</span><span class="part-cost"></span><span class="part-note"></span></button>
-        <button class="part" data-part="rightWing"><span class="part-icon">▬▶</span><span class="part-name">RIGHT WING</span><span class="part-cost"></span><span class="part-note"></span></button>
-        <button class="part" data-part="tail"><span class="part-icon">▲</span><span class="part-name">TAIL</span><span class="part-cost"></span><span class="part-note"></span></button>
-      </div>
-    </div>
+  <button id="btn-shop" class="shop-btn">🛠 SHOP</button>
+  <div class="stage-chip" id="title-stage">Plains · Wooden Trainer</div>
+</section>
+
+<section id="shop" class="screen" hidden>
+  <div class="shop-top">
+    <button id="btn-shop-back" class="alt back-btn">◀ BACK</button>
+    <div class="chip wallet"><span class="coin-dot"></span><span id="shop-coins">0</span></div>
+  </div>
+  <div class="shop-stage"></div>
+  <div class="shop-panel">
+    <div class="shop-grid" id="shop-grid"></div>
+    <div class="shop-section">BUILD YOUR PLANE</div>
+    <div class="shop-grid parts-grid" id="parts-grid"></div>
+    <div class="shop-section">PAINT JOBS</div>
+    <div class="paints" id="paints"></div>
   </div>
 </section>
 
@@ -177,11 +219,20 @@
     <div class="chip" id="hud-dist">0 m</div>
     <button id="btn-pause" aria-label="Pause">❚❚</button>
   </div>
+  <div id="banner" class="banner" hidden></div>
   <div id="aim">
-    <div class="power"><div id="power-fill"></div></div>
     <div class="aim-hint">
       <div class="arrow">▼</div>
       <div class="chip">Pull back, then let go!</div>
+    </div>
+    <div class="speedo" id="speedo">
+      <svg viewBox="0 0 200 150" aria-hidden="true">
+        <circle class="speedo-rim" id="speedo-rim" cx="100" cy="100" r="92"></circle>
+        <g id="speedo-zones"></g>
+        <g id="speedo-ticks"></g>
+        <g id="speedo-needle"><g id="speedo-shake"><line x1="100" y1="100" x2="100" y2="22"></line><circle cx="100" cy="100" r="9"></circle></g></g>
+      </svg>
+      <div class="speedo-read"><span id="speedo-kmh">0</span><small>km/h</small></div>
     </div>
   </div>
   <div id="hud-flight" hidden>
@@ -189,6 +240,11 @@
       <div class="speed-label">SPEED</div>
       <div class="bar"><div id="speed-fill"></div></div>
     </div>
+    <button id="btn-eject" class="eject-btn" hidden>EJECT</button>
+    <button id="btn-boost" class="boost-btn" hidden>
+      <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="fuel-bg" cx="50" cy="50" r="44"></circle><circle class="fuel-ring" id="fuel-ring" cx="50" cy="50" r="44"></circle></svg>
+      <span>BOOST</span>
+    </button>
   </div>
 </div>
 <div id="stick" hidden><div id="stick-knob"></div></div>
@@ -205,13 +261,19 @@
   <div class="panel">
     <div class="newbest" id="res-newbest" hidden>NEW BEST!</div>
     <h2>You flew <span id="res-dist">0</span> m!</h2>
+    <p class="verdict" id="res-verdict"></p>
     <p class="msg" id="res-msg"></p>
     <div class="stat-row">
       <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
       <div class="stat"><small>DISTANCE BONUS</small>+<span id="res-bonus">0</span></div>
+      <div class="stat" id="res-landing-box"><small>LANDING BONUS</small>+<span id="res-landing">0</span></div>
       <div class="stat"><small>EARNED</small><span class="coin-dot"></span><span id="res-total">0</span></div>
     </div>
-    <div class="stat"><small>BEST</small><span id="res-best">0</span> m</div>
+    <div class="stat-row">
+      <div class="stat"><small>TOP SPEED</small><span id="res-top">0</span> km/h</div>
+      <div class="stat" id="res-glide-box" hidden><small>EJECT GLIDE</small><span id="res-glide">0</span> m</div>
+      <div class="stat"><small>BEST</small><span id="res-best">0</span> m</div>
+    </div>
     <div class="btn-row">
       <button id="btn-again" class="big">FLY AGAIN</button>
       <button id="btn-home" class="alt">HOME</button>

@@ -1,65 +1,94 @@
-// Pure coin + upgrade rules.
-import { ENGINE, SLING, PARTS, COINS } from './config.js';
+// Pure shop + coin rules. Everything works on ONE stage record (see save.js
+// getStage/setStage), so every stage has its own wallet and upgrades.
+import { ENGINE, BAND, TANK, RAMP, MAGNET, WHEELS, PARTS, PAINTS, EJECT, COINS } from './config.js';
 
-export const MAX_ENGINE = ENGINE.length;
-export const MAX_SLING = SLING.length;
+// Level tracks: each table's first row is the starting level (1, or 0 = "none").
+export const TRACKS = { band: BAND, engine: ENGINE, tank: TANK, ramp: RAMP, magnet: MAGNET, wheels: WHEELS };
+export const TRACK_IDS = Object.keys(TRACKS);
 export const PART_IDS = PARTS.map((p) => p.id);
+export const PAINT_IDS = PAINTS.map((p) => p.id);
 
-const statsAt = (table, level) => table[Math.min(table.length, Math.max(1, level | 0)) - 1];
-const nextCost = (table, level) => (level >= table.length ? null : table[level].cost);
+export const minLevel = (id) => TRACKS[id][0].level;
+export const maxLevel = (id) => TRACKS[id][TRACKS[id].length - 1].level;
 
-export const engineStats = (level) => statsAt(ENGINE, level);
-export const slingStats = (level) => statsAt(SLING, level);
-
-// Cost of the NEXT level, or null when maxed.
-export const nextEngineCost = (level) => nextCost(ENGINE, level);
-export const nextSlingCost = (level) => nextCost(SLING, level);
-
-export function canBuyEngine(save) {
-  const cost = nextEngineCost(save.engine);
-  return cost !== null && save.coins >= cost;
+export function trackStats(id, level) {
+  const t = TRACKS[id];
+  const i = Math.min(t.length - 1, Math.max(0, (level | 0) - t[0].level));
+  return t[i];
 }
 
-export function canBuySling(save) {
-  const cost = nextSlingCost(save.slingLevel);
-  return cost !== null && save.coins >= cost;
+// Cost of the NEXT level of a track, or null when maxed.
+export function nextCost(id, level) {
+  return level >= maxLevel(id) ? null : trackStats(id, level + 1).cost;
 }
 
-// Purchases return a NEW save with the purchase applied, or null if not allowed.
-export function buyEngine(save) {
-  if (!canBuyEngine(save)) return null;
-  return { ...save, coins: save.coins - nextEngineCost(save.engine), engine: save.engine + 1 };
+export function canBuyTrack(rec, id) {
+  const cost = nextCost(id, rec[id]);
+  return cost !== null && rec.coins >= cost;
 }
 
-export function buySling(save) {
-  if (!canBuySling(save)) return null;
-  return { ...save, coins: save.coins - nextSlingCost(save.slingLevel), slingLevel: save.slingLevel + 1 };
+// Purchases return a NEW record, or null if not allowed.
+export function buyTrack(rec, id) {
+  if (!canBuyTrack(rec, id)) return null;
+  return { ...rec, coins: rec.coins - nextCost(id, rec[id]), [id]: rec[id] + 1 };
 }
 
-// The next part to build (they come in a fixed order), or null when complete.
+// Plane parts: one-time, fixed order.
 export function nextPart(parts) {
   return PARTS.find((p) => !parts[p.id]) ?? null;
 }
-
-export function canBuyPart(save, id) {
-  const next = nextPart(save.parts);
-  return !!next && next.id === id && save.coins >= next.cost;
+export function canBuyPart(rec, id) {
+  const next = nextPart(rec.parts);
+  return !!next && next.id === id && rec.coins >= next.cost;
+}
+export function buyPart(rec, id) {
+  if (!canBuyPart(rec, id)) return null;
+  const part = nextPart(rec.parts);
+  return { ...rec, coins: rec.coins - part.cost, parts: { ...rec.parts, [id]: true } };
 }
 
-export function buyPart(save, id) {
-  if (!canBuyPart(save, id)) return null;
-  const part = nextPart(save.parts);
-  return { ...save, coins: save.coins - part.cost, parts: { ...save.parts, [id]: true } };
+// Ejector seat: one-time.
+export const canBuyEject = (rec) => !rec.eject && rec.coins >= EJECT.cost;
+export function buyEject(rec) {
+  return canBuyEject(rec) ? { ...rec, coins: rec.coins - EJECT.cost, eject: true } : null;
 }
 
-export function runPayout(distance, coinsCollected) {
+// Paint jobs: buying one also puts it on; owned ones can be switched for free.
+export function buyOrWearPaint(rec, id) {
+  const paint = PAINTS.find((p) => p.id === id);
+  if (!paint) return null;
+  if (rec.paints.owned.includes(id)) return { ...rec, paints: { ...rec.paints, current: id } };
+  if (rec.coins < paint.cost) return null;
+  return { ...rec, coins: rec.coins - paint.cost, paints: { owned: [...rec.paints.owned, id], current: id } };
+}
+
+// Total cost of everything in the shop (for BALANCE.md).
+export function completionTotals() {
+  const track = (id) => TRACKS[id].slice(1).reduce((a, l) => a + l.cost, 0);
+  const t = Object.fromEntries(TRACK_IDS.map((id) => [id, track(id)]));
+  t.parts = PARTS.reduce((a, p) => a + p.cost, 0);
+  t.eject = EJECT.cost;
+  t.core = Object.values(t).reduce((a, v) => a + v, 0);
+  t.paints = PAINTS.reduce((a, p) => a + p.cost, 0);
+  t.allIn = t.core + t.paints;
+  return t;
+}
+
+export function runPayout(distance, coinsCollected, landingBonus = 0) {
   const bonus = Math.floor(Math.max(0, distance) / COINS.metersPerBonusCoin);
-  return { collected: coinsCollected * COINS.perCoin, bonus, total: coinsCollected * COINS.perCoin + bonus };
+  const collected = coinsCollected * COINS.perCoin;
+  return { collected, bonus, landing: landingBonus, total: collected + bonus + landingBonus };
 }
 
-// Apply a finished run to the save. Returns a NEW save.
-export function applyRun(save, distance, coinsCollected) {
-  const pay = runPayout(distance, coinsCollected);
+// Apply a finished run to a stage record. Returns a NEW record.
+export function applyRun(rec, distance, coinsCollected, landingBonus = 0, secretsFound = []) {
+  const pay = runPayout(distance, coinsCollected, landingBonus);
   const dist = Math.floor(Math.max(0, distance));
-  return { ...save, coins: save.coins + pay.total, best: Math.max(save.best, dist) };
+  const secrets = [...rec.secrets, ...secretsFound.filter((id) => !rec.secrets.includes(id))];
+  return { ...rec, coins: rec.coins + pay.total, best: Math.max(rec.best, dist), secrets };
+}
+
+// Secrets reached this flight that earn the once-ever "SECRET FOUND!" banner.
+export function newSecrets(rec, reachedIds) {
+  return reachedIds.filter((id, i) => !rec.secrets.includes(id) && reachedIds.indexOf(id) === i);
 }

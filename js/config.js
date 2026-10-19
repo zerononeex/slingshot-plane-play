@@ -3,7 +3,7 @@
 
 // How the plane looks. Change these to repaint / reshape the code-built plane.
 export const PLANE_TUNE = {
-  bodyColor: 0xff4fa3,   // bubblegum pink body
+  bodyColor: 0xff4fa3,   // bubblegum pink body (the free default paint)
   wingColor: 0xffd23f,   // sunny yellow wings + tail
   accentColor: 0x3fc5ff, // cockpit glass + stripes
   wingScale: 1.15,       // 1 = normal wingspan, 1.3 = big wings
@@ -42,8 +42,12 @@ export const FLIGHT = {
   bounceMinSpeed: 9,    // need this much speed to bounce instead of skid
   bounceMinAngleDeg: 4,
   maxBounces: 2,
-  bounceKeep: 0.65,     // fraction of speed kept per bounce
-  bounceUpDeg: 16,
+  // bounce speed kept + upward pop now come from the BOUNCY WHEELS level (WHEELS below)
+  launchHold: 0.5,      // s after launch the nose keeps (at least) the ramp angle unless you push down
+  faceStep: 1.5,        // m: ground rising more than this in one step = a wall/face, not a landing
+  scrapeLoss: 2,        // m/s lost per wall scrape
+  roofScrapeDecel: 6,   // m/s² while scraping a tunnel roof
+  trunkRadius: 0.75,
   groundFriction: 5,    // m/s² slow-down while rolling
   stopSpeed: 0.4,
   tumbleFriction: 9,
@@ -51,25 +55,105 @@ export const FLIGHT = {
 };
 
 // ENGINE upgrade = "fly longer once you're up". Index 0 = level 1.
+// propSpin = how fast the propeller idles at that level; cowl = engine ring colour.
 // `cost` = coins to BUY that level. Since v0.2 the engine changes ONLY decay
 // (launch power moved to the SLINGSHOT upgrade).
 export const ENGINE = [
-  { level: 1, decay: 0.90, cost: 0 },
-  { level: 2, decay: 0.78, cost: 40 },
-  { level: 3, decay: 0.66, cost: 100 },
-  { level: 4, decay: 0.54, cost: 200 },
-  { level: 5, decay: 0.42, cost: 400 },
+  { level: 1, decay: 0.90, cost: 0, propSpin: 1.0, cowl: 0x888888 },
+  { level: 2, decay: 0.78, cost: 40, propSpin: 1.25, cowl: 0xc0c0c0 },
+  { level: 3, decay: 0.66, cost: 100, propSpin: 1.5, cowl: 0x4fd1ff },
+  { level: 4, decay: 0.54, cost: 200, propSpin: 1.8, cowl: 0xff8a3d },
+  { level: 5, decay: 0.42, cost: 400, propSpin: 2.2, cowl: 0xffc61a },
 ];
 
-// SLINGSHOT upgrade = "a stronger launch". launchMax = m/s at full pull.
-// momentum = seconds after launch with no decay/drag (dive/climb still work).
-// The rest is how the slingshot on the ramp looks at that level.
-export const SLING = [
-  { level: 1, launchMax: 30, momentum: 0,   cost: 0,   bandColor: 0xd9b77a, bandScale: 1.0, doubleBands: false, frameScale: 1.0 }, // plain rope
-  { level: 2, launchMax: 35, momentum: 2.0, cost: 40,  bandColor: 0xe0342f, bandScale: 1.3, doubleBands: false, frameScale: 1.0 }, // red
-  { level: 3, launchMax: 40, momentum: 2.5, cost: 100, bandColor: 0xe0342f, bandScale: 1.3, doubleBands: true,  frameScale: 1.0 }, // double red
-  { level: 4, launchMax: 46, momentum: 3.0, cost: 200, bandColor: 0xffc61a, bandScale: 1.6, doubleBands: true,  frameScale: 1.0 }, // golden
-  { level: 5, launchMax: 52, momentum: 3.5, cost: 400, bandColor: 0xffc61a, bandScale: 1.9, doubleBands: true,  frameScale: 1.6 }, // golden + chunky frame
+// RUBBER BAND (was "Slingshot") = "a stronger launch". launchMax = m/s at full
+// pull; momentum = seconds after launch with no decay/drag (dive/climb still work).
+// colour = strength: on the ramp model, the shop icon and the speedometer accent.
+export const BAND = [
+  { level: 1, name: 'Hemp Rope', launchMax: 30, momentum: 0,   cost: 0,   color: 0xd9b77a, thickness: 1.0, doubleBands: false, frameScale: 1.0 },
+  { level: 2, name: 'Red',       launchMax: 35, momentum: 2.0, cost: 40,  color: 0xe0342f, thickness: 1.3, doubleBands: false, frameScale: 1.0 },
+  { level: 3, name: 'Blue',      launchMax: 40, momentum: 2.5, cost: 100, color: 0x2f7fe0, thickness: 1.3, doubleBands: true,  frameScale: 1.0 },
+  { level: 4, name: 'Purple',    launchMax: 46, momentum: 3.0, cost: 200, color: 0x9b3fe0, thickness: 1.6, doubleBands: true,  frameScale: 1.2 },
+  { level: 5, name: 'GOLD',      launchMax: 52, momentum: 3.5, cost: 400, color: 0xffc61a, thickness: 1.9, doubleBands: true,  frameScale: 1.6 },
+];
+
+// FUEL TANK = the BOOST. Level 0 = no tank (no BOOST button). Refills free every flight.
+// NOTE: the brief lists 5 tank sizes but only 4 prices; Lv5 uses 800 (see BALANCE.md).
+export const TANK = [
+  { level: 0, seconds: 0,   cost: 0,   scale: 0 },
+  { level: 1, seconds: 3,   cost: 50,  scale: 0.8 },
+  { level: 2, seconds: 4.5, cost: 100, scale: 1.0 },
+  { level: 3, seconds: 6,   cost: 200, scale: 1.2 },
+  { level: 4, seconds: 8,   cost: 400, scale: 1.4 },
+  { level: 5, seconds: 10,  cost: 800, scale: 1.65 },
+];
+export const BOOST = {
+  thrust: 6,            // m/s² while the BOOST button is held
+  capOverBand: 10,      // boost can't push you faster than band cap + this
+};
+
+// LAUNCH RAMP: taller pad + steeper launch angle (launch speed unchanged).
+export const RAMP = [
+  { level: 1, height: 0,   angleDeg: 0, cost: 0,   rails: false },
+  { level: 2, height: 1.5, angleDeg: 2, cost: 40,  rails: false },
+  { level: 3, height: 3,   angleDeg: 4, cost: 100, rails: false },
+  { level: 4, height: 4.5, angleDeg: 6, cost: 200, rails: true },
+  { level: 5, height: 6,   angleDeg: 8, cost: 400, rails: true },
+];
+
+// COIN MAGNET: coins within `radius` drift to the plane. Level 0 = none.
+// NOTE: 5 radii but only 4 prices in the brief; Lv5 uses 800 (see BALANCE.md).
+export const MAGNET = [
+  { level: 0, radius: 0,   cost: 0,   scale: 0,    color: 0x000000, tips: 0x000000, glowTips: false, sparkle: false },
+  { level: 1, radius: 2.5, cost: 50,  scale: 0.7,  color: 0x9a6b6b, tips: 0xb8b8b8, glowTips: false, sparkle: false }, // small dull grey-red
+  { level: 2, radius: 4,   cost: 100, scale: 0.85, color: 0xd63a3a, tips: 0xdddddd, glowTips: false, sparkle: false }, // red
+  { level: 3, radius: 5.5, cost: 200, scale: 1.05, color: 0xff2a2a, tips: 0xffffff, glowTips: false, sparkle: false }, // big bright red
+  { level: 4, radius: 7,   cost: 400, scale: 1.2,  color: 0xff2a2a, tips: 0xffffff, glowTips: true,  sparkle: false }, // glowing white tips
+  { level: 5, radius: 9,   cost: 800, scale: 1.4,  color: 0xffc61a, tips: 0xfff3b0, glowTips: true,  sparkle: true },  // GOLD + sparkles
+];
+export const MAGNET_PULL_SPEED = 22; // m/s (on top of the plane's own speed) a pulled coin flies at
+
+// BOUNCY WHEELS: speed kept per bounce + upward pop. Lv1 = stock.
+// NOTE: the brief lists 6 retention numbers for 5 levels; 55% was dropped (see BALANCE.md).
+export const WHEELS = [
+  { level: 1, keep: 0.45, pop: 3,   cost: 0,   scale: 0.8,  tire: 0x222222, rim: 0x888888, stripe: false }, // small black
+  { level: 2, keep: 0.65, pop: 4,   cost: 40,  scale: 0.95, tire: 0x6b4423, rim: 0xc8a070, stripe: false }, // brown
+  { level: 3, keep: 0.75, pop: 5,   cost: 100, scale: 1.1,  tire: 0xff7a1a, rim: 0xffffff, stripe: false }, // orange
+  { level: 4, keep: 0.85, pop: 6,   cost: 200, scale: 1.25, tire: 0x222222, rim: 0xffffff, stripe: true },  // red-striped
+  { level: 5, keep: 0.92, pop: 7.5, cost: 400, scale: 1.5,  tire: 0x222222, rim: 0xffc61a, stripe: true },  // big GOLD-rimmed
+];
+
+// EJECTOR SEAT: one-time buy. The parachuting pilot glides on.
+export const EJECT = { cost: 250 };
+export const PILOT = {
+  popUp: 6,             // m/s upward kick when the seat fires ("POING!")
+  canopySink: 3.2,      // m/s steady sink under the parachute
+  flareSinkMul: 0.55,   // full drag-up: sink × this (floats flatter)
+  diveSinkMul: 1.9,     // full drag-down: sink × this (dives faster)
+  glideSpeed: 8,        // m/s forward the canopy settles to
+  forwardDrag: 0.45,    // per second, how fast forward speed settles to glideSpeed
+  sideSpeed: 5,
+  sinkResponse: 1.5,
+  pickupRadius: 2.0,
+};
+
+// LANDINGS, judged at the first ground contact (no eject).
+export const LANDING = {
+  perfect: { minSink: -2,   maxAngleDeg: 10, bonus: 10, text: 'PERFECT LANDING!' },
+  good:    { minSink: -3.5, maxAngleDeg: 18, bonus: 5,  text: 'GREAT LANDING!' },
+  rough:   { bonus: 0, text: 'Bumpy landing' },
+  bad:     { bonus: 0, text: 'Bonk! A wobbly tumble — you’re OK!' },
+  pilot:   { bonus: 5, text: 'PILOT LANDED SAFELY!' },
+};
+
+// PAINT JOBS (cosmetic). The first is the free default.
+export const PAINTS = [
+  { id: 'default', name: 'Bubblegum',       cost: 0,   color: 0xff4fa3 },
+  { id: 'sky',     name: 'Sky Blue',        cost: 100, color: 0x45b6ff },
+  { id: 'red',     name: 'Racing Red',      cost: 100, color: 0xe8262c },
+  { id: 'yellow',  name: 'Sunshine Yellow', cost: 100, color: 0xffd400 },
+  { id: 'grape',   name: 'Grape Purple',    cost: 150, color: 0x8a3fd1 },
+  { id: 'rainbow', name: 'RAINBOW',         cost: 300, color: 0xff4040, rainbow: true },
 ];
 
 // PLANE PARTS — one-time buys, in this order. Start = body + propeller only.
@@ -104,10 +188,9 @@ export const WORLD = {
   treesPerChunk: 14,
   rocksPerChunk: 4,
   cloudsPerChunk: 2,
-  coinsPerChunk: 10,
+  coinSlots: 360,        // coins drawn at once (patterns + cave trails + secret stashes)
   flagEvery: 500,
   flagX: 30,             // flag poles stand this far either side of the middle
-  hillHeight: 7,
   fogNear: 90,
   fogFar: 400,
 };

@@ -1,24 +1,45 @@
-// localStorage save with validation. A bad save never crashes.
-// v0.2 added `slingLevel` and `parts`; saves without them load with defaults
-// and keep their coins / best / engine.
+// localStorage save, per stage. A bad save never crashes and is never wiped:
+// every field is validated on its own and falls back to its default.
+//
+// Shape (v2): { v: 2, currentStage, stages: { <stageId>: record } }
+// record = { coins, band, engine, tank, ramp, magnet, wheels, eject,
+//            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[] }
+//
+// Game code reads/writes progression ONLY through getStage(save, id) / setStage(save, id, rec).
 import { SAVE_KEY } from './config.js';
-import { MAX_ENGINE, MAX_SLING, PART_IDS } from './economy.js';
+import { STAGES, DEFAULT_STAGE } from './stages.js';
+import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel } from './economy.js';
 
 const MAX_COINS = 10_000_000;
 const MAX_BEST = 10_000_000;
+const MAX_STAGES = 16;
+const STAGE_ID = /^[a-z][a-z0-9-]{0,23}$/;
 
 export const freshParts = () => Object.fromEntries(PART_IDS.map((id) => [id, false]));
 
-export function freshSave() {
-  return { v: 1, coins: 0, best: 0, engine: 1, slingLevel: 1, parts: freshParts() };
+export function freshRecord() {
+  return {
+    coins: 0,
+    ...Object.fromEntries(TRACK_IDS.map((id) => [id, minLevel(id)])),
+    eject: false,
+    parts: freshParts(),
+    paints: { owned: ['default'], current: 'default' },
+    best: 0,
+    secrets: [],
+  };
 }
 
-const isInt = (n, lo, hi) => Number.isInteger(n) && n >= lo && n <= hi;
+export function freshSave() {
+  return { v: 2, currentStage: DEFAULT_STAGE, stages: { [DEFAULT_STAGE]: freshRecord() } };
+}
+
+const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
+const intOr = (n, lo, hi, dflt) => (Number.isInteger(n) ? Math.min(hi, Math.max(lo, n)) : dflt);
 
 // Parts must be owned in order: keep the longest valid prefix, drop the rest.
 function cleanParts(raw) {
   const parts = freshParts();
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return parts;
+  if (!isObj(raw)) return parts;
   for (const id of PART_IDS) {
     if (raw[id] !== true) break;
     parts[id] = true;
@@ -26,22 +47,71 @@ function cleanParts(raw) {
   return parts;
 }
 
+function cleanPaints(raw) {
+  const owned = ['default'];
+  if (isObj(raw) && Array.isArray(raw.owned)) {
+    for (const id of raw.owned) if (PAINT_IDS.includes(id) && !owned.includes(id)) owned.push(id);
+  }
+  const current = isObj(raw) && owned.includes(raw.current) ? raw.current : 'default';
+  return { owned, current };
+}
+
+function cleanSecrets(raw, stageId) {
+  const known = (STAGES[stageId]?.secrets ?? []).map((s) => s.id);
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((id) => known.includes(id)))];
+}
+
+// Validate one stage record field by field.
+export function validateRecord(raw, stageId = DEFAULT_STAGE) {
+  const r = isObj(raw) ? raw : {};
+  const rec = freshRecord();
+  rec.coins = intOr(r.coins, 0, MAX_COINS, 0);
+  rec.best = intOr(r.best, 0, MAX_BEST, 0);
+  for (const id of TRACK_IDS) rec[id] = intOr(r[id], minLevel(id), maxLevel(id), minLevel(id));
+  rec.eject = r.eject === true;
+  rec.parts = cleanParts(r.parts);
+  rec.paints = cleanPaints(r.paints);
+  rec.secrets = cleanSecrets(r.secrets, stageId);
+  return rec;
+}
+
+// v0 / v0.2 flat save → the plains record (slingLevel → band; new lines at base).
+function migrateFlat(raw) {
+  return validateRecord({
+    coins: raw.coins,
+    best: raw.best,
+    engine: raw.engine ?? raw.engineLevel,
+    band: raw.slingLevel,
+    parts: raw.parts,
+  }, DEFAULT_STAGE);
+}
+
 export function validateSave(data) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  if (data.v !== 1) return null;
-  // Core fields from v0: if these are broken the save is corrupt → start fresh.
-  if (!isInt(data.coins, 0, MAX_COINS)) return null;
-  if (!isInt(data.best, 0, MAX_BEST)) return null;
-  if (!isInt(data.engine, 1, MAX_ENGINE)) return null;
-  // v0.2 fields: missing or broken → default, never wipe the rest of the save.
-  return {
-    v: 1,
-    coins: data.coins,
-    best: data.best,
-    engine: data.engine,
-    slingLevel: isInt(data.slingLevel, 1, MAX_SLING) ? data.slingLevel : 1,
-    parts: cleanParts(data.parts),
-  };
+  if (!isObj(data)) return freshSave();
+  if (!isObj(data.stages)) {
+    // Old flat save (v0 / v0.2).
+    return { v: 2, currentStage: DEFAULT_STAGE, stages: { [DEFAULT_STAGE]: migrateFlat(data) } };
+  }
+  const stages = {};
+  for (const id of Object.keys(data.stages).slice(0, MAX_STAGES)) {
+    if (STAGE_ID.test(id)) stages[id] = validateRecord(data.stages[id], id);
+  }
+  if (!stages[DEFAULT_STAGE]) stages[DEFAULT_STAGE] = freshRecord();
+  const currentStage = typeof data.currentStage === 'string' && stages[data.currentStage] && STAGES[data.currentStage]
+    ? data.currentStage : DEFAULT_STAGE;
+  return { v: 2, currentStage, stages };
+}
+
+// The ONLY way game code reads progression: a validated copy of one stage's record.
+export function getStage(save, id = save.currentStage) {
+  return validateRecord(save.stages[id] ?? freshRecord(), id);
+}
+
+// The ONLY way game code writes progression: returns a NEW save with that stage replaced.
+export function setStage(save, id, rec) {
+  if (!STAGE_ID.test(id)) throw new Error(`bad stage id: ${id}`);
+  return { ...save, stages: { ...save.stages, [id]: validateRecord(rec, id) } };
 }
 
 function defaultStorage() {
@@ -52,7 +122,7 @@ export function loadSave(storage = defaultStorage()) {
   try {
     const raw = storage?.getItem(SAVE_KEY);
     if (!raw) return freshSave();
-    return validateSave(JSON.parse(raw)) ?? freshSave();
+    return validateSave(JSON.parse(raw));
   } catch {
     return freshSave();
   }
@@ -60,9 +130,8 @@ export function loadSave(storage = defaultStorage()) {
 
 export function writeSave(save, storage = defaultStorage()) {
   try {
-    const ok = validateSave(save);
-    if (!ok || !storage) return false;
-    storage.setItem(SAVE_KEY, JSON.stringify(ok));
+    if (!storage) return false;
+    storage.setItem(SAVE_KEY, JSON.stringify(validateSave(save)));
     return true;
   } catch {
     return false; // private mode / quota — the game keeps going
