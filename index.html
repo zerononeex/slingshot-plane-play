@@ -60,10 +60,30 @@
   .big { font-size: clamp(36px, 6vh, 60px); padding: 2.2vh 56px; border-radius: 30px; }
   .alt { background: #4fa8ff; box-shadow: 0 7px 0 #2f7fd1; }
   .alt:active { box-shadow: 0 2px 0 #2f7fd1; }
+  /* Title: stage picker + quick cards */
+  #title { gap: 1.6vh; }
+  #title h1 { font-size: clamp(34px, 5.6vh, 60px); }
+  .stage-row {
+    width: min(96vw, 760px); display: flex; gap: 10px; overflow-x: auto; padding: 4px 4px 10px;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; touch-action: pan-x;
+  }
+  .stage-card {
+    flex: 0 0 auto; width: 150px; min-height: 0; padding: 10px; border-radius: 18px; scroll-snap-align: center;
+    display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left;
+    background: #fff; color: var(--ink); box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: 14px; font-weight: 700;
+  }
+  .stage-card .st-name { font-weight: 900; font-size: 17px; }
+  .stage-card .st-plane, .stage-card .st-secrets { opacity: 0.7; font-size: 13px; }
+  .stage-card .st-lock { font-size: 12px; opacity: 0.8; line-height: 1.2; }
+  .stage-card.selected { border-color: var(--go); background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
+  .stage-card.locked, .stage-card:disabled { background: #eef1f4; color: #7b8794; box-shadow: 0 5px 0 #c3ccd4; cursor: default; transform: none; }
+  .quick-cards { width: min(96vw, 620px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .updraft { color: #ffe14d; margin-left: 6px; }
+  .unlock { background: #3ccf5a; color: #fff; border-radius: 16px; padding: 6px 14px; font-weight: 900; font-size: clamp(18px, 2.6vh, 26px); }
+
   /* Title + shop */
   .shop-btn { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; }
   .shop-btn:active { box-shadow: 0 2px 0 #d9661b; }
-  .stage-chip { font-weight: 800; font-size: clamp(14px, 2vh, 20px); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
   #shop { justify-content: flex-start; gap: 1vh; padding-top: max(12px, env(safe-area-inset-top)); }
   .shop-top { width: min(96vw, 760px); display: flex; justify-content: space-between; align-items: center; }
   .back-btn { min-height: 0; padding: 10px 18px; font-size: clamp(18px, 2.4vh, 24px); }
@@ -187,15 +207,16 @@
 <canvas id="game"></canvas>
 
 <section id="title" class="screen">
-  <h1>Slingshot<br>Plane</h1>
+  <h1>Slingshot Plane</h1>
+  <div class="stage-row" id="stage-row"></div>
   <div class="stat-row">
     <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="title-coins">0</span></div>
     <div class="stat"><small>BEST</small><span id="title-best">0</span> m</div>
     <div class="stat"><small>SECRETS</small><span id="title-secrets">0/3</span></div>
   </div>
+  <div class="quick-cards" id="quick-cards"></div>
   <button id="btn-fly" class="big">FLY!</button>
   <button id="btn-shop" class="shop-btn">🛠 SHOP</button>
-  <div class="stage-chip" id="title-stage">Plains · Wooden Trainer</div>
 </section>
 
 <section id="shop" class="screen" hidden>
@@ -237,7 +258,7 @@
   </div>
   <div id="hud-flight" hidden>
     <div class="speed">
-      <div class="speed-label">SPEED</div>
+      <div class="speed-label">SPEED <span id="hud-updraft" class="updraft" hidden>▲ UPDRAFT</span></div>
       <div class="bar"><div id="speed-fill"></div></div>
     </div>
     <button id="btn-eject" class="eject-btn" hidden>EJECT</button>
@@ -261,6 +282,7 @@
   <div class="panel">
     <div class="newbest" id="res-newbest" hidden>NEW BEST!</div>
     <h2>You flew <span id="res-dist">0</span> m!</h2>
+    <div class="unlock" id="res-unlock" hidden></div>
     <p class="verdict" id="res-verdict"></p>
     <p class="msg" id="res-msg"></p>
     <div class="stat-row">

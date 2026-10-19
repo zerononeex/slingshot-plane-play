@@ -1,32 +1,49 @@
 // Pure coin logic: per-flight coin patterns (R1), cave trails, secret stashes (R4),
 // magnet pull and pickup. The WORLD is fixed; only the coin patterns shuffle per flight.
 import { MAGNET_PULL_SPEED } from './config.js';
+import { rng } from './rng.js';
 
-export function rng(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { rng };
 
 const overlaps = (a0, a1, b0, b1) => a0 <= b1 && b0 <= a1;
 
-// Which specials can appear in segment k (they need their feature nearby).
+// What is in segment k (local, first-lap coordinates), so specials only appear
+// where their feature is, and plain patterns stay clear of side features.
 function segmentContext(stage, terrain, k) {
   const L = stage.patterns.segment;
   const d0 = terrain.local(k * L), d1 = d0 + L;
+  const off = k * L - d0;
+  const inSeg = (d) => d >= d0 && d < d1;
+  const zones = stage.zones.filter((z) => overlaps(d0, d1, z.from - 20, z.to + 20));
+  const midKind = stage.water ? terrain.surfaceKind(-16, k * L + L / 2) : 'ground';
   return {
-    forest: stage.forests.some((f) => overlaps(d0 + 5, d1 - 5, f.from, f.to)),
+    d0, d1, off,
+    leftBusy: zones.some((z) => z.side === 'left') || stage.bigHills.some((b) => b.x < -8 && b.shape !== 'island' && overlaps(d0, d1, b.d - b.rd, b.d + b.rd)),
+    rightBusy: zones.some((z) => z.side === 'right'),
+    slalomTrees: terrain.columns.filter((c) => c.kind === 'tree' && c.slalom && !c.hero && inSeg(c.d) && c.d > d0 + 5 && c.d < d1 - 5),
     ditch: stage.ditches.find((t) => t.d > d0 + 20 && t.d < d1 - 15) ?? null,
-    cavern: stage.caverns.some((c) => overlaps(d0, d1, c.start - 20, c.end + 20)),
-    bigHill: stage.bigHills.some((b) => overlaps(d0, d1, b.d - b.rd, b.d + b.rd)),
-    d0: k * L,
+    arches: terrain.arches.filter((a) => inSeg(a.d)),
+    updrafts: stage.updrafts.filter((u) => u.d > d0 + 30 && u.d < d1),
+    rings: terrain.rings.filter((r) => inSeg(r.d)),
+    rooftops: terrain.blocks.filter((b) => b.kind === 'rooftop' && b.d0 >= d0 && b.d1 < d1),
+    tailwind: stage.tailwinds.find((t) => overlaps(d0 + 10, d1 - 10, t.d0, t.d1)) ?? null,
+    mound: stage.mounds.find((m) => m.d > d0 + 22 && m.d < d1 - 22) ?? null,
+    devil: stage.devils.find((v) => v.d > d0 + 12 && v.d < d1 - 6) ?? null,
+    pond: stage.pits.find((p) => p.pond && p.d > d0 + 25 && p.d < d1 - 20) ?? null,
+    water: !!stage.water && midKind === 'water' && zones.some((z) => z.kind === 'lowSwoop'),
+    island: stage.bigHills.find((b) => b.shape === 'island' && Math.abs(b.x) < 10 && b.d > d0 + 10 && b.d < d1 - 10) ?? null,
   };
 }
+
+// Which context entry each special needs.
+const SPECIAL_NEEDS = {
+  treeWeave: (c) => c.slalomTrees.length > 0, ditchDip: (c) => !!c.ditch,
+  archLine: (c) => c.arches.length > 0, updraftCatch: (c) => c.updrafts.length > 0,
+  ringLine: (c) => c.rings.length > 0, rooftopSkim: (c) => c.rooftops.length > 0,
+  gustRider: (c) => !!c.tailwind, driftDip: (c) => !!c.mound,
+  devilRider: (c) => !!c.devil, oasisDip: (c) => !!c.pond,
+  waterSkim: (c) => c.water, islandHop: (c) => !!c.island,
+};
 
 // A per-flight pattern sequence: seeded, never the same twice in a row,
 // gentle openers, trickier patterns weigh in further out.
@@ -35,8 +52,7 @@ export function makePatternPicker(stage, terrain, seed) {
   const r = rng(seed);
   const seq = [];
   function weight(name, k, ctx) {
-    if (name === 'treeWeave') return ctx.forest ? 20 : 0;
-    if (name === 'ditchDip') return ctx.ditch ? 20 : 0;
+    if (SPECIAL_NEEDS[name]) return SPECIAL_NEEDS[name](ctx) ? 20 : 0;
     if (P.gentle.includes(name)) return Math.max(0.6, 3 - k * 0.25);
     return Math.min(3, 0.4 + k * 0.3);
   }
@@ -58,31 +74,86 @@ export function makePatternPicker(stage, terrain, seed) {
   return { pick, seq, rand: r };
 }
 
-// Coins for one ~80 m segment. Never buried: at least 2.5 m over the ground top.
+// The stage specials: each builds its coins around its feature in the segment.
+// `rel` = height above the floor at that spot (resolved after).
+function specialCoins(name, ctx, add, n) {
+  const o = ctx.off;
+  switch (name) {
+    case 'treeWeave':
+      // Thread the trunks: pass each trunk on the opposite side, with a coin in each gap.
+      for (const tr of ctx.slalomTrees) {
+        const mx = 2 * tr.mid - tr.x; // mirror across the slalom middle
+        add(mx, 0, tr.d + o - 2, 4); add(mx, 0, tr.d + o + 2, 4); add(tr.mid, 0, tr.d + o + 12.5, 4);
+      }
+      return;
+    case 'ditchDip':
+      for (let i = 0; i < n; i++) add(0, 0, ctx.ditch.d + o - (n - 1) * 2.5 + i * 5, 2.2, true);
+      return;
+    case 'archLine':
+      for (const a of ctx.arches) for (let i = 0; i < 9; i++) add(a.cx, a.y0abs + a.h / 2, a.d + o - 12 + i * 3);
+      return;
+    case 'updraftCatch': {
+      const u = ctx.updrafts[0];
+      for (let i = 0; i < n; i++) { const t = i / (n - 1); add(u.x * t, 0, u.d + o - 45 + 45 * t, 6 + 20 * t * t); }
+      return;
+    }
+    case 'ringLine':
+      for (const r of ctx.rings) for (const dd of [-6, 0, 6]) add(r.x, r.y, r.d + o + dd);
+      return;
+    case 'rooftopSkim':
+      for (const b of ctx.rooftops.slice(0, 2)) for (let i = 0; i < 5; i++) add((b.x0 + b.x1) / 2, 0, b.d0 + o + 2 + i * (b.d1 - b.d0 - 4) / 4, 2.5);
+      return;
+    case 'gustRider': {
+      const t = ctx.tailwind;
+      const from = Math.max(t.d0, ctx.d0 + 5);
+      for (let i = 0; i < n; i++) add((t.x0 + t.x1) / 2, 0, from + o + i * 5, 8);
+      return;
+    }
+    case 'driftDip': {
+      const m = ctx.mound;
+      for (let i = 0; i < n; i++) add(m.x, 0, m.d + o - 22.5 + i * 5, 2.2, true);
+      return;
+    }
+    case 'devilRider': {
+      const v = ctx.devil;
+      for (let i = 0; i < n; i++) { const a = i * 0.9; add(v.x + 3 * Math.cos(a), 0, v.d + o - 12 + i * 1.8, 4 + i * 1.2); }
+      return;
+    }
+    case 'oasisDip': {
+      const p = ctx.pond;
+      for (let i = 0; i < n; i++) add(p.x, 0, p.d + o - 25 + i * 5, 2.2, true);
+      return;
+    }
+    case 'waterSkim':
+      for (let i = 0; i < n; i++) add(-16, 0, ctx.d0 + o + 15 + i * 5, 1.8, true);
+      return;
+    case 'islandHop': {
+      const isl = ctx.island;
+      for (let i = 0; i < n; i++) { const t = i / (n - 1); add(isl.x, 0, isl.d + o - isl.rd + t * isl.rd * 2, 2.5 + 8 * Math.sin(Math.PI * t)); }
+      return;
+    }
+    default:
+  }
+}
+
+// Coins for one ~80 m segment. Never buried: at least 2.5 m over the ground top
+// (dips follow the floor at a fixed height), and always under tunnel roofs.
 export function patternCoins(stage, terrain, k, name, r) {
   const L = stage.patterns.segment;
   const n = stage.patterns.coinsEach;
   const ctx = segmentContext(stage, terrain, k);
   let cx = k === 0 ? 0 : (r() * 2 - 1) * 16;
-  if (ctx.cavern || ctx.bigHill) cx = Math.max(cx, -6);  // keep the left features for the cave trail
-  if (ctx.forest) cx = Math.min(cx, 6);
+  if (ctx.leftBusy) cx = Math.max(cx, -6);  // keep the side features clear
+  if (ctx.rightBusy) cx = Math.min(cx, 6);
   const base = k === 0 ? 6 : 6 + r() * 12;
   const start = k === 0 ? 14 : k * L + 8 + r() * 18;
   const out = [];
-  const add = (x, y, d) => out.push({ x, y, d });
-  if (name === 'treeWeave') {
-    // Thread the trunks: pass each trunk on the opposite side, with a coin in each gap.
-    const lap = k * L - terrain.local(k * L);
-    const inSeg = terrain.trunks.filter((tr) => !tr.hero && tr.d + lap >= k * L && tr.d + lap < (k + 1) * L);
-    for (const tr of inSeg) {
-      const mx = 33 - tr.x; // mirror across the slalom middle (x 16.5)
-      add(mx, 4, tr.d + lap - 2);
-      add(mx, 4, tr.d + lap + 2);
-      add(16.5, 4, tr.d + lap + 12.5);
-    }
-    if (out.length === 0) name = 'slalom';
+  const add = (x, y, d, rel = null, dip = false) => out.push({ x, y, d, rel, dip });
+  if (SPECIAL_NEEDS[name]) {
+    if (SPECIAL_NEEDS[name](ctx)) specialCoins(name, ctx, add, n);
+    if (out.length === 0) name = 'line';
   }
-  for (let i = 0; i < n && name !== 'treeWeave'; i++) {
+  for (let i = 0; i < n && !SPECIAL_NEEDS[name]; i++) {
     const t = i / (n - 1);
     const d = start + i * 5;
     switch (name) {
@@ -100,22 +171,25 @@ export function patternCoins(stage, terrain, k, name, r) {
         else { const a = ((i - 2) / (n - 2)) * Math.PI * 2; add(cx + 2.2 * Math.cos(a), base + 2.2 * Math.sin(a), start + 14); }
         break;
       }
-      case 'ditchDip': {
-        const t0 = ctx.ditch ? ctx.ditch.d + (k * L - terrain.local(k * L)) - (n - 1) * 2.5 : d;
-        const dd = t0 + i * 5;
-        add(cx, 0, dd); // y set below to follow the ground into the ditch
-        out[out.length - 1].dip = true;
-        break;
-      }
       default: add(cx, base, d); // line
     }
   }
   for (const c of out) {
+    const floor = terrain.groundAt(c.x, c.d);
     const top = terrain.groundAt(c.x, c.d, Infinity);
-    c.y = c.dip ? terrain.groundAt(c.x, c.d) + 2.2 : Math.max(c.y, top + 2.5);
+    if (c.dip) c.y = floor + c.rel;
+    else if (c.rel !== null) c.y = Math.max(floor + c.rel, top + 2.5);
+    else c.y = Math.max(c.y, top + 2.5);
     c.y = Math.min(c.y, terrain.ceilingAt(c.x, c.d) - 1.5);
+    delete c.rel; delete c.dip;
   }
-  return out;
+  // Never inside rock: a coin in an arch slides into its opening; one inside a column is dropped.
+  return out.filter((c) => {
+    const hit = terrain.hitTest(c.x, c.y, c.d, 0.6);
+    if (!hit) return true;
+    if (hit.w) { c.x = hit.cx; c.y = hit.y0abs + hit.h / 2; return true; }
+    return false;
+  });
 }
 
 // A secret's `y` is its height above the floor there.
@@ -133,6 +207,12 @@ export function featureCoins(stage, terrain, lap) {
         out.push({ x, y: 3.5 + Math.sin(i * 0.7) * 1.2, d: d + off });
       }
     }
+  }
+  // Threaded coins through every non-tree slalom (pillars, cacti, pier posts).
+  for (const c of terrain.columns) {
+    if (!c.slalom || c.hero || c.kind === 'tree') continue;
+    const x = 2 * c.mid - c.x;
+    out.push({ x, y: terrain.groundAt(x, c.d, Infinity) + 3, d: c.d + off });
   }
   if (lap === 0) {
     for (const s of stage.secrets) {

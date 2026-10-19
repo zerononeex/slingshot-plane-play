@@ -21,13 +21,17 @@ export function partEffects(parts, pp) {
   };
 }
 
-// Merge the shared FLIGHT numbers with the engine level, the plane parts, and the
-// shop items that change the flight (wheels, band cap for the boost limit).
-export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null } = {}) {
+// Merge the shared FLIGHT numbers with the engine level, the plane parts, the shop
+// items that change the flight (wheels, band cap for the boost limit), the stage's
+// plane (decay/glide multipliers) and the stage's modifiers (soft snow, water).
+const STOCK_PLANE = { decayMul: 1, glideMul: 1 };
+export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null, plane = STOCK_PLANE, modifiers = {} } = {}) {
   const e = effects ?? { sinkMul: 1, climbCostMul: 1, driftSpeed: 0, stallSpeed: null, stallSinkMul: 1, responseMul: 1 };
+  const snow = modifiers.softSnow;
   return {
     ...flight,
-    decay: engine.decay,
+    decay: engine.decay * plane.decayMul,
+    drag: flight.drag * plane.glideMul,
     sinkMul: e.sinkMul,
     climbCostMul: e.climbCostMul,
     driftSpeed: e.driftSpeed,
@@ -35,8 +39,10 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     stallSink: flight.stallSink * e.stallSinkMul,
     pitchRateDeg: flight.pitchRateDeg * e.responseMul,
     lateralResponse: flight.lateralResponse * e.responseMul,
-    bounceKeep: wheels.keep,
+    bounceKeep: snow ? Math.min(0.97, wheels.keep + snow.keepBonus) : wheels.keep,
     bouncePop: wheels.pop,
+    landingSinkBonus: snow ? snow.sinkBonus : 0,
+    water: modifiers.water ?? null,
     boostThrust: BOOST.thrust,
     boostCap: (band ? band.launchMax : 30) + BOOST.capOverBand,
   };
@@ -69,16 +75,20 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 
     landing: null,          // null | perfect | good | rough | bad — judged at first contact
     crashFX: false,         // fire + smoke only for a BAD crash
     scrapeCool: 0,
+    used: new Set(),        // arches / rings / dust devils already used this flight
+    inUpdraft: false,
     ended: null,            // null | 'landed' | 'tumble'
-    events: [],             // bounce | touchdown | tumble | scrape | perfect | good — drained by the game
+    events: [],             // bounce | touchdown | tumble | scrape | perfect | good | arch | ring | devil | updraft | splash | bigSplash
   };
 }
 
 // Accept either a bare groundAt(x, d, y) function or a terrain object.
+const NO_FX = { lift: 0, push: 0, gust: 0, updraft: null };
 function envOf(env) {
   if (typeof env === 'function') return { groundAt: env, ceilingAt: () => Infinity, hitTest: () => null };
   return env;
 }
+const _cross = [];
 
 // Advance one step. input = { x: -1..1 (right +), y: -1..1 (climb +), boost: bool }.
 export function stepFlight(s, input, dt, P, envIn) {
@@ -94,12 +104,15 @@ export function stepFlight(s, input, dt, P, envIn) {
   return s;
 }
 
+// Returns true when the plane was pushed against the corridor edge this step.
 function steerLateral(s, input, dt, P, scale, drift = 0) {
   const target = clamp(input.x, -1, 1) * P.lateralSpeed * scale + drift;
   s.vx += (target - s.vx) * Math.min(1, P.lateralResponse * dt);
   s.x += s.vx * dt;
-  if (s.x > P.corridorHalfWidth) { s.x = P.corridorHalfWidth; s.vx = Math.min(s.vx, 0); }
-  if (s.x < -P.corridorHalfWidth) { s.x = -P.corridorHalfWidth; s.vx = Math.max(s.vx, 0); }
+  const pushing = Math.abs(s.vx) > 1.5;
+  if (s.x > P.corridorHalfWidth) { s.x = P.corridorHalfWidth; s.vx = Math.min(s.vx, 0); return pushing; }
+  if (s.x < -P.corridorHalfWidth) { s.x = -P.corridorHalfWidth; s.vx = Math.max(s.vx, 0); return pushing; }
+  return false;
 }
 
 function startTumble(s) {
@@ -125,6 +138,12 @@ function stepAir(s, input, dt, P, env) {
     if (iy >= 0) target = Math.max(target, s.launchPitch);
   }
 
+  // Stage gimmicks at this spot: updraft lift, tailwind push, side gusts.
+  const zone = env.effectsAt ? env.effectsAt(s.x, s.y, s.d) : NO_FX;
+  const inUp = zone.lift > 0;
+  if (inUp && !s.inUpdraft) s.events.push('updraft');
+  s.inUpdraft = inUp;
+
   s.stalled = s.speed < P.stallSpeed;
   const stallAmt = s.stalled ? clamp(1 - (s.speed - P.minAirSpeed) / (P.stallSpeed - P.minAirSpeed), 0, 1) : 0;
   if (s.stalled) target = Math.min(target, 0) - stallAmt * P.stallNoseDropDeg * DEG;
@@ -144,17 +163,38 @@ function stepAir(s, input, dt, P, env) {
     s.fuel = Math.max(0, s.fuel - dt);
     if (s.speed < P.boostCap) thrust = P.boostThrust;
   }
-  s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust) * dt);
-  if (thrust > 0 && s.speed > P.boostCap) s.speed = Math.max(P.boostCap, s.speed - thrust * dt);
+  // Tailwind: a push forward (never past the boost cap).
+  const wind = zone.push > 0 && s.speed < P.boostCap ? zone.push : 0;
+  s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust + wind) * dt);
+  if ((thrust > 0 || wind > 0) && s.speed > P.boostCap) s.speed = Math.max(P.boostCap, s.speed - (thrust + wind) * dt);
 
   const xPrev = s.x, dPrev = s.d, yPrev = s.y;
   const forward = s.speed * Math.cos(s.pitch);
-  s.vy = s.speed * Math.sin(s.pitch) - stallAmt * P.stallSink * (P.sinkMul ?? 1);
-  steerLateral(s, input, dt, P, 1, P.driftSpeed ?? 0);
+  // Updraft: the stall sink is cancelled and the air lifts you — at no speed cost.
+  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1)) + zone.lift;
+  if (steerLateral(s, input, dt, P, 1, (P.driftSpeed ?? 0) + zone.gust) && env.edgeWalls) scrape(s, P); // cliff / building walls
   s.d += forward * dt;
   s.y = Math.min(P.ceiling, s.y + s.vy * dt);
 
-  // Solid trunks: a proper hit is a Bonk.
+  // Through an arch opening or a ring: once each per flight.
+  if (env.crossings) {
+    _cross.length = 0;
+    for (const c of env.crossings(xPrev, yPrev, dPrev, s.x, s.y, s.d, _cross)) {
+      if (!s.used.has(c.id + c.type)) { s.used.add(c.id + c.type); s.events.push(c.type); }
+    }
+  }
+  // Dust devil: a swirling boost, once per devil.
+  if (env.devilAt) {
+    const dv = env.devilAt(s.x, s.y, s.d);
+    if (dv && !s.used.has(`devil${dv.id}`)) {
+      s.used.add(`devil${dv.id}`);
+      s.speed += env.stage.devilBoost.speed;
+      s.pitch = Math.max(s.pitch, env.stage.devilBoost.pitchDeg * DEG);
+      s.events.push('devil');
+    }
+  }
+
+  // Solid obstacles (trunks, pillars, towers, arch rock): a proper hit is a Bonk.
   if (env.hitTest(s.x, s.y, s.d, P.clearance)) { s.d = dPrev; startTumble(s); return; }
 
   // Tunnel roof: scrape along it.
@@ -195,11 +235,13 @@ function slopeAt(x, d, y, env) {
 }
 
 // Landing classification (first contact) + bounce / roll / tumble.
+// Soft snow widens the sink limits by P.landingSinkBonus m/s.
 export function classifyTouchdown(vy, impactDeg, speed, P) {
   if (impactDeg < -P.crashAngleDeg && speed > P.crashSpeed) return 'bad';
   const a = Math.abs(impactDeg);
-  if (vy >= LANDING.perfect.minSink && a <= LANDING.perfect.maxAngleDeg) return 'perfect';
-  if (vy >= LANDING.good.minSink && a <= LANDING.good.maxAngleDeg) return 'good';
+  const bonus = P.landingSinkBonus ?? 0;
+  if (vy >= LANDING.perfect.minSink - bonus && a <= LANDING.perfect.maxAngleDeg) return 'perfect';
+  if (vy >= LANDING.good.minSink - bonus && a <= LANDING.good.maxAngleDeg) return 'good';
   return 'rough';
 }
 
@@ -211,7 +253,22 @@ function touchGround(s, forward, P, env, g) {
 
   const verdict = classifyTouchdown(s.vy, impact / DEG, s.speed, P);
   const first = s.landing === null;
-  if (verdict === 'bad') { startTumble(s); return; }
+  const onWater = P.water && env.surfaceKind && env.surfaceKind(s.x, s.d, s.y) === 'water';
+  if (verdict === 'bad') { if (onWater) s.events.push('bigSplash'); startTumble(s); return; }
+  if (onWater) {
+    // Floats! Water never grades better than ROUGH: splash-bounce, or settle and float.
+    if (first) s.landing = 'rough';
+    s.events.push('splash');
+    if (s.speed > P.bounceMinSpeed) {
+      s.bounces++;
+      s.speed *= P.water.keep;
+      s.pitch = slope + Math.asin(Math.min(0.9, P.water.pop / Math.max(s.speed, 1)));
+    } else {
+      s.mode = 'ground';
+      s.pitch = slope;
+    }
+    return;
+  }
   if (first) s.landing = verdict;
 
   if (first && (verdict === 'perfect' || verdict === 'good')) {

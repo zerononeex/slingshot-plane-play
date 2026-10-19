@@ -7,14 +7,14 @@ import {
 import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects } from './physics.js';
 import { stepPilot, tryEject, runDistance, runOver } from './pilot.js';
 import { makeTerrain } from './terrain.js';
-import { STAGES } from './stages.js';
+import { STAGES, STAGE_ORDER, stageBand } from './stages.js';
 import { stepCoins, reachSecrets } from './coins.js';
 import { speedoReading, speedoZones, KMH } from './speedo.js';
 import {
   trackStats, nextCost, canBuyTrack, buyTrack, maxLevel, minLevel,
   nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, applyRun, runPayout, newSecrets,
 } from './economy.js';
-import { loadSave, writeSave, getStage, setStage } from './save.js';
+import { loadSave, writeSave, getStage, setStage, checkUnlocks, isUnlocked, selectStage } from './save.js';
 import { buildPlane } from './plane.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
@@ -24,21 +24,23 @@ const $ = (id) => document.getElementById(id);
 const DEG = Math.PI / 180;
 const STEP = 1 / 60;
 const PULL_BACK_M = 5;            // how far the plane slides back at full pull
-const TOP_SPEED = trackStats('band', maxLevel('band')).launchMax + 10;
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
 // ---------- save + stage ----------
 let save = loadSave();
 let stageId = save.currentStage;
-const stage = STAGES[stageId];
+let stage = STAGES[stageId];
 let rec = getStage(save, stageId);
+// Stage-aware shop stats: the band's caps come from the stage's plane.
+const statsFor = (id, lv) => (id === 'band' ? stageBand(stage, trackStats('band', lv)) : trackStats(id, lv));
+const topSpeed = () => stage.plane.caps[stage.plane.caps.length - 1] + 10;
 function commit(next) {
   rec = next;
   save = setStage(save, stageId, rec);
   writeSave(save);
 }
 const loadout = () => ({
-  band: trackStats('band', rec.band),
+  band: statsFor('band', rec.band),
   engine: trackStats('engine', rec.engine),
   tank: trackStats('tank', rec.tank),
   ramp: trackStats('ramp', rec.ramp),
@@ -56,11 +58,13 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRat
 renderer.shadowMap.enabled = false;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 520);
-const world = createWorld(scene, stage);
+const world = createWorld(scene);
 const fx = createFx(scene);
 let terrain = terrainFor(loadout());
+world.setStage(stage, terrain);
 
 const plane = buildPlane(PLANE_TUNE);
+plane.setStagePlane(stage.plane);
 scene.add(plane.root);
 
 // Fake blob shadow.
@@ -105,15 +109,58 @@ function refreshTitle() {
   $('title-coins').textContent = rec.coins;
   $('title-best').textContent = rec.best;
   $('title-secrets').textContent = `${rec.secrets.length}/${stage.secrets.length}`;
-  $('title-stage').textContent = `${stage.name} · ${stage.plane}`;
+  renderStageRow();
+  // Quick cards: Rubber Band + Engine for the SELECTED stage (same cards + purchase path as the shop).
+  const quick = $('quick-cards');
+  quick.textContent = '';
+  for (const item of SHOP_ITEMS.filter((i) => i.id === 'band' || i.id === 'engine')) quick.appendChild(trackCard(item, true));
   applyLooks();
+}
+
+// Stage picker: one card per stage, locked ones say how to unlock them.
+function renderStageRow() {
+  const row = $('stage-row');
+  row.textContent = '';
+  for (const id of STAGE_ORDER) {
+    const st = STAGES[id];
+    const r = getStage(save, id);
+    const open = isUnlocked(save, id);
+    const b = document.createElement('button');
+    b.className = `stage-card${id === stageId ? ' selected' : ''}${open ? '' : ' locked'}`;
+    b.dataset.stage = id;
+    const prev = st.unlock ? STAGES[st.unlock.after] : null;
+    b.innerHTML = open
+      ? `<span class="st-name">${st.name}</span><span class="st-plane">${st.plane.name}</span><span class="st-best">Best ${r.best} m</span><span class="st-secrets">Secrets ${r.secrets.length}/${st.secrets.length}</span>`
+      : `<span class="st-name">🔒 ${st.name}</span><span class="st-lock">Fly ${st.unlock.best} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)</span>`;
+    b.disabled = !open;
+    b.addEventListener('click', () => switchStage(id));
+    row.appendChild(b);
+  }
+  row.querySelector('.selected')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+}
+
+function switchStage(id) {
+  if (id === stageId || !isUnlocked(save, id)) return;
+  save = selectStage(save, id);
+  writeSave(save);
+  stageId = id;
+  stage = STAGES[id];
+  rec = getStage(save, id);
+  lo = loadout();
+  terrain = terrainFor(lo);
+  world.setStage(stage, terrain);
+  plane.setStagePlane(stage.plane);
+  newWorld();
+  refreshTitle();
+  placePlane(restPose(0), 0, 0, 0);
+  snapCamera();
 }
 
 // ---------- shop ----------
 const pct = (v) => `${Math.round(v * 100)}%`;
 const SHOP_ITEMS = [
   { id: 'band', name: 'RUBBER BAND', icon: '➰', effect: (l) => `${l.name} · launch ${Math.round(l.launchMax * KMH)} km/h${l.momentum ? ` · ${l.momentum}s momentum` : ''}` },
-  { id: 'engine', name: 'ENGINE', icon: '⚙️', effect: (l) => `Fly longer: loses ${l.decay.toFixed(2)} m/s each second` },
+  { id: 'engine', name: 'ENGINE', icon: '⚙️', effect: (l) => `Fly longer: loses ${(l.decay * stage.plane.decayMul).toFixed(2)} m/s each second` },
   { id: 'tank', name: 'FUEL TANK', icon: '⛽', effect: (l) => (l.level ? `BOOST for ${l.seconds} s, refills every flight` : 'Get a BOOST button!') },
   { id: 'ramp', name: 'LAUNCH RAMP', icon: '📐', effect: (l) => `Pad +${l.height} m, angle +${l.angleDeg}°` },
   { id: 'magnet', name: 'COIN MAGNET', icon: '🧲', effect: (l) => (l.level ? `Pulls coins from ${l.radius} m` : 'Coins fly to you!') },
@@ -136,35 +183,41 @@ function card({ icon, iconBg, name, pips = '', effect, price, state, onBuy }) {
   return b;
 }
 
+// One purchase path for the shop AND the title quick cards (one source of truth: the stage record).
 function purchase(next) {
   if (!next) return;
   commit(next);
   sfx.coin();
-  refreshShop();
+  if (mode === 'shop') refreshShop(); else refreshTitle();
+}
+
+// A level-track card (shop grid and title quick cards share this).
+function trackCard(item, quick = false) {
+  const lv = rec[item.id];
+  const cur = statsFor(item.id, lv);
+  const cost = nextCost(item.id, lv);
+  const next = cost === null ? null : statsFor(item.id, lv + 1);
+  const state = cost === null ? 'maxed' : canBuyTrack(rec, item.id) ? 'buyable' : 'locked-soft';
+  const effect = next ? (quick ? `▸ ${item.effect(next)}` : `${item.effect(cur)}<br>▸ ${item.effect(next)}`) : item.effect(cur);
+  const c = card({
+    icon: item.icon,
+    iconBg: item.id === 'band' ? hex(cur.color) : item.id === 'magnet' && lv ? hex(cur.color) : '',
+    name: item.name,
+    pips: pipsHtml(lv, minLevel(item.id), maxLevel(item.id)),
+    effect,
+    price: cost === null ? 'MAX ★' : `<span class="coin-dot"></span>${cost}`,
+    state,
+    onBuy: () => purchase(buyTrack(rec, item.id)),
+  });
+  c.dataset.track = item.id;
+  return c;
 }
 
 function refreshShop() {
   $('shop-coins').textContent = rec.coins;
   const grid = $('shop-grid');
   grid.textContent = '';
-  for (const item of SHOP_ITEMS) {
-    const lv = rec[item.id];
-    const cur = trackStats(item.id, lv);
-    const cost = nextCost(item.id, lv);
-    const next = cost === null ? null : trackStats(item.id, lv + 1);
-    const state = cost === null ? 'maxed' : canBuyTrack(rec, item.id) ? 'buyable' : 'locked-soft';
-    const effect = next ? `${item.effect(cur)}<br>▸ ${item.effect(next)}` : item.effect(cur);
-    grid.appendChild(card({
-      icon: item.icon,
-      iconBg: item.id === 'band' ? hex(cur.color) : item.id === 'magnet' && lv ? hex(cur.color) : '',
-      name: item.name,
-      pips: pipsHtml(lv, minLevel(item.id), maxLevel(item.id)),
-      effect,
-      price: cost === null ? 'MAX ★' : `<span class="coin-dot"></span>${cost}`,
-      state,
-      onBuy: () => purchase(buyTrack(rec, item.id)),
-    }));
-  }
+  for (const item of SHOP_ITEMS) grid.appendChild(trackCard(item));
   grid.appendChild(card({
     icon: '🪂', name: 'EJECTOR SEAT', effect: 'Once per flight: pop out and parachute on!',
     price: rec.eject ? 'OWNED ✓' : `<span class="coin-dot"></span>${EJECT.cost}`,
@@ -239,7 +292,7 @@ function startRun() {
   newWorld();
   applyLooks();
   effects = partEffects(rec.parts, PART_PHYSICS);
-  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band });
+  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: stage.plane, modifiers: stage.modifiers });
   flight = null;
   runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set();
   flop = false; pull = 0; endTimer = 0; crashTimer = 0; paused = false; tumbleSpin = 0;
@@ -311,7 +364,15 @@ function launch() {
   $('hud-flight').hidden = false;
   $('btn-boost').hidden = lo.tank.level === 0;
   $('btn-eject').hidden = !rec.eject;
+  world.setUsed(flight.used);
   sfx.launch();
+}
+
+// Unlock chain: store anything newly earned (never re-locks).
+function storeUnlocks() {
+  const u = checkUnlocks(save);
+  if (u.newly.length) { save = u.save; writeSave(save); }
+  return u.newly;
 }
 
 function distanceNow() {
@@ -323,6 +384,10 @@ function finishRun() {
   const prevBest = rec.best;
   const pay = runPayout(dist, runCoins, landingBonus);
   commit(applyRun(rec, dist, runCoins, landingBonus, secretsFound));
+  const unlocked = storeUnlocks();
+  $('res-unlock').hidden = unlocked.length === 0;
+  $('res-unlock').textContent = unlocked.map((id) => `NEW STAGE UNLOCKED: ${STAGES[id].name}!`).join(' ');
+  if (unlocked.length) sfx.secret();
   $('res-dist').textContent = dist;
   $('res-coins').textContent = pay.collected;
   $('res-bonus').textContent = pay.bonus;
@@ -341,7 +406,7 @@ function finishRun() {
 }
 
 function goHome() {
-  if (mode === 'fly' && flight) commit(applyRun(rec, distanceNow(), runCoins, landingBonus, secretsFound)); // leaving mid-flight keeps what you earned
+  if (mode === 'fly' && flight) { commit(applyRun(rec, distanceNow(), runCoins, landingBonus, secretsFound)); storeUnlocks(); } // leaving mid-flight keeps what you earned
   mode = 'title';
   paused = false;
   $('pause').hidden = true;
@@ -558,7 +623,8 @@ function updateHud() {
   $('hud-coins').textContent = runCoins;
   const sp = flight ? flight.speed : 0;
   const fill = $('speed-fill');
-  fill.style.width = `${Math.min(100, (sp / TOP_SPEED) * 100)}%`;
+  fill.style.width = `${Math.min(100, (sp / topSpeed()) * 100)}%`;
+  $('hud-updraft').hidden = !(flight && flight.inUpdraft && !ejected);
   fill.classList.toggle('slow', !!flight && flight.mode === 'air' && flight.stalled);
   fill.classList.toggle('momentum', !!flight && flight.momentumLeft > 0);
   if (flight && lo.tank.level) {
@@ -693,6 +759,17 @@ function stepGame(dt) {
       landingBonus += LANDING[ev].bonus;
       banner(`${LANDING[ev].text} +${LANDING[ev].bonus}`, 2.2);
       sfx.cheer();
+    }
+    if (ejected) continue; // the empty plane earns nothing
+    if (ev === 'arch') { runCoins += stage.archBonus; banner(`THROUGH THE ARCH! +${stage.archBonus}`, 1.6); sfx.secret(); }
+    if (ev === 'ring') { runCoins += stage.ringBonus; banner(`THROUGH THE RING! +${stage.ringBonus}`, 1.2); sfx.secret(); }
+    if (ev === 'devil') { banner('WHOOSH! DUST DEVIL BOOST!', 1.4); sfx.whoosh(); }
+    if (ev === 'updraft') sfx.whoosh();
+    if (ev === 'splash' || ev === 'bigSplash') {
+      plane.root.getWorldPosition(_v);
+      fx.splash(_v.x, terrain.groundAt(flight.x, flight.d), _v.z, ev === 'bigSplash');
+      sfx.splash();
+      if (ev === 'splash') plane.squashWheels();
     }
   }
   flight.events.length = 0;

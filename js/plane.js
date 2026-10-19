@@ -197,7 +197,38 @@ export function buildPlane(tune) {
   magnet.position.set(0, -0.32, 0.95);
   model.add(magnet);
 
+  // Seaplane floats (the Sea Falcon) — shown per stage plane.
+  const floats = new THREE.Group();
+  const floatMat = lam(0xffffff);
+  for (const side of [-1, 1]) {
+    const pontoon = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 2.0, 8), floatMat);
+    pontoon.rotation.x = Math.PI / 2;
+    pontoon.position.set(side * 0.75, -0.62, -0.25);
+    floats.add(pontoon);
+    const tipF = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.4, 8), floatMat);
+    tipF.rotation.x = -Math.PI / 2;
+    tipF.position.set(side * 0.75, -0.62, -1.45);
+    floats.add(tipF);
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), darkMat);
+    strut.position.set(side * 0.6, -0.4, -0.3);
+    floats.add(strut);
+  }
+  floats.visible = false;
+  model.add(floats);
+
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
+
+  // Each stage flies its own plane: colours, wing size, floats.
+  let defaultBody = tune.bodyColor;
+  function setStagePlane(def) {
+    defaultBody = def.body;
+    wingMat.color.setHex(def.wing);
+    accentMat.color.setHex(def.accent);
+    const ws = def.wingScale / tune.wingScale;
+    leftWing.scale.x = rightWing.scale.x = ws;
+    tail.scale.x = ws;
+    floats.visible = !!def.floats;
+  }
 
   function setParts(parts) {
     leftWing.visible = !!parts.leftWing;
@@ -227,7 +258,7 @@ export function buildPlane(tune) {
       w.userData.baseY = w.position.y;
     }
     seat.visible = !!rec.eject;
-    bodyMat.color.setHex(paint.color);
+    bodyMat.color.setHex(paint.id === 'default' ? defaultBody : paint.color);
     rainbow = !!paint.rainbow;
   }
 
@@ -257,5 +288,5 @@ export function buildPlane(tune) {
     for (const a of pilot.arms) a.rotation.set(0, 0, 0);
   }
 
-  return { root, model, prop, setParts, setLoadout, animate, squashWheels, pilot, seatPilot, magnet, tank };
+  return { root, model, prop, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank };
 }

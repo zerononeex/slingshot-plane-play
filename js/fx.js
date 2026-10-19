@@ -65,6 +65,14 @@ export function createFx(scene) {
     spark(x, y, z, color = 0xfff3b0) {
       spawn(x, y, z, { color, size: 0.35, life: 0.18, grow: -1, flicker: true });
     },
+    splash(x, y, z, big = false) {
+      const n = big ? 26 : 12;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const sp = (big ? 7 : 4) * (0.6 + r() * 0.6);
+        spawn(x, y + 0.2, z, { color: i % 3 ? 0xffffff : 0x9fd8ff, size: big ? 0.9 : 0.6, life: 0.7, vx: Math.cos(a) * sp, vy: 3 + r() * (big ? 7 : 4), vz: Math.sin(a) * sp, grow: 0.6, opacity: 0.9 });
+      }
+    },
     sparkleBurst(x, y, z) {
       for (let i = 0; i < 18; i++) {
         const a = (i / 18) * Math.PI * 2;

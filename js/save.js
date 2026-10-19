@@ -1,13 +1,13 @@
 // localStorage save, per stage. A bad save never crashes and is never wiped:
 // every field is validated on its own and falls back to its default.
 //
-// Shape (v2): { v: 2, currentStage, stages: { <stageId>: record } }
+// Shape (v2): { v: 2, currentStage, unlocked: [stageIds], stages: { <stageId>: record } }
 // record = { coins, band, engine, tank, ramp, magnet, wheels, eject,
 //            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[] }
 //
 // Game code reads/writes progression ONLY through getStage(save, id) / setStage(save, id, rec).
 import { SAVE_KEY } from './config.js';
-import { STAGES, DEFAULT_STAGE } from './stages.js';
+import { STAGES, DEFAULT_STAGE, STAGE_ORDER } from './stages.js';
 import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel } from './economy.js';
 
 const MAX_COINS = 10_000_000;
@@ -30,8 +30,30 @@ export function freshRecord() {
 }
 
 export function freshSave() {
-  return { v: 2, currentStage: DEFAULT_STAGE, stages: { [DEFAULT_STAGE]: freshRecord() } };
+  return { v: 2, currentStage: DEFAULT_STAGE, unlocked: [DEFAULT_STAGE], stages: { [DEFAULT_STAGE]: freshRecord() } };
 }
+
+// Unlock chain: a stage is unlocked if it was unlocked before (stored, never re-locks),
+// if its own record exists, or if the previous stage's best meets its bar.
+export function deriveUnlocked(stages, stored = []) {
+  const out = [DEFAULT_STAGE];
+  for (const id of STAGE_ORDER) {
+    if (id === DEFAULT_STAGE) continue;
+    const u = STAGES[id].unlock;
+    const prevBest = stages[u.after]?.best ?? 0;
+    if (stored.includes(id) || stages[id] || (out.includes(u.after) && prevBest >= u.best)) out.push(id);
+  }
+  return out;
+}
+
+// After a run: newly earned unlocks (and the save with them stored).
+export function checkUnlocks(save) {
+  const unlocked = deriveUnlocked(save.stages, save.unlocked);
+  const newly = unlocked.filter((id) => !save.unlocked.includes(id));
+  return { save: newly.length ? { ...save, unlocked } : save, newly };
+}
+
+export const isUnlocked = (save, id) => save.unlocked.includes(id);
 
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const intOr = (n, lo, hi, dflt) => (Number.isInteger(n) ? Math.min(hi, Math.max(lo, n)) : dflt);
@@ -91,16 +113,19 @@ export function validateSave(data) {
   if (!isObj(data)) return freshSave();
   if (!isObj(data.stages)) {
     // Old flat save (v0 / v0.2).
-    return { v: 2, currentStage: DEFAULT_STAGE, stages: { [DEFAULT_STAGE]: migrateFlat(data) } };
+    const stages = { [DEFAULT_STAGE]: migrateFlat(data) };
+    return { v: 2, currentStage: DEFAULT_STAGE, unlocked: deriveUnlocked(stages), stages };
   }
   const stages = {};
   for (const id of Object.keys(data.stages).slice(0, MAX_STAGES)) {
     if (STAGE_ID.test(id)) stages[id] = validateRecord(data.stages[id], id);
   }
   if (!stages[DEFAULT_STAGE]) stages[DEFAULT_STAGE] = freshRecord();
-  const currentStage = typeof data.currentStage === 'string' && stages[data.currentStage] && STAGES[data.currentStage]
+  const stored = Array.isArray(data.unlocked) ? data.unlocked.filter((id) => STAGE_ORDER.includes(id)) : [];
+  const unlocked = deriveUnlocked(stages, stored);
+  const currentStage = typeof data.currentStage === 'string' && STAGES[data.currentStage] && unlocked.includes(data.currentStage)
     ? data.currentStage : DEFAULT_STAGE;
-  return { v: 2, currentStage, stages };
+  return { v: 2, currentStage, unlocked, stages };
 }
 
 // The ONLY way game code reads progression: a validated copy of one stage's record.
@@ -136,4 +161,9 @@ export function writeSave(save, storage = defaultStorage()) {
   } catch {
     return false; // private mode / quota — the game keeps going
   }
+}
+
+// Switch stages (only to an unlocked one).
+export function selectStage(save, id) {
+  return isUnlocked(save, id) ? { ...save, currentStage: id } : save;
 }
