@@ -3,7 +3,79 @@
 // and its look shows its level (setLoadout).
 import * as THREE from 'three';
 
-const lam = (color, extra) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+// v0.7 art pass: every plane material carries baked vertex colours (lighter on top, the colour
+// mid, deeper on the belly) so paint jobs still recolour through material.color.
+const lam = (color, extra) => new THREE.MeshLambertMaterial({ color, flatShading: true, vertexColors: true, ...extra });
+// Metal bits (cowls, intake, hub, struts, rims): a subtle Phong sheen — no environment maps.
+const metal = (color) => new THREE.MeshPhongMaterial({ color, flatShading: true, vertexColors: true, specular: 0x9aa3b0, shininess: 46 });
+
+// Bake top-light / belly-shade vertex colours into every mesh of a built model (once, at load).
+const _n = new THREE.Vector3(), _nm = new THREE.Matrix3();
+export function bakeShading(root, top = 1, belly = 0.56) {
+  root.updateMatrixWorld(true);
+  root.traverse((m) => {
+    if (!m.isMesh || !m.material?.vertexColors) return;
+    const g = m.geometry, nrm = g.attributes.normal, n = nrm.count;
+    _nm.getNormalMatrix(m.matrixWorld);
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      _n.fromBufferAttribute(nrm, i).applyMatrix3(_nm).normalize();
+      const t = (_n.y + 1) / 2;                                 // 0 = belly, 1 = top
+      const k = (belly + (top - belly) * t * t * (3 - 2 * t)) * (0.86 + 0.14 * Math.abs(_n.y)); // + a darker rim on the sides
+      const dust = Math.max(0, 0.45 - t) / 0.45 * 0.08;                // a soft warm dust tint on bellies + wheels
+      col[i * 3] = k; col[i * 3 + 1] = k * (1 - dust * 0.6); col[i * 3 + 2] = k * (1 - dust * 1.4);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  });
+}
+
+// Glass: dark blue-black with a baked diagonal highlight stripe (canvas, made once).
+let glassTex = null;
+function glassTexture() {
+  if (glassTex) return glassTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const base = g.createLinearGradient(0, 0, 0, 64);
+  base.addColorStop(0, '#2a3b66'); base.addColorStop(1, '#0b1224');
+  g.fillStyle = base; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 6;
+  g.beginPath(); g.moveTo(10, 64); g.lineTo(44, 0); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(26, 64); g.lineTo(58, 4); g.stroke();
+  glassTex = new THREE.CanvasTexture(c);
+  glassTex.colorSpace = THREE.SRGBColorSpace;
+  return glassTex;
+}
+const glass = (extra) => new THREE.MeshPhongMaterial({ color: 0xffffff, map: glassTexture(), specular: 0xffffff, shininess: 90, ...extra });
+
+// ---------- v0.7 decals (canvas-made once; they ride on top, so paint jobs still show) ----------
+// Plane identity: tail number (delivery order) + a two-tone stripe kit [main, pin].
+const IDENTITY = {
+  'Wooden Trainer': { num: '01', stripe: [0x3fc5ff, 0xffffff] }, 'Canyon Cruiser': { num: '02', stripe: [0xfff1d6, 0x7a2a12] },
+  'City Hopper': { num: '03', stripe: [0xe8262c, 0x2b3a55] }, 'Snow Owl': { num: '04', stripe: [0x3f86e8, 0xffffff] },
+  'Dune Hawk': { num: '05', stripe: [0x8a5a1a, 0xfff1d6] }, 'Sea Falcon': { num: '06', stripe: [0xffffff, 0xff7a1a] },
+  Starship: { num: '07', stripe: [0xff7a1a, 0xffffff] }, Barnstormer: { num: '08', stripe: [0xfff1d6, 0xd8262c] },
+  'Sky Dart': { num: '09', stripe: [0xff7a1a, 0x3b4252] },
+};
+const hexCss = (n) => `#${n.toString(16).padStart(6, '0')}`;
+function canvasTex(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 2;
+  return { c, g: c.getContext('2d'), t };
+}
+const decalMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide });
+
+// Thin dark silhouette lines on the few big parts (fuselage, wing decks, tail): ~8 extra draw calls.
+const EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x0d1626, transparent: true, opacity: 0.38 });
+function edges(mesh, angle = 28) {
+  const l = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), EDGE_MAT);
+  mesh.add(l);
+  return l;
+}
 
 // The little pilot (sits in the cockpit; pops out on eject or after a Bonk).
 function buildPilot() {
@@ -58,7 +130,7 @@ export function buildPlane(tune) {
   const bodyMat = lam(tune.bodyColor);
   const wingMat = lam(tune.wingColor);
   const accentMat = lam(tune.accentColor);
-  const darkMat = lam(0x333344);
+  const darkMat = metal(0x333344);
 
   const root = new THREE.Group();   // positioned + rotated by the game
   const model = new THREE.Group();  // local offsets / tumble spin
@@ -68,6 +140,7 @@ export function buildPlane(tune) {
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.22, 2.2, 8), bodyMat);
   body.rotation.x = Math.PI / 2;
   model.add(body);
+  edges(body);
   const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 0.4, 8), bodyMat);
   nose.rotation.x = Math.PI / 2;
   nose.position.z = -1.3;
@@ -77,14 +150,14 @@ export function buildPlane(tune) {
   stripe.position.z = -0.75;
   model.add(stripe);
 
-  // Windscreen in front of the pilot.
-  const screen = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), accentMat);
+  // Windscreen in front of the pilot: dark glossy glass with a highlight stripe.
+  const screen = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), glass());
   screen.scale.set(1, 0.8, 0.7);
   screen.position.set(0, 0.3, -0.42);
   model.add(screen);
 
   // Engine cowl ring (colour = engine level).
-  const cowlMat = lam(0x888888);
+  const cowlMat = metal(0x888888);
   const cowl = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.07, 6, 12), cowlMat);
   cowl.position.z = -1.48;
   model.add(cowl);
@@ -96,6 +169,7 @@ export function buildPlane(tune) {
     const slab = new THREE.Mesh(new THREE.BoxGeometry(span / 2, 0.1, 0.75), wingMat);
     slab.position.set(side * span / 4, -0.08, -0.35);
     g.add(slab);
+    edges(slab);
     const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 0.1, 8), wingMat);
     tip.position.set(side * span / 2, -0.08, -0.35);
     g.add(tip);
@@ -104,6 +178,7 @@ export function buildPlane(tune) {
     const top = new THREE.Mesh(new THREE.BoxGeometry(span / 2 - 0.3, 0.09, 0.7), wingMat);
     top.position.set(side * (span / 4 + 0.15), 0.72, -0.5);
     upper.add(top);
+    edges(top);
     const topTip = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.09, 8), wingMat);
     topTip.position.set(side * span / 2, 0.72, -0.5);
     upper.add(topTip);
@@ -118,7 +193,7 @@ export function buildPlane(tune) {
     model.add(g);
     return g;
   };
-  const strutMat = lam(0x5a3a22);
+  const strutMat = metal(0x5a3a22);
   const leftWing = makeWing(-1);  // -x = screen-left from the chase camera
   const rightWing = makeWing(1);
 
@@ -127,9 +202,11 @@ export function buildPlane(tune) {
   const stab = new THREE.Mesh(new THREE.BoxGeometry(1.3 * tune.wingScale, 0.08, 0.4), wingMat);
   stab.position.set(0, 0.05, 1.0);
   tail.add(stab);
+  edges(stab);
   const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.45), wingMat);
   fin.position.set(0, 0.38, 1.0);
   tail.add(fin);
+  edges(fin);
   model.add(tail);
 
   // Propeller.
@@ -159,7 +236,7 @@ export function buildPlane(tune) {
 
   // Wheels (always fitted; size/colour = BOUNCY WHEELS level). Wheel bottoms sit at y -0.6.
   const tireMat = lam(0x222222);
-  const rimMat = lam(0x888888);
+  const rimMat = metal(0x888888);
   const stripeMat = lam(0xe8262c);
   const gear = new THREE.Group();
   const wheels = [-1, 1].map((side) => {
@@ -242,7 +319,8 @@ export function buildPlane(tune) {
 
   // Jet (the Sky Dart): a dark nose intake instead of a propeller; the engine ring moves to the
   // tail as the afterburner ring and the exhaust flame grows with speed.
-  const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.25, 12, 1, true).rotateX(Math.PI / 2), lam(0x1d2433, { side: THREE.DoubleSide }));
+  const intakeMat = new THREE.MeshPhongMaterial({ color: 0x1d2433, side: THREE.DoubleSide, flatShading: true, vertexColors: true, specular: 0x9aa3b0, shininess: 46 });
+  const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.25, 12, 1, true).rotateX(Math.PI / 2), intakeMat);
   intake.position.z = -1.55;
   intake.visible = false;
   model.add(intake);
@@ -254,7 +332,7 @@ export function buildPlane(tune) {
   const shipNose = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.9, 10).rotateX(-Math.PI / 2), bodyMat);
   shipNose.position.z = -1.9;
   shipParts.add(shipNose);
-  const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 8), new THREE.MeshLambertMaterial({ color: 0x9fe6ff, transparent: true, opacity: 0.55, emissive: 0x1a4a66 }));
+  const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 8), glass({ transparent: true, opacity: 0.85 }));
   bubble.scale.set(1, 0.85, 1.4);
   bubble.position.set(0, 0.32, -0.3);
   shipParts.add(bubble);
@@ -299,6 +377,13 @@ export function buildPlane(tune) {
     leftWing.rotation.z = ship ? -0.3 : 0;        // fins angle up
     rightWing.rotation.z = ship ? 0.3 : 0;
     exhaustMat.color.setHex(jet ? 0xff7a2e : ship ? ION[ionLevel - 1] : 0xffa21f);
+    // v0.7 identity: stripes, roundel number and name lettering per plane; scorch behind exhausts.
+    const id = IDENTITY[def.name] ?? { num: '00', stripe: [def.accent, 0xffffff] };
+    stripeMain.color.setHex(id.stripe[0]);
+    stripePin.color.setHex(id.stripe[1]);
+    drawIdentity(def.name, id.num, id.stripe[0], id.stripe[1]);
+    for (const m of scorches) m.visible = jet || ship;
+    core.visible = ship;
   }
 
   function setParts(parts) {
@@ -342,7 +427,16 @@ export function buildPlane(tune) {
   let squash = 0;
   const _hsl = new THREE.Color();
   // Per-frame visual life: rainbow paint, wheel squash after a bounce.
-  function animate(dt, t, flying, speed = 0) {
+  // How fast the prop turns (rad/s): fast = a blur disc, slow = the blades.
+  function propBlurFor(rate) {
+    const k = Math.min(1, Math.max(0, (rate - 14) / 16));
+    blurMat.opacity = 0.9 * k;
+    propBlur.visible = k > 0.02;
+    blade.visible = k < 0.75;
+  }
+  function animate(dt, t, flying, speed = 0, boosting = false) {
+    if (jet) intakeGlowMat.opacity = flying ? Math.min(0.9, 0.2 + speed / 120) * (0.75 + 0.25 * Math.sin(t * (6 + speed * 0.2))) : 0.15;
+    if (ship) { coreMat.opacity = 0.75 + Math.random() * 0.25; core.scale.set(1, 1, boosting ? 1.6 + Math.random() * 0.6 : 1); }
     if (rainbow) bodyMat.color.copy(_hsl.setHSL((t * (flying ? 0.12 : 0.08)) % 1, 0.85, 0.55));
     if (nebula) bodyMat.color.copy(_hsl.setHSL(0.5 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.3)), 0.7, 0.5)); // swirling teal ↔ purple
     if (beamT > 0) { beamT = Math.max(0, beamT - dt); beamMat.opacity = 0.28 * Math.min(1, beamT / 0.15) * (0.8 + 0.2 * Math.sin(t * 30)); }
@@ -378,5 +472,90 @@ export function buildPlane(tune) {
 
   // TRACTOR BEAM: a soft cone shimmer while a coin is being pulled (Starship only).
   function tractor() { if (ship) beamT = 0.35; }
-  return { root, model, prop, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
+  // ---- decals: stripes, roundel + number, name lettering, scorch; prop blur disc; intake glow ----
+  const stripeMain = lam(0x3fc5ff), stripePin = lam(0xffffff);
+  const rTop = (z) => 0.32 - 0.09 * z;        // the fuselage's top line along z (it tapers to the tail)
+  const fuseStripe = new THREE.Group();
+  const sMain = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.02, 2.0), stripeMain);
+  const sPin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 2.0), stripePin);
+  for (const m of [sMain, sPin]) { m.rotation.x = Math.atan(0.09); m.position.set(0, rTop(0) + 0.1 + (m === sPin ? 0.012 : 0), 0); fuseStripe.add(m); }
+  model.add(fuseStripe);
+  for (const w of [leftWing, rightWing]) { // wing-tip stripes (ride with the owned wing)
+    const side = w === leftWing ? -1 : 1;
+    for (const [dx, mat] of [[0.38, stripeMain], [0.26, stripePin]]) {
+      const ws = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.012, 0.78), mat);
+      ws.position.set(side * (span / 2 - dx), -0.025, -0.35);
+      w.add(ws);
+    }
+  }
+  const roundel = canvasTex(128, 128), nameTex = canvasTex(512, 64), scorch = canvasTex(64, 32);
+  const sideDecal = (tex, w, h, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), decalMat(tex.t)); m.position.set(x, y, z); m.rotation.y = ry; model.add(m); return m; };
+  const roundels = [-1, 1].map((sd) => sideDecal(roundel, 0.42, 0.42, sd * 0.33, 0.06, 0.52, sd * Math.PI / 2 + sd * 0.09));
+  for (const sd of [-1, 1]) { // …and on both sides of the tail fin (shown with the TAIL part)
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), decalMat(roundel.t));
+    m.position.set(sd * 0.05, 0.4, 1.0);
+    m.rotation.y = sd * Math.PI / 2;
+    tail.add(m);
+  }
+  const names = [-1, 1].map((sd) => sideDecal(nameTex, 1.1, 0.14, sd * 0.4, 0.02, -0.2, sd * Math.PI / 2 + sd * 0.09));
+  const scorches = [-1, 1].map((sd) => sideDecal(scorch, 0.5, 0.2, sd * 0.25, 0, 0.98, sd * Math.PI / 2 + sd * 0.09));
+  { // the scorch gradient is the same for every plane
+    const g = scorch.g, gr = g.createLinearGradient(0, 0, 64, 0);
+    gr.addColorStop(0, 'rgba(20,16,12,0)'); gr.addColorStop(1, 'rgba(20,16,12,0.55)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 32);
+    scorch.t.needsUpdate = true;
+  }
+  function drawIdentity(name, num, accent, pin) {
+    let g = roundel.g;
+    g.clearRect(0, 0, 128, 128);
+    g.fillStyle = hexCss(pin); g.beginPath(); g.arc(64, 64, 60, 0, Math.PI * 2); g.fill();
+    g.fillStyle = hexCss(accent); g.beginPath(); g.arc(64, 64, 50, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(64, 64, 38, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#121a2b'; g.font = 'italic 900 54px system-ui, -apple-system, "Segoe UI", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(num, 64, 68);
+    roundel.t.needsUpdate = true;
+    g = nameTex.g;
+    g.clearRect(0, 0, 512, 64);
+    g.font = 'italic 900 44px system-ui, -apple-system, "Segoe UI", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 6; g.strokeStyle = 'rgba(10,16,30,0.75)'; g.strokeText(name.toUpperCase(), 256, 34);
+    g.fillStyle = '#ffffff'; g.fillText(name.toUpperCase(), 256, 34);
+    nameTex.t.needsUpdate = true;
+  }
+
+  // PROP BLUR: a soft disc + faint arc streaks replaces the hard blades when it spins fast.
+  const blurTex = canvasTex(128, 128);
+  {
+    const g = blurTex.g, gr = g.createRadialGradient(64, 64, 6, 64, 64, 62);
+    gr.addColorStop(0, 'rgba(40,44,56,0.55)'); gr.addColorStop(0.7, 'rgba(60,64,78,0.22)'); gr.addColorStop(1, 'rgba(60,64,78,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(64, 64, 62, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 3;
+    for (const a of [0.3, 2.4, 4.4]) { g.beginPath(); g.arc(64, 64, 50, a, a + 0.7); g.stroke(); }
+    blurTex.t.needsUpdate = true;
+  }
+  const blurMat = new THREE.MeshBasicMaterial({ map: blurTex.t, transparent: true, depthWrite: false, opacity: 0, side: THREE.DoubleSide });
+  const propBlur = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), blurMat);
+  propBlur.position.z = -0.02;
+  prop.add(propBlur);
+  // JET: the intake glow ring pulses with speed.
+  const intakeGlowMat = new THREE.MeshBasicMaterial({ color: 0x7fd8ff, transparent: true, opacity: 0, depthWrite: false });
+  const intakeGlow = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.04, 6, 20), intakeGlowMat);
+  intakeGlow.position.z = -1.62;
+  intake.add(intakeGlow);
+  intakeGlow.position.set(0, 0, 0);
+  // STARSHIP: a bright core inside the exhaust (a longer flicker tongue at boost).
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false });
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.9, 8).rotateX(-Math.PI / 2), coreMat);
+  exhaust.add(core);
+
+  // Contrail anchors: the wing tips (they ride the wing groups, so ship fins tilt with them),
+  // or the fuselage sides when a wing isn't fitted.
+  const anchors = [leftWing, rightWing].map((w, i) => { const a = new THREE.Object3D(); a.position.set((i ? 1 : -1) * span / 2, -0.08, -0.2); w.add(a); return a; });
+  const bodyAnchors = [-1, 1].map((sd) => { const a = new THREE.Object3D(); a.position.set(sd * 0.45, 0, 0.2); model.add(a); return a; });
+  function trailPoints(outL, outR) {
+    (leftWing.visible ? anchors[0] : bodyAnchors[0]).getWorldPosition(outL);
+    (rightWing.visible ? anchors[1] : bodyAnchors[1]).getWorldPosition(outR);
+  }
+
+  bakeShading(model); // v0.7: the shaded, less-toy look (vertex colours, baked once)
+  return { root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
 }

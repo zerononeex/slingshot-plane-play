@@ -24,6 +24,7 @@ import { createMusic } from './music.js';
 import { createFlightSound } from './flightsound.js';
 import { upgradeNames, chipNames } from './names.js';
 import { SWING } from './pockets.js';
+import { createTrails, createStreaks } from './trails.js';
 import { exportCode, groupCode, parseCode } from './codes.js';
 import { quote, stepAmount, transfer, transferProblem } from './transfer.js';
 import { bumpSummary } from './bumpables.js';
@@ -492,6 +493,7 @@ function startRun() {
   params.canTilt = skills.has('tilt') && !!rec.parts.leftWing;
   params.canDive = skills.has('dive');
   flight = null;
+  camera.fov = baseFov; camera.updateProjectionMatrix(); // the speed kick starts from rest
   runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set(); bumpsRun = []; stashReached = new Set();
   world.setPocketLook(null);
   flop = false; pull = 0; endTimer = 0; crashTimer = 0; paused = false; tumbleSpin = 0;
@@ -526,6 +528,7 @@ function buildSpeedo() {
     const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     p.setAttribute('d', `M${x0} ${y0} A78 78 0 ${large} 1 ${x1} ${y1}`);
     p.setAttribute('stroke', z.color);
+    if (z.gold) p.classList.add('gold');
     zones.appendChild(p);
   }
   const ticks = $('speedo-ticks');
@@ -545,6 +548,7 @@ function updateSpeedo() {
   $('speedo-needle').style.transform = `rotate(${-SWEEP + 2 * SWEEP * frac}deg)`;
   $('speedo-kmh').textContent = pull > 0.02 ? Math.round(r.kmh) : 0;
   $('speedo').classList.toggle('full', r.nearFull);
+  $('speedo').classList.toggle('jet', pull > 0.02 && r.kmh >= 500); // jet-gauge look (visual only)
 }
 
 function launch() {
@@ -566,6 +570,11 @@ function launch() {
   showSkills(true);
   world.setUsed(flight.used);
   sfx.launch();
+  // v0.7: a little launch dust, and the trails start fresh.
+  plane.root.getWorldPosition(_v);
+  fx.dust(_v.x, _v.y - 0.5, _v.z + 1, DUST[stageId] ?? 0xd8c8a8, 8, 0.6);
+  trails.reset();
+  trails.setLook(plane.trailLook, plane.accent);
 }
 
 // A flight credits the WORLD flown (coins, best, secrets); unlocks read world bests.
@@ -1074,6 +1083,22 @@ $('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are
   xsDone();
 });
 
+// ---------- v0.7 speed FX ----------
+// World-tinted dust: snow puffs white, desert tan, moon grey…
+const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc };
+const trails = createTrails(scene), streaks = createStreaks(scene, camera);
+const _tl = new THREE.Vector3(), _tr = new THREE.Vector3();
+function speedFx(dt) {
+  if (mode === 'fly' && flight && !flight.ended && !ejected) {
+    plane.trailPoints(_tl, _tr);
+    trails.update(_tl, _tr, flight.speed, flight.boosting, dt, camera.position);
+    streaks.update(flight.speed, dt);
+  } else {
+    trails.update(_tl, _tr, 0, false, dt);
+    streaks.hide();
+  }
+}
+
 // ---------- visuals ----------
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
@@ -1200,10 +1225,12 @@ function frame(now) {
     const flying = mode === 'fly' && flight && !flight.ended;
     const spinRate = (flying && !ejected ? 12 + flight.speed * 1.6 : mode === 'fly' ? 0 : 6) * lo.engine.propSpin;
     plane.prop.rotation.z += spinRate * dt;
-    plane.animate(dt, clock, flying, flying ? flight.speed : 0);
+    plane.propBlurFor(spinRate);
+    plane.animate(dt, clock, flying, flying ? flight.speed : 0, flying && flight.boosting);
     animatePilot(dt);
     if (lo.magnet.sparkle && mode !== 'fly' && Math.random() < dt * 4) magnetSpark(0xffe14d);
     fx.update(dt);
+    speedFx(dt);
     if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $('banner').hidden = true;
     updateCamera(dt);
   }
@@ -1335,6 +1362,11 @@ function stepGame(dt) {
   }
   if (n === 6) acc = 0;
   for (const ev of flight.events) {
+    if (ev === 'bounce' || ev === 'touchdown' || ev === 'perfect' || ev === 'good') { // touchdown dust, scaled by the impact
+      plane.root.getWorldPosition(_v);
+      const k = Math.min(1, flight.speed / 30);
+      fx.dust(_v.x, _v.y - 0.5, _v.z, DUST[stageId] ?? 0xd8c8a8, Math.round(6 + 12 * k), 0.6 + 0.6 * k);
+    }
     if (ev === 'bounce') {
       sfx.bounce();
       if (plane.isShip) { // RETRO THRUSTERS: blue puffs instead of a squash
@@ -1419,13 +1451,18 @@ function stepGame(dt) {
   const steerVx = flight.vx - params.driftSpeed;
   const wob = onGround ? 0 : effects.wobbleDeg * DEG;
   let bank = onGround ? 0 : (steerVx / params.lateralSpeed) * bankMax - effects.rollDeg * DEG + wob * Math.sin(clock * 2.3);
-  bank += -flight.tiltT * (Math.PI / 2 - bank * 0.5);
-  if (flight.swing) { // SUB-AREAS: bank HARD toward the turn, with a quick FOV kick
+  bank += -flight.tiltT * (Math.PI / 2 - bank * 0.5); // TILT: knife-edge (left wing down)
+  // FOV kick: the sub-area swing's +6 and the speed kick (+4 from 45 m/s up) take the MAX, never stack;
+  // eased so it returns smoothly on landing.
+  let swingKick = 0;
+  if (flight.swing) { // SUB-AREAS: bank HARD toward the turn
     const k = Math.min(1, flight.swing.t / SWING.time), dir = Math.sign(flight.swing.to - flight.swing.from);
     bank += dir * SWING.bankDeg * DEG * Math.sin(Math.PI * k);
-    camera.fov = baseFov + SWING.fovKick * Math.sin(Math.PI * k);
-    camera.updateProjectionMatrix();
-  } else if (camera.fov !== baseFov) { camera.fov = baseFov; camera.updateProjectionMatrix(); }                                         // TILT: knife-edge (left wing down)
+    swingKick = SWING.fovKick * Math.sin(Math.PI * k);
+  }
+  const sk = Math.min(1, Math.max(0, (flight.speed - 45) / 40)), speedKick = flight.ended ? 0 : 4 * sk * sk * (3 - 2 * sk);
+  const fovWant = baseFov + Math.max(swingKick, speedKick);
+  if (Math.abs(camera.fov - fovWant) > 0.01) { camera.fov += (fovWant - camera.fov) * Math.min(1, (swingKick ? 14 : 5) * dt); camera.updateProjectionMatrix(); }                                         // TILT: knife-edge (left wing down)
   if (flight.rollT > 0) bank += flight.rollDir * Math.PI * 2 * (1 - flight.rollT / SKILLS.rollTime); // ROLL: a barrel roll
   const yaw = -Math.atan2(flight.vx, Math.max(1, flight.speed)) * 0.6;
   bonkWobble = Math.max(0, bonkWobble - dt);

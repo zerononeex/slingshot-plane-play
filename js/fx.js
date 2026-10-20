@@ -79,6 +79,13 @@ export function createFx(scene) {
         spawn(x, y, z, { color: i % 2 ? 0xffe14d : 0xffffff, size: 0.5, life: 0.9, vx: Math.cos(a) * 6, vy: Math.sin(a) * 6, vz: (r() - 0.5) * 4, grow: -0.4, flicker: true });
       }
     },
+    // Launch / touchdown dust, world-tinted, scaled by the impact (v0.7).
+    dust(x, y, z, color, n = 10, size = 0.7) {
+      for (let i = 0; i < n; i++) {
+        const a = r() * Math.PI * 2, sp = 1.5 + r() * 3;
+        spawn(x + (r() - 0.5), y, z + (r() - 0.5), { color, size: size * (0.6 + r() * 0.6), life: 0.7 + r() * 0.5, vx: Math.cos(a) * sp, vy: 0.6 + r() * 1.6, vz: Math.sin(a) * sp, grow: 1.1, opacity: 0.6 });
+      }
+    },
     // Bonk: a burst of stage-flavoured bits (leaves, pebbles, paper, puffs, sand, spray, sparks).
     bits(x, y, z, c1, c2) {
       for (let i = 0; i < 16; i++) {

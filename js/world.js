@@ -74,6 +74,73 @@ export function createWorld(scene) {
   spaceSky.visible = false;
   scene.add(spaceSky);
 
+  // ---------- v0.7 sky: a 3-stop gradient dome (zenith → horizon → warm near-ground haze) ----------
+  // Rides with the camera; fog uses the horizon stop. Bright skies stay bright (richness, not dusk).
+  const domeGeo = new THREE.SphereGeometry(470, 24, 14);
+  domeGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(domeGeo.attributes.position.count * 3), 3));
+  const dome = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  dome.renderOrder = -2;
+  dome.frustumCulled = false;
+  scene.add(dome);
+  const _z = new THREE.Color(), _h = new THREE.Color(), _w = new THREE.Color(), _k = new THREE.Color();
+  function paintSky(th) {
+    if (th.space) { _z.setHex(0x03050f); _h.setHex(th.sky); _w.setHex(0x1a2040); }
+    else {
+      _h.setHex(th.sky).lerp(_k.setHex(0xffffff), 0.28);           // horizon: lighter
+      _z.setHex(th.sky).multiplyScalar(0.82);                        // zenith: a deeper version of the sky
+      _w.copy(_h).lerp(_k.setHex(0xfff0d8), 0.4);                    // near-ground haze: warm
+    }
+    const pos = domeGeo.attributes.position, col = domeGeo.attributes.color;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i) / 470;
+      if (y >= 0) _k.copy(_h).lerp(_z, Math.pow(y, 0.6)); else _k.copy(_h).lerp(_w, Math.min(1, -y * 5));
+      col.setXYZ(i, _k.r, _k.g, _k.b);
+    }
+    col.needsUpdate = true;
+    return _h;
+  }
+
+  // ---------- v0.7 depth: ONE far, hazy silhouette range per world (parallax sells speed) ----------
+  const FAR_R = 420, FAR_N = 160;
+  const farGeo = new THREE.BufferGeometry();
+  const farPos = new Float32Array((FAR_N + 1) * 2 * 3), farCol = new Float32Array((FAR_N + 1) * 2 * 3);
+  const farIdx = [];
+  for (let i = 0; i < FAR_N; i++) { const a = i * 2; farIdx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  farGeo.setAttribute('position', new THREE.BufferAttribute(farPos, 3));
+  farGeo.setAttribute('color', new THREE.BufferAttribute(farCol, 3));
+  farGeo.setIndex(farIdx);
+  const farLayer = new THREE.Mesh(farGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false, depthWrite: false }));
+  farLayer.renderOrder = -1;
+  farLayer.frustumCulled = false;
+  scene.add(farLayer);
+  const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks' };
+  function profile(style, a) {
+    const s1 = Math.sin(a * 3 + 1.3), s2 = Math.sin(a * 7 + 0.4), s3 = Math.sin(a * 17 + 2.2);
+    switch (style) {
+      case 'mesas': return 22 + (s1 > 0.1 ? 20 : 4) + (s2 > 0.5 ? 10 : 0);
+      case 'towers': { const b = Math.floor(a * 40); return 18 + ((b * 7919) % 13) * 4 * (b % 3 ? 1 : 0.4); }
+      case 'peaks': return 30 + 35 * Math.abs(Math.sin(a * 5 + 0.7)) ** 1.6 + 10 * s3;
+      case 'dunes': return 12 + 10 * (0.5 + 0.5 * s1) + 4 * s2;
+      case 'islands': return 4 + Math.max(0, 22 * Math.sin(a * 4 + 0.9) - 6) + 3 * s3;
+      case 'rims': return 10 + 8 * Math.abs(s2) + 4 * s3;
+      default: return 16 + 12 * (0.5 + 0.5 * s1) + 6 * s2 + 2 * s3; // rolling hills
+    }
+  }
+  function buildFar(st, horizon) {
+    const style = FAR_STYLE[st.id] ?? 'hills';
+    const top = _k.setHex(st.theme.rock).lerp(horizon, st.theme.space ? 0.35 : 0.62); // paler, hazier than anything near
+    for (let i = 0; i <= FAR_N; i++) {
+      const a = (i / FAR_N) * Math.PI * 2, h = profile(style, a);
+      const x = Math.cos(a) * FAR_R, z = Math.sin(a) * FAR_R, o = i * 6;
+      farPos[o] = x; farPos[o + 1] = -30; farPos[o + 2] = z;
+      farPos[o + 3] = x; farPos[o + 4] = h; farPos[o + 5] = z;
+      farCol[o] = horizon.r; farCol[o + 1] = horizon.g; farCol[o + 2] = horizon.b; // fades into the haze at its foot
+      farCol[o + 3] = top.r; farCol[o + 4] = top.g; farCol[o + 5] = top.b;
+    }
+    farGeo.attributes.position.needsUpdate = true;
+    farGeo.attributes.color.needsUpdate = true;
+  }
+
   const L = WORLD.chunkLength;
   const N = WORLD.chunkCount;
   const HALF = WORLD.chunkHalfWidth;
@@ -138,8 +205,15 @@ export function createWorld(scene) {
   const balls = inst(ballGeo, ballMat, N * TP);
   const rockMatSmall = lam(0x9a9aa5);
   const rocks = inst(new THREE.DodecahedronGeometry(1, 0), rockMatSmall, N * RP);
-  const cloudMat = lam(0xffffff, { emissive: 0x777777 });
-  const clouds = inst(new THREE.IcosahedronGeometry(1, 0), cloudMat, N * CP);
+  // v0.7: soft two-tone clouds — bright top, gentle grey-blue belly (baked vertex colours).
+  const cloudMat = lam(0xffffff, { emissive: 0x777777, vertexColors: true });
+  const cloudGeo = new THREE.IcosahedronGeometry(1, 0).toNonIndexed();
+  {
+    const n = cloudGeo.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { const t = (cloudGeo.attributes.position.getY(i) + 1) / 2; col[i * 3] = 0.8 + 0.2 * t; col[i * 3 + 1] = 0.83 + 0.17 * t; col[i * 3 + 2] = 0.92 + 0.08 * t; }
+    cloudGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+  const clouds = inst(cloudGeo, cloudMat, N * CP);
   const coinGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.18, 14).rotateX(Math.PI / 2);
   const roundCoins = inst(coinGeo, lam(0xffc61a, { emissive: 0x5a3c00 }), WORLD.coinSlots);
   // Space: STAR COINS (looks only — still worth 1).
@@ -149,6 +223,8 @@ export function createWorld(scene) {
     if (i === 0) star.moveTo(Math.cos(a) * r, Math.sin(a) * r); else star.lineTo(Math.cos(a) * r, Math.sin(a) * r);
   }
   const starCoins = inst(new THREE.ExtrudeGeometry(star, { depth: 0.2, bevelEnabled: false }).translate(0, 0, -0.1), lam(0xffe14d, { emissive: 0x6a5200 }), WORLD.coinSlots);
+  // Per-coin colour for the v0.7 glint (created up front so the shader has it from the first frame).
+  for (const m of [roundCoins, starCoins]) for (let i = 0; i < WORLD.coinSlots; i++) m.setColorAt(i, _c.setRGB(1, 1, 1));
   let coinMesh = roundCoins;
 
   // ---------- the lap group: every static stage feature, moved lap by lap ----------
@@ -161,6 +237,8 @@ export function createWorld(scene) {
   const colBody = inst(new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0), lam(0xffffff), 64, lapGroup);
   const colCap = inst(new THREE.IcosahedronGeometry(1, 0), lam(0xffffff), 64, lapGroup);
   const ringMesh = inst(new THREE.TorusGeometry(1, 0.12, 6, 18), lam(0xffd23f, { emissive: 0x8a6a00 }), 32, lapGroup);
+  // v0.7: a soft inner glow edge on every ring / star ring (same matrices, additive).
+  const ringGlow = inst(new THREE.TorusGeometry(0.88, 0.07, 4, 24), new THREE.MeshBasicMaterial({ color: 0xfff1a0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }), 32, lapGroup);
   const loopRingMesh = inst(new THREE.TorusGeometry(1, 0.13, 6, 18), lam(0xff4fd8, { emissive: 0x6a1a5a }), 40, lapGroup);
   const asteroidMesh = inst(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8d96), 96, lapGroup);
   const updraftRings = inst(new THREE.TorusGeometry(1, 0.05, 4, 16).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), 30, lapGroup);
@@ -438,8 +516,10 @@ export function createWorld(scene) {
 
     // Rings.
     for (let i = 0; i < 32; i++) ringMesh.setMatrixAt(i, ZERO);
-    terrain.rings.slice(0, 32).forEach((r, i) => setInst(ringMesh, i, r.x, r.y, r.d, r.r, r.r, r.r));
+    for (let i = 0; i < 32; i++) ringGlow.setMatrixAt(i, ZERO);
+    terrain.rings.slice(0, 32).forEach((r, i) => { setInst(ringMesh, i, r.x, r.y, r.d, r.r, r.r, r.r); setInst(ringGlow, i, r.x, r.y, r.d, r.r, r.r, r.r); });
     ringMesh.instanceMatrix.needsUpdate = true;
+    ringGlow.instanceMatrix.needsUpdate = true;
 
     // Updrafts: a shimmering column each (rings rise inside, animated per frame).
     for (const u of stage.updrafts) {
@@ -518,7 +598,9 @@ export function createWorld(scene) {
     else if (h < -1) c = G.low;
     else if (G.water && h < 1.2) c = G.low; // beaches
     else c = G.grass;
-    _c.setRGB(c[0] + 0.06 * shade + h * 0.004, c[1] + 0.06 * shade, c[2] + 0.04 * shade);
+    // v0.7: a very subtle fine grain so big slopes aren't empty (a hash, no visible tiling).
+    const grain = (((Math.sin(x * 12.9898 + d * 78.233) * 43758.5453) % 1) + 1) % 1 * 0.03 - 0.015;
+    _c.setRGB(c[0] + 0.06 * shade + h * 0.004 + grain, c[1] + 0.06 * shade + grain, c[2] + 0.04 * shade + grain);
   }
 
   function buildChunk(ch, k) {
@@ -805,6 +887,7 @@ export function createWorld(scene) {
       scene.fog.far = theme.fogFar + (30 - theme.fogFar) * k;
     }
     if (spaceSky.visible && camPos) spaceSky.position.copy(camPos);
+    if (camPos) { dome.position.copy(camPos); farLayer.position.set(camPos.x, 0, camPos.z); }
     const first = Math.floor(planeD / L) - 1;
     for (let k = first; k < first + N; k++) {
       const slot = ((k % N) + N) % N;
@@ -832,10 +915,17 @@ export function createWorld(scene) {
       let i = 0;
       for (const c of active) {
         if (i >= WORLD.coinSlots) break;
-        if (c.alive) { const k = c.big ? 2.2 : 1; setInst(coinMesh, i++, c.x, c.y, c.d, k, k, k, spin + c.d * 0.2); } // big = a slot TOKEN
+        if (c.alive) {
+          const k = c.big ? 2.2 : 1, turn = spin + c.d * 0.2;
+          // v0.7 GLINT: a quick bright flash as each coin turns face-on (still unmistakably gold).
+          const g = Math.max(0, Math.cos(turn * 2)) ** 24;
+          coinMesh.setColorAt(i, _c.setRGB(1 + 0.9 * g, 1 + 0.8 * g, 1 + 0.5 * g));
+          setInst(coinMesh, i++, c.x, c.y, c.d, k, k, k, turn); // big = a slot TOKEN
+        }
       }
       for (; i < WORLD.coinSlots; i++) coinMesh.setMatrixAt(i, ZERO);
       coinMesh.instanceMatrix.needsUpdate = true;
+      if (coinMesh.instanceColor) coinMesh.instanceColor.needsUpdate = true;
     }
 
     // Flags for the milestones near the plane.
@@ -855,8 +945,9 @@ export function createWorld(scene) {
   const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
-    scene.fog.color.setHex(c ?? theme.sky);
-    scene.background.setHex(c ?? theme.sky);
+    if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }
+    else { const h = paintSky(theme); scene.fog.color.copy(h); scene.background.copy(h); }
+    dome.visible = farLayer.visible = !c; // a tinted pocket hides the sky dome + far range
   }
   // The cloud tunnel feels like fog for 2 s (v0.6 part 2).
   let fogPulse = 0;
@@ -867,8 +958,10 @@ export function createWorld(scene) {
     stage = newStage;
     theme = stage.theme;
     terrain = newTerrain;
-    scene.background.setHex(theme.sky);
-    scene.fog.color.setHex(theme.sky);
+    const horizon = paintSky(theme);
+    buildFar(stage, horizon);
+    scene.background.copy(horizon);
+    scene.fog.color.copy(horizon); // fog matched to the horizon stop
     scene.fog.near = theme.fogNear;
     scene.fog.far = theme.fogFar;
     hemi.groundColor.setHex(theme.hemiGround);
