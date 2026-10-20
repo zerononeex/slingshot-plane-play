@@ -183,7 +183,7 @@
   .card.bounce, .swatch.bounce { animation: happy 0.55s cubic-bezier(.3,1.8,.5,1); }
   @keyframes happy { 30% { transform: scale(1.12) rotate(-2deg); } 60% { transform: scale(0.96) rotate(1deg); } }
   @keyframes glow { 50% { box-shadow: 0 5px 0 #e59f00, 0 0 18px 4px rgba(255, 198, 26, 0.85); } }
-  .paints { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .paints { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
   @media (max-width: 520px) { .card .effect { display: none; } .shop-grid { gap: 0.9vh 6px; } .shop-panel { padding: 1vh 6px; } }
   .swatch {
     min-height: 0; padding: 0.6vh 2px; border-radius: 14px; background: #fff; color: var(--ink);
@@ -194,6 +194,7 @@
   .swatch.current { border-color: var(--tint); background: var(--tint-soft); }
   .swatch:disabled { cursor: default; transform: none; color: var(--ink); background: #fff; box-shadow: 0 4px 0 #c3ccd4; }
   .rainbow-dot { background: conic-gradient(red, orange, yellow, lime, cyan, blue, violet, red); }
+  .nebula-dot { background: conic-gradient(#7a3fd1, #19c3c3, #b06ad9, #7a3fd1); }
 
   /* Launch speedometer */
   .speedo { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); width: min(64vw, 340px); }
@@ -220,6 +221,27 @@
   .fuel-ring { fill: none; stroke: #ffe14d; stroke-width: 8; stroke-dasharray: 276.5; stroke-dashoffset: 0; stroke-linecap: round; }
   .boost-btn.on { background: #ff5d2d; transform: scale(0.95); }
   .boost-btn.empty { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; }
+  /* SKILLS: big word buttons stacked on the right, above BOOST */
+  .skills { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 196px);
+    display: flex; flex-direction: column-reverse; gap: 10px; pointer-events: none; }
+  .skill-btn { pointer-events: auto; touch-action: none; width: 116px; min-height: 0; height: clamp(54px, 7vh, 72px); padding: 0; border-radius: 22px;
+    font-size: clamp(20px, 2.8vh, 26px); background: #7a4ad1; box-shadow: 0 6px 0 #4e2a99; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+  .skill-btn small { font-size: 0.5em; opacity: 0.85; }
+  .skill-btn[data-skill="tilt"].on { background: #ffb020; box-shadow: 0 6px 0 #c98200; }
+  .skill-btn.held { transform: translateY(4px); box-shadow: 0 2px 0 #4e2a99; }
+  .skill-btn.cool { opacity: 0.55; }
+  .skill-btn.nowing { background: #b9c2cc; box-shadow: 0 6px 0 #8f99a3; }
+  /* Bumps: a floating "+N" and coin sparkles that fly to the coin counter */
+  .bump-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .bump-plus { position: absolute; left: 50%; top: 46%; transform: translate(-50%, 0); color: #ffe14d; font-weight: 900; font-size: clamp(26px, 4.4vh, 40px);
+    text-shadow: 0 3px 0 rgba(0,0,0,0.35); opacity: 0; }
+  .bump-plus.go { animation: plusUp 1s ease-out forwards; }
+  @keyframes plusUp { 0% { opacity: 0; transform: translate(-50%, 10px) scale(0.6); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -60px) scale(1); } }
+  .bump-coin { position: absolute; left: 0; top: 0; width: 18px; height: 18px; margin: -9px; border-radius: 50%; background: var(--gold); border: 3px solid #e59f00; box-sizing: border-box;
+    opacity: 0; transition: transform 0.7s cubic-bezier(.5,0,.8,.6), opacity 0.7s; }
+  .res-bumps { opacity: 0.8; font-weight: 800; margin: 0; }
+  .puff-text { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); color: #fff; font-weight: 900; font-size: clamp(22px, 3.6vh, 34px);
+    text-shadow: 0 3px 0 rgba(0,0,0,0.35); pointer-events: none; animation: pop 0.3s ease-out; }
   .eject-btn { left: max(16px, env(safe-area-inset-left)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px); width: 96px; height: 96px; background: #e8262c; box-shadow: 0 7px 0 #a8161b; font-size: 20px; border: 5px solid #ffd400; }
   .banner {
     position: absolute; left: 50%; top: 15vh; transform: translateX(-50%); white-space: nowrap;
@@ -376,9 +398,9 @@
   <div class="shop-stage"></div>
   <div class="shop-panel">
     <div class="shop-grid" id="shop-grid"></div>
-    <div class="shop-section">BUILD YOUR PLANE</div>
+    <div class="shop-section" id="shop-sec-parts">BUILD YOUR PLANE</div>
     <div class="shop-grid parts-grid" id="parts-grid"></div>
-    <div class="shop-section">PAINT JOBS</div>
+    <div class="shop-section" id="shop-sec-paints">PAINT JOBS</div>
     <div class="paints" id="paints"></div>
   </div>
 </section>
@@ -411,6 +433,14 @@
       <div class="bar"><div id="speed-fill"></div></div>
     </div>
     <button id="btn-eject" class="eject-btn" hidden>EJECT</button>
+    <div class="skills" id="skills">
+      <button class="skill-btn" data-skill="tilt" hidden>TILT<small></small></button>
+      <button class="skill-btn" data-skill="loop" hidden>LOOP</button>
+      <button class="skill-btn" data-skill="roll" hidden>ROLL</button>
+      <button class="skill-btn" data-skill="dive" hidden>DIVE<small>hold</small></button>
+    </div>
+    <div class="puff-text" id="puff-text" hidden></div>
+    <div class="bump-fx" id="bump-fx"><div class="bump-plus" id="bump-plus"></div></div>
     <button id="btn-boost" class="boost-btn" hidden>
       <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="fuel-bg" cx="50" cy="50" r="44"></circle><circle class="fuel-ring" id="fuel-ring" cx="50" cy="50" r="44"></circle></svg>
       <span>BOOST</span>
@@ -496,6 +526,7 @@
     <div class="unlock" id="res-unlock" hidden></div>
     <p class="verdict" id="res-verdict"></p>
     <p class="msg" id="res-msg"></p>
+    <p class="msg res-bumps" id="res-bumps" hidden></p>
     <div class="stat-row">
       <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
       <div class="stat"><small>DISTANCE BONUS</small>+<span id="res-bonus">0</span></div>

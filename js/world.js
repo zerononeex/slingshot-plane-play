@@ -8,6 +8,7 @@ import { WORLD, LAUNCH } from './config.js';
 import { DECK } from './terrain.js';
 import { rng, makePatternPicker, patternCoins, featureCoins } from './coins.js';
 import { fillSceneryChunk, newSceneryChunk, TREE_SLOTS, ROCK_SLOTS, columnCap } from './scenery.js';
+import { buildCritter, animateCritter, resetCritter } from './critters.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -39,6 +40,9 @@ const COLUMN_LOOK = {
   antenna: { body: 0xdddddd, cap: 0xff3030, glow: true },
   post: { body: 0x7d5230, cap: 0x7d5230 },
   lighthouse: { body: 0xffffff, cap: 0xe8262c, glow: true },
+  pylon: { body: 0xff5d2e, cap: 0xffe14d, glow: true },
+  flag: { body: 0xffffff, cap: 0xff4fa3 },
+  aqueductLeg: { body: 0xd9b46a, cap: 0xd9b46a },
 };
 
 export function createWorld(scene) {
@@ -137,7 +141,15 @@ export function createWorld(scene) {
   const cloudMat = lam(0xffffff, { emissive: 0x777777 });
   const clouds = inst(new THREE.IcosahedronGeometry(1, 0), cloudMat, N * CP);
   const coinGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.18, 14).rotateX(Math.PI / 2);
-  const coinMesh = inst(coinGeo, lam(0xffc61a, { emissive: 0x5a3c00 }), WORLD.coinSlots);
+  const roundCoins = inst(coinGeo, lam(0xffc61a, { emissive: 0x5a3c00 }), WORLD.coinSlots);
+  // Space: STAR COINS (looks only — still worth 1).
+  const star = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2, r = i % 2 ? 0.45 : 1.05;
+    if (i === 0) star.moveTo(Math.cos(a) * r, Math.sin(a) * r); else star.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const starCoins = inst(new THREE.ExtrudeGeometry(star, { depth: 0.2, bevelEnabled: false }).translate(0, 0, -0.1), lam(0xffe14d, { emissive: 0x6a5200 }), WORLD.coinSlots);
+  let coinMesh = roundCoins;
 
   // ---------- the lap group: every static stage feature, moved lap by lap ----------
   const lapGroup = new THREE.Group();
@@ -149,7 +161,8 @@ export function createWorld(scene) {
   const colBody = inst(new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0), lam(0xffffff), 64, lapGroup);
   const colCap = inst(new THREE.IcosahedronGeometry(1, 0), lam(0xffffff), 64, lapGroup);
   const ringMesh = inst(new THREE.TorusGeometry(1, 0.12, 6, 18), lam(0xffd23f, { emissive: 0x8a6a00 }), 32, lapGroup);
-  const asteroidMesh = inst(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8d96), 40, lapGroup);
+  const loopRingMesh = inst(new THREE.TorusGeometry(1, 0.13, 6, 18), lam(0xff4fd8, { emissive: 0x6a1a5a }), 40, lapGroup);
+  const asteroidMesh = inst(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8d96), 96, lapGroup);
   const updraftRings = inst(new THREE.TorusGeometry(1, 0.05, 4, 16).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), 30, lapGroup);
   const updraftCols = [];
   const devilCones = [];
@@ -174,7 +187,13 @@ export function createWorld(scene) {
     stageMeshes.length = 0;
     updraftCols.length = 0;
     devilCones.length = 0;
+    critters.length = 0;
   }
+  // BUMPABLES: one figure each (in the lap group); t = seconds since its bump this lap (−1 = idle).
+  const critters = [];
+  let clockT = 0;
+  function resetCritters() { for (const c of critters) { c.t = -1; c.lap = -1; resetCritter(c.g); } }
+  function bump(index, lap) { const c = critters[index]; if (c) { resetCritter(c.g); c.t = 0; c.lap = lap; } }
 
   // Build the stage's static meshes (called on stage switch, never per frame).
   function buildStageMeshes() {
@@ -186,10 +205,11 @@ export function createWorld(scene) {
       const look = COLUMN_LOOK[t.kind] ?? COLUMN_LOOK.pillar;
       const g = terrain.surfaceAt(t.x, t.d, -Infinity);
       setInst(colBody, i, t.x, g - 0.5, t.d, t.r, t.h + 0.5, t.r);
-      colBody.setColorAt(i, _c.setHex(t.kind === 'lighthouse' && i % 2 ? 0xe8262c : look.body));
+      const COURSE = { flags: 0xff4fa3, banners: 0xffd23f, scaffold: 0xffb020, palms: 0x3fae4a, buoys: 0xff7a1a, pylons: 0xff5d2e };
+      colBody.setColorAt(i, _c.setHex(t.kind === 'lighthouse' && i % 2 ? 0xe8262c : t.kind === 'flag' ? (t.look === 'scaffold' ? 0xffb020 : 0xffffff) : look.body));
       const cap = columnCap(t);
       setInst(colCap, i, t.x, g + t.h + cap.y * 0.4, t.d, cap.r, cap.y, cap.r);
-      colCap.setColorAt(i, _c.setHex(look.cap));
+      colCap.setColorAt(i, _c.setHex(t.kind === 'flag' ? COURSE[t.look] ?? look.cap : look.cap));
     });
     colBody.instanceMatrix.needsUpdate = true;
     colCap.instanceMatrix.needsUpdate = true;
@@ -200,7 +220,7 @@ export function createWorld(scene) {
     for (const c of stage.caverns) {
       const g = new THREE.Group();
       const left = c.laneMax < 0;
-      const mat = c.ice ? lam(0xbfe6ff, { emissive: 0x2a5a7a }) : c.station ? lam(0xdfe6ee, { emissive: 0x1a2230 }) : c.shape === 'block' ? lam(0xb8a890) : c.shape === 'pyramid' ? lam(0xd9b46a) : rockMat;
+      const mat = c.cloud ? lam(0xf4f7fc, { emissive: 0x8a96a8 }) : c.ice ? lam(0xbfe6ff, { emissive: 0x2a5a7a }) : c.station ? lam(0xdfe6ee, { emissive: 0x1a2230 }) : c.shape === 'block' ? lam(0xb8a890) : c.shape === 'pyramid' ? lam(0xd9b46a) : rockMat;
       const mid = (c.start + c.end) / 2, half = (c.end - c.start) / 2;
       const topAt = (d) => (c.shape === 'pyramid' ? c.height * Math.max(0, 1 - Math.abs(d - mid) / half) : c.height);
       const top = Math.min(topAt(c.mouth), topAt(c.exit));
@@ -249,9 +269,168 @@ export function createWorld(scene) {
       keep(g);
     }
 
+    for (const b of terrain.bumpables ?? []) {
+      const g = buildCritter(b.type);
+      critters.push({ g, b, home: { x: b.x, y: b.cy, d: b.d }, t: -1, lap: -1 });
+      keep(g);
+    }
+
+    // SLOTS: two themed walls around the 2 m gap (tilt through!).
+    const SLOT_LOOK = { trees: 0x7a4a28, pillars: theme.rock, towers: 0x8a94a6, ice: 0xbfe6ff, pyramid: 0xd9b46a, rocks: 0x6f6a64, station: 0xdfe6ee, cloud: 0x8e98aa };
+    for (const sl of terrain.slots ?? []) {
+      const mat = lam(SLOT_LOOK[sl.look] ?? theme.rock, sl.look === 'ice' ? { emissive: 0x2a5a7a } : undefined);
+      for (const side of [-1, 1]) {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(sl.wall, sl.h + 1, 2), mat);
+        w.position.set(sl.x + side * (sl.gap / 2 + sl.wall / 2), sl.base + (sl.h + 1) / 2 - 1, -sl.d);
+        keep(w);
+        if (sl.look === 'trees') { // the tutorial slot's two hero trees: leafy tops above the gap
+          const top = new THREE.Mesh(new THREE.IcosahedronGeometry(2.6, 0), lam(0x3a9a3a));
+          top.position.set(sl.x + side * (sl.gap / 2 + sl.wall / 2 + 0.6), sl.base + sl.h + 2.2, -sl.d);
+          keep(top);
+        }
+      }
+    }
+    // LOOP RINGS: each ring faces along its circle.
+    for (let i = 0; i < 40; i++) loopRingMesh.setMatrixAt(i, ZERO);
+    (terrain.loopRings ?? []).slice(0, 40).forEach((r, i) => setInst(loopRingMesh, i, r.x, r.y, r.d, r.r, r.r, r.r, 0, (r.k / 8) * Math.PI * 2));
+    loopRingMesh.instanceMatrix.needsUpdate = true;
+    // DIVE GATES: a low blue banner between the posts.
+    for (const g of terrain.diveGates ?? []) {
+      const cv = document.createElement('canvas');
+      cv.width = 256; cv.height = 48;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = '#2f7fe0'; c2.fillRect(0, 0, 256, 48);
+      c2.fillStyle = '#ffffff'; c2.font = 'bold 30px system-ui, sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.fillText('▼ DIVE GATE ▼', 128, 26);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const ban = new THREE.Mesh(new THREE.BoxGeometry(g.w, 1.4, 0.2), new THREE.MeshBasicMaterial({ map: tex }));
+      ban.position.set(g.x, g.base + g.h + 0.7, -g.d);
+      keep(ban);
+    }
+
+    // Speed gates: a glowing banner across the pylon tops.
+    for (const gt of terrain.gates ?? []) {
+      const cv = document.createElement('canvas');
+      cv.width = 256; cv.height = 48;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = '#ff5d2e'; c2.fillRect(0, 0, 256, 48);
+      c2.fillStyle = '#fff6c0'; c2.font = 'bold 32px system-ui, sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.fillText('SPEED GATE', 128, 26);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const ban = new THREE.Mesh(new THREE.BoxGeometry(gt.w, 2.2, 0.3), new THREE.MeshBasicMaterial({ map: tex }));
+      ban.position.set(gt.x, gt.base + gt.h + 1.4, -gt.d);
+      keep(ban);
+    }
+
+    // Storm clouds: dark puffy clusters (the collider is the big puff).
+    const stormMat = lam(0x4b5466, { emissive: 0x141821 });
+    for (const c of terrain.storms ?? []) {
+      const g = new THREE.Group();
+      const main = new THREE.Mesh(new THREE.IcosahedronGeometry(c.r, 1), stormMat);
+      g.add(main);
+      for (const [ox, oy, k] of [[0.55, -0.25, 0.6], [-0.6, -0.15, 0.55], [0.1, 0.45, 0.5]]) {
+        const p2 = new THREE.Mesh(new THREE.IcosahedronGeometry(c.r * k, 1), stormMat);
+        p2.position.set(c.r * ox, c.r * oy, c.r * 0.2);
+        g.add(p2);
+      }
+      g.position.set(c.x, c.cy, -c.d);
+      keep(g);
+    }
+
+    // Bridges across the corridor: cloud, covered (wood with a red roof), rock, stone (river arches /
+    // the aqueduct), snow.
+    for (const b of terrain.bridges ?? []) {
+      const mat = b.kind === 'cloud' ? lam(0xf7f9fd, { emissive: 0x7d8899 }) : b.kind === 'covered' ? lam(0x9a6a3a)
+        : b.kind === 'snow' ? lam(0xf2f7ff, { emissive: 0x3a4a5a }) : b.kind === 'stone' ? lam(b.aqueduct ? 0xd9b46a : 0xa8a29a) : rockMat;
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, b.y1 - b.y0, b.depth), mat);
+      slab.position.set((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, -b.d);
+      keep(slab);
+      if (b.kind === 'covered') { // a little red roof on top
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0 + 1, 1, b.depth + 1), lam(0xc0392b));
+        roof.position.set((b.x0 + b.x1) / 2, b.y1 + 0.5, -b.d);
+        keep(roof);
+      }
+      if (b.arches) for (let x = b.x0 + 6; x < b.x1; x += 12) { // the river bridge's low arch piers (looks only, outside the lane)
+        if (Math.abs(x) < 8) continue;
+        const pier = new THREE.Mesh(new THREE.BoxGeometry(1.4, b.under, b.depth * 0.8), mat);
+        pier.position.set(x, b.base + b.under / 2, -b.d);
+        keep(pier);
+      }
+    }
+    // SUB-AREAS: a glowing PORTAL at the side of the corridor, an end-portal in the pocket lane,
+    // the pocket's own decor along its sides (looks only), and the BONUS STASH sign.
+    const PORTAL = { mushrooms: 0xffd23f, slotCanyon: 0xff9a3c, garden: 0x7fff9a, aurora: 0x9fe6ff, oasis: 0x5fffd0, coral: 0xff7ab8, nebula: 0xc08aff, stormEye: 0xffd23f };
+    for (const p of terrain.pockets ?? []) {
+      const glow = new THREE.MeshBasicMaterial({ color: PORTAL[p.look] ?? 0xffd23f });
+      const ringAt = (x, d, base) => {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(p.portal.w / 2, 0.45, 8, 28), glow);
+        ring.position.set(x, base + p.portal.w / 2 + 0.6, -d);
+        keep(ring);
+        for (const side of [-1, 1]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, p.portal.w / 2 + 0.8, 0.7), glow);
+          post.position.set(x + side * p.portal.w / 2, base + (p.portal.w / 2 + 0.8) / 2, -d);
+          keep(post);
+        }
+      };
+      ringAt(p.portal.x, p.portal.d, p.portalBase);
+      ringAt(p.cx, p.end, terrain.surfaceAt(p.cx, p.end, -Infinity));
+      // Decor along both sides of the lane.
+      for (let d = p.start + 10, i = 0; d < p.end - 10; d += 34, i++) for (const side of [-1, 1]) {
+        const x = p.cx + side * (p.half + 2.5 + (i % 2) * 2), g0 = terrain.surfaceAt(x, d, -Infinity), y = new THREE.Group();
+        if (p.look === 'mushrooms') { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 4 + (i % 3), 7), lam(0xf2e6d0)); st.position.y = 2; y.add(st); const cap = new THREE.Mesh(new THREE.SphereGeometry(2.6, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), lam(i % 2 ? 0xe8262c : 0xb04ad1)); cap.position.y = 4 + (i % 3); y.add(cap); const fly = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 3), new THREE.MeshBasicMaterial({ color: 0xfff6a0 })); fly.position.set(-side * 2, 6, 3); y.add(fly); }
+        else if (p.look === 'garden') { const pl = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 2.4), lam(0x8a5a35)); pl.position.y = 0.6; y.add(pl); const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), lam(0x3fae4a)); bush.position.y = 2; y.add(bush); }
+        else if (p.look === 'aurora') { const ice = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), lam(0xbfe6ff, { emissive: 0x2a6a8a })); ice.position.y = 1.6; y.add(ice); if (side > 0) { const rib = new THREE.Mesh(new THREE.PlaneGeometry(2 * p.half + 8, 5), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x6fffb0 : 0xb08aff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); rib.position.set(-side * (p.half + 3), 16, 0); rib.rotation.x = -0.4; y.add(rib); } }
+        else if (p.look === 'oasis') { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 6, 6), lam(0x9a7046)); tr.position.y = 3; y.add(tr); const fr = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), lam(0x3fae4a)); fr.scale.set(2.4, 0.6, 2.4); fr.position.y = 6.2; y.add(fr); }
+        else if (p.look === 'coral') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 0), lam([0xff7ab8, 0xff9a3c, 0xb04ad1][i % 3])); c.scale.set(1, 1.6, 1); c.position.y = 0.8; y.add(c); if (i % 3 === 0) { const stack = new THREE.Mesh(new THREE.BoxGeometry(3, 18, 3), lam(0x8a7a6a)); stack.position.set(side * 3, 9, 0); y.add(stack); } }
+        else if (p.look === 'nebula') { const n = new THREE.Mesh(new THREE.IcosahedronGeometry(3 + (i % 3), 1), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xb04ad1 : 0x19c3c3, transparent: true, opacity: 0.25, depthWrite: false })); n.position.y = 8; y.add(n); }
+        else if (p.look === 'stormEye') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(4, 1), lam(0x4b5466, { emissive: 0x141821 })); c.position.y = 10 + (i % 3) * 3; y.add(c); }
+        else { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), lam(0xffb070, { emissive: 0x6a3a10 })); crystal.position.y = 1.2; y.add(crystal); }
+        y.position.set(x, g0, -d);
+        keep(y);
+      }
+      if (p.look === 'garden') { const ft = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.4, 1, 12), lam(0xdfe6ee)); ft.position.set(p.cx + p.half + 4, terrain.surfaceAt(p.cx, (p.start + p.end) / 2, -Infinity) + 0.5, -(p.start + p.end) / 2); keep(ft); }
+      if (p.look === 'oasis') { const pond = new THREE.Mesh(new THREE.CircleGeometry(6, 18).rotateX(-Math.PI / 2), lam(0x2fa8e0)); pond.position.set(p.cx, terrain.surfaceAt(p.cx, (p.start + p.end) / 2, -Infinity) + 0.05, -(p.start + p.end) / 2); keep(pond); }
+      // The BONUS STASH sign.
+      const cv = document.createElement('canvas');
+      cv.width = 256; cv.height = 64;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = '#ffc61a'; c2.fillRect(0, 0, 256, 64);
+      c2.fillStyle = '#5b3b00'; c2.font = 'bold 34px system-ui, sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.fillText('BONUS STASH!', 128, 34);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+      sign.position.set(p.stash.x, p.stashBase + p.stash.y + 3.5, -p.stash.d);
+      keep(sign);
+    }
+
+    // ARCHWAYS: two legs + a lintel.
+    for (const a of terrain.archways ?? []) {
+      const mat = rockMat;
+      for (const side of [-1, 1]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(a.leg, a.h + a.thick + 6, a.depth), mat);
+        leg.position.set(a.cx + side * (a.w / 2 + a.leg / 2), a.base + (a.h + a.thick) / 2 - 3, -a.d);
+        keep(leg);
+      }
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(a.w + a.leg * 2, a.thick, a.depth), mat);
+      lintel.position.set(a.cx, a.base + a.h + a.thick / 2, -a.d);
+      keep(lintel);
+    }
+    // Decor: the City construction crane (looks only, off the lane).
+    for (const dc of stage.decor ?? []) if (dc.kind === 'crane') {
+      const g0 = terrain.surfaceAt(dc.x, dc.d, -Infinity), y = new THREE.Group(), steel = lam(0xffb020);
+      const mast = new THREE.Mesh(new THREE.BoxGeometry(1.2, 30, 1.2), steel); mast.position.set(0, 15, 0); y.add(mast);
+      const jib = new THREE.Mesh(new THREE.BoxGeometry(18, 0.8, 0.8), steel); jib.position.set(6, 29.5, 0); y.add(jib);
+      const hook = new THREE.Mesh(new THREE.BoxGeometry(0.1, 8, 0.1), lam(0x333344)); hook.position.set(12, 25.5, 0); y.add(hook);
+      y.position.set(dc.x, g0, -dc.d);
+      keep(y);
+    }
+
     // Floating asteroids.
-    for (let i = 0; i < 40; i++) asteroidMesh.setMatrixAt(i, ZERO);
-    terrain.asteroids.slice(0, 40).forEach((a, i) => {
+    for (let i = 0; i < 96; i++) asteroidMesh.setMatrixAt(i, ZERO);
+    terrain.asteroids.slice(0, 96).forEach((a, i) => {
       const g = terrain.surfaceAt(a.x, a.d, -Infinity);
       setInst(asteroidMesh, i, a.x, g + a.y, a.d, a.r * 1.1, a.r * 0.9, a.r, i * 1.7, i * 0.9);
     });
@@ -611,6 +790,20 @@ export function createWorld(scene) {
   }
 
   function update(planeD, planeX, dt, camPos = null) {
+    // Bumpables: idle life, or their set-piece (only in the lap they were bumped in).
+    for (const c of critters) {
+      const mine = c.lap === lapShown && c.t >= 0;
+      if (mine) c.t += dt;
+      else if (c.t >= 0) { c.t = -1; c.lap = -1; resetCritter(c.g); }
+      animateCritter(c.g, c.b.cast.leave, mine ? c.t : -1, clockT, c.home);
+    }
+    clockT += dt;
+    if (fogPulse > 0) {
+      fogPulse = Math.max(0, fogPulse - dt);
+      const k = Math.min(1, fogPulse / 0.4, (2 - fogPulse) / 0.3 + 0.0001);
+      scene.fog.near = theme.fogNear * (1 - 0.95 * k);
+      scene.fog.far = theme.fogFar + (30 - theme.fogFar) * k;
+    }
     if (spaceSky.visible && camPos) spaceSky.position.copy(camPos);
     const first = Math.floor(planeD / L) - 1;
     for (let k = first; k < first + N; k++) {
@@ -639,7 +832,7 @@ export function createWorld(scene) {
       let i = 0;
       for (const c of active) {
         if (i >= WORLD.coinSlots) break;
-        if (c.alive) setInst(coinMesh, i++, c.x, c.y, c.d, 1, 1, 1, spin + c.d * 0.2);
+        if (c.alive) { const k = c.big ? 2.2 : 1; setInst(coinMesh, i++, c.x, c.y, c.d, k, k, k, spin + c.d * 0.2); } // big = a slot TOKEN
       }
       for (; i < WORLD.coinSlots; i++) coinMesh.setMatrixAt(i, ZERO);
       coinMesh.instanceMatrix.needsUpdate = true;
@@ -657,6 +850,17 @@ export function createWorld(scene) {
       }
     }
   }
+
+  // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
+  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a };
+  function setPocketLook(look) {
+    const c = look && POCKET_FOG[look];
+    scene.fog.color.setHex(c ?? theme.sky);
+    scene.background.setHex(c ?? theme.sky);
+  }
+  // The cloud tunnel feels like fog for 2 s (v0.6 part 2).
+  let fogPulse = 0;
+  function fogIn(seconds = 2) { fogPulse = seconds; }
 
   // Switch stage: theme + static meshes (never per frame).
   function setStage(newStage, newTerrain) {
@@ -676,6 +880,12 @@ export function createWorld(scene) {
     ballMat.color.setHex(sc === 'cactus' ? 0x4fb35a : sc === 'palm' ? 0x3fae4a : 0x51b848);
     trunkMat.color.setHex(sc === 'cactus' ? 0x3f9a4a : sc === 'palm' ? 0x9a7046 : 0x8a5a35);
     spaceSky.visible = !!theme.space;
+    coinMesh = theme.space ? starCoins : roundCoins;
+    for (const m of [roundCoins, starCoins]) { for (let i = 0; i < WORLD.coinSlots; i++) m.setMatrixAt(i, ZERO); m.instanceMatrix.needsUpdate = true; }
+    // Space: the CATAPULT RAIL on a moon LAUNCH PAD (metal + glowing energy bands).
+    wood.color.setHex(theme.space ? 0x8e96a3 : 0xb07a45);
+    darkWood.color.setHex(theme.space ? 0xc9d0da : 0x7d5230);
+    bandMat.emissive.setHex(theme.space ? 0x335577 : 0x000000);
     cloudMat.color.setHex(theme.space ? 0x7a7d86 : 0xffffff);   // space: floating rock islets
     cloudMat.emissive.setHex(theme.space ? 0x15161c : 0x777777);
     buildStageMeshes();
@@ -693,13 +903,14 @@ export function createWorld(scene) {
     active.length = 0;
     windowFirst = null;
     picker = makePatternPicker(stage, terrain, seed);
+    resetCritters(); // bumpables respawn every flight
     coinRand = rng(seed * 31 + 7);
     lapShown = -1;
     update(0, 0, 0);
   }
 
   return {
-    update, newFlight, setStage, setBands, setBandLook, setRamp, restPoint, forkD,
+    update, newFlight, setStage, setBands, setBandLook, setRamp, restPoint, forkD, bump, fogIn, setPocketLook,
     activeCoins: () => active, setUsed: (set) => { usedSet = set; },
   };
 }

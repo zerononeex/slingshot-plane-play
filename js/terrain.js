@@ -9,6 +9,8 @@ import { LAUNCH, WORLD } from './config.js';
 import { STAGES, DEFAULT_STAGE } from './stages.js';
 import { rng } from './rng.js';
 import { columnCap, fillSceneryChunk, newSceneryChunk } from './scenery.js';
+import { CAST, slowFor } from './bumpables.js';
+import { pocketRects, rectWeight, inRect } from './pockets.js';
 
 export const DECK = { start: -8, end: 1.5, halfWidth: 2.2 };
 
@@ -22,7 +24,9 @@ function cityBlocks(stage) {
   const r = rng(B.seed);
   const out = [...B.fixed.map((b) => ({ ...b }))];
   // Keep generated blocks off the landmarks and out of the through-building's footprint.
+  const pocketBoxes = (stage.pockets ?? []).flatMap(pocketRects);
   const clear = (x0, x1, d0, d1) =>
+    !pocketBoxes.some((r) => r.x0 < x1 + 2 && x0 < r.x1 + 2 && r.d0 < d1 + 4 && d0 < r.d1 + 4) &&
     !out.some((b) => b.x0 < x1 + 1 && x0 < b.x1 + 1 && b.d0 < d1 + 4 && d0 < b.d1 + 4) &&
     !stage.caverns.some((c) => {
       const cx0 = c.laneMax < 0 ? -46 : c.edge - 1, cx1 = c.laneMax < 0 ? c.edge + 1 : 46;
@@ -57,6 +61,12 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     }
   }
   for (const c of stage.columns) columns.push({ hero: false, slalom: false, ...c });
+  // Speed-gate pylons are solid columns either side of the opening.
+  for (const g of stage.speedGates) for (const side of [-1, 1]) columns.push({ kind: 'pylon', x: g.x + side * g.w / 2, d: g.d, r: 1, h: g.h + 3, hero: false, slalom: false, gate: g });
+  // Slalom-course gate posts (thin, solid), unless the gate already has pylons.
+  for (const c of stage.courses) for (const g of c.gates) if (!g.noPosts) for (const side of [-1, 1]) columns.push({ kind: 'flag', x: g.x + side * g.w / 2, d: g.d, r: 0.3, h: g.h + 0.5, hero: false, slalom: false, course: c.id, look: c.look });
+  // Dive-gate posts (thin, solid) either side of the low banner.
+  for (const g of stage.diveGates) for (const side of [-1, 1]) columns.push({ kind: 'post', x: g.x + side * g.w / 2, d: g.d, r: 0.45, h: g.h + 0.6, hero: false, slalom: false, diveGate: g });
   columns.forEach((c, i) => { c.id = i; });
 
   // Floating asteroids (spheres): y = centre height above the ground under them.
@@ -71,6 +81,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
   for (const a of stage.asteroids) asteroids.push({ hero: false, ...a });
 
+  const pocketList = (stage.pockets ?? []).map((p, i) => ({ ...p, index: i, rects: pocketRects(p) }));
   const blocks = cityBlocks(stage);
   const blockBuckets = new Map();
   for (const b of blocks) for (let k = Math.floor(b.d0 / 50); k <= Math.floor(b.d1 / 50); k++) {
@@ -165,6 +176,12 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
       if (r < 1) g -= p.depth * bump(r);
       if (p.rim && r > 0.6 && r < 1.4) g += p.rim * bump(Math.abs(r - 1) / 0.4); // crater rim
     }
+    // SUB-AREAS: the pocket lane and its entry/exit passages get a carved floor (the stage's own
+    // ground shape, as if on the main line), blended softly at the edges.
+    for (const p of pocketList) for (const r of p.rects) {
+      const w = rectWeight(r, x, dl);
+      if (w > 0) { const floor = baseGround(Math.max(-20, Math.min(20, x - p.cx)), d); if (floor < g) g += (floor - g) * w; }
+    }
     if (waterLevel !== null && g < waterLevel) g = waterLevel; // the sea is the floor
     return g;
   }
@@ -201,6 +218,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     return { ...a, id: i, depth: 6, y0abs: base + a.y0, top: base + a.y0 + a.h + 5, base };
   });
   const rings = stage.rings.map((r, i) => ({ ...r, id: i }));
+  const gates = stage.speedGates.map((g, i) => ({ ...g, id: i, base: featuresAt(g.x, g.d, -Infinity) }));
   const devils = stage.devils.map((v, i) => ({ ...v, id: i }));
 
   function inOpening(a, x, y, pad) {
@@ -267,9 +285,91 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     return null;
   }
 
+  // Storm clouds (solid puffs; y = centre above the ground) and bridge slabs (fly under or over).
+  const storms = stage.storms.map((c, i) => ({ ...c, id: i, kind: 'storm', cy: featuresAt(c.x, c.d, -Infinity) + c.y }));
+  const bridges = stage.bridges.map((b, i) => {
+    const base = featuresAt((b.x0 + b.x1) / 2, b.d, -Infinity);
+    return { ...b, id: i, base, y0: base + b.under, y1: base + b.under + b.thick };
+  });
+  // SLOTS: two walls around a 2 m gap. `span` = the plane's half-width (wings out ≈ 1.6 m,
+  // tilted to knife-edge 0.3 m), so a level plane bonks and a tilted one slips through.
+  const slots = stage.slots.map((sl, i) => ({ ...sl, id: i, kind: 'slot', base: featuresAt(sl.x, sl.d, -Infinity), cx: sl.x, noKick: false }));
+  function hitSlot(x, y, dl, radius, span) {
+    for (const sl of slots) {
+      if (Math.abs(dl - sl.d) > 1 + radius || y > sl.base + sl.h + radius) continue;
+      const ax = Math.abs(x - sl.x), g = sl.gap / 2;
+      if (ax + span > g && ax - span < g + sl.wall) return sl;
+    }
+    return null;
+  }
+  // LOOP RINGS: 8 rings on a vertical circle (bottom ring first, then forward and over the top).
+  const loopRings = [];
+  stage.loopRings.forEach((set, si) => {
+    const yc = featuresAt(set.x, set.d, -Infinity) + set.yc;
+    for (let k = 0; k < 8; k++) {
+      const th = (k / 8) * Math.PI * 2;
+      loopRings.push({ set: si, k, id: `${si}.${k}`, x: set.x, d: set.d + set.R * Math.sin(th), y: yc - set.R * Math.cos(th), r: 3, setInfo: set, yc });
+    }
+  });
+  function loopRingAt(x, y, d) {
+    const lap = Math.floor(d / cycle), dl = local(d);
+    for (const r of loopRings) {
+      if (Math.abs(r.d - dl) > r.r || Math.abs(r.x - x) > r.r) continue;
+      if (Math.hypot(r.d - dl, r.y - y) < r.r) return { ring: r, id: `${lap}:${r.id}` };
+    }
+    return null;
+  }
+  const diveGates = stage.diveGates.map((g, i) => ({ ...g, id: i, base: featuresAt(g.x, g.d, -Infinity) }));
+  // BUMPABLES: a contact sphere each (never solid). bumpAt → { b, id } with the lap in the id.
+  const bumpables = [...stage.bumpables, ...pocketList.flatMap((p) => p.bumpables.map((b) => ({ ...b, pocket: p.index })))].map((b, i) => {
+    const c = CAST[b.type];
+    return { ...b, id: i, cast: c, r: c.r, slow: slowFor(b.type), cy: featuresAt(b.x, b.d, -Infinity) + (b.y ?? c.y) };
+  });
+  function bumpAt(x, y, d, radius = 0.6) {
+    const lap = Math.floor(d / cycle), dl = local(d);
+    for (const b of bumpables) {
+      if (Math.abs(b.d - dl) > b.r + radius) continue;
+      if (Math.hypot(b.x - x, b.cy - y, b.d - dl) < b.r + radius) return { b, id: `${lap}:${b.id}`, lap };
+    }
+    return null;
+  }
+
+  // ARCHWAYS: freestanding arches — two legs + a lintel; the opening is safe.
+  const archways = stage.archways.map((a, i) => ({ ...a, id: i, kind: 'archway', base: featuresAt(a.cx, a.d, -Infinity), x: a.cx }));
+  function hitArchway(x, y, dl, radius) {
+    for (const a of archways) {
+      if (Math.abs(dl - a.d) > a.depth / 2 + radius) continue;
+      const top = a.base + a.h + a.thick, half = a.w / 2, outer = half + a.leg;
+      const ax = Math.abs(x - a.cx);
+      if (ax > outer + radius || y > top + radius) continue;
+      if (ax > half - radius) return a;            // a leg
+      if (y > a.base + a.h - radius) return a;     // the lintel
+    }
+    return null;
+  }
+  // SLALOM COURSES: 5 chained gates each.
+  for (const p of pocketList) { p.portalBase = featuresAt(p.portal.x, p.portal.d, -Infinity); p.stashBase = featuresAt(p.stash.x, p.stash.d, -Infinity); }
+  const courses = stage.courses.map((c, ci) => ({ ...c, index: ci, gates: c.gates.map((g, k) => ({ ...g, k, base: featuresAt(g.x, g.d, -Infinity) })) }));
+
+  function hitStructures(x, y, dl, radius) {
+    const aw = hitArchway(x, y, dl, radius);
+    if (aw) return aw;
+    for (const c of storms) {
+      if (Math.abs(c.d - dl) > c.r + radius) continue;
+      if (Math.hypot(c.x - x, c.cy - y, c.d - dl) < c.r + radius) return c;
+    }
+    for (const b of bridges) {
+      if (Math.abs(dl - b.d) > b.depth / 2 + radius || x < b.x0 - radius || x > b.x1 + radius) continue;
+      if (y > b.y0 - radius && y < b.y1 + radius) return b;
+    }
+    return null;
+  }
+
   // Solid obstacles: returns what you hit (a column, scenery, an asteroid or arch rock), else null.
-  function hitTest(x, y, d, radius = 0.6) {
+  function hitTest(x, y, d, radius = 0.6, span = radius) {
     const dl = local(d);
+    const st = hitStructures(x, y, dl, radius) ?? hitSlot(x, y, dl, radius, span);
+    if (st) return st;
     const bucket = colBuckets.get(Math.floor(dl / BUCKET));
     if (bucket) for (const t of bucket) if (hitColumn(t, x, y, dl, radius)) return t;
     for (const a of asteroids) {
@@ -303,6 +403,11 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     const a0 = d0 - lap * cycle, a1 = d1 - lap * cycle;
     for (const a of arches) if (a0 < a.d && a1 >= a.d && inOpening(a, x1, y1, 0)) out.push({ type: 'arch', id: `${lap}:${a.id}` });
     for (const r of rings) if (a0 < r.d && a1 >= r.d && Math.hypot(x1 - r.x, y1 - r.y) < r.r) out.push({ type: 'ring', id: `${lap}:${r.id}` });
+    for (const g of gates) if (a0 < g.d && a1 >= g.d && Math.abs(x1 - g.x) < g.w / 2 - 1 && y1 < g.base + g.h) out.push({ type: 'gate', id: `${lap}:${g.id}` });
+    for (const sl of slots) if (a0 < sl.d && a1 >= sl.d && Math.abs(x1 - sl.x) < sl.gap / 2 && y1 < sl.base + sl.h) out.push({ type: 'slot', id: `${lap}:${sl.id}` });
+    for (const g of diveGates) if (a0 < g.d && a1 >= g.d && Math.abs(x1 - g.x) < g.w / 2 - 0.5 && y1 < g.base + g.h) out.push({ type: 'diveGate', id: `${lap}:${g.id}` });
+    for (const p of pocketList) if (a0 < p.portal.d && a1 >= p.portal.d && Math.abs(x1 - p.portal.x) < p.portal.w / 2 && y1 < p.portalBase + p.portal.h) out.push({ type: 'portal', id: `${lap}:${p.index}`, pocket: p.index, lap });
+    for (const c of courses) for (const g of c.gates) if (a0 < g.d && a1 >= g.d && Math.abs(x1 - g.x) < g.w / 2 - 0.3 && y1 < g.base + g.h) out.push({ type: 'courseGate', id: `${lap}:${c.index}.${g.k}`, course: c.index, k: g.k, lap });
     return out;
   }
 
@@ -318,6 +423,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   const terrainApi = {
     stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt,
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
+    gates, storms, bridges, slots, loopRings, loopRingAt, diveGates, bumpables, bumpAt, archways, courses, pockets: pocketList,
     edgeWalls: !!stage.edgeWalls,
   };
   return terrainApi;

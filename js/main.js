@@ -4,11 +4,11 @@ import * as THREE from 'three';
 import {
   PLANE_TUNE, LAUNCH, FLIGHT, PARTS, PART_PHYSICS, RENDER, COINS, PILOT, LANDING, PAINTS, EJECT,
 } from './config.js';
-import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects } from './physics.js';
+import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects, toggleTilt, tryLoop, tryRoll, pickupRadiusFor, SKILLS } from './physics.js';
 import { stepPilot, tryEject, runDistance, runOver, pilotParams } from './pilot.js';
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
-import { stepCoins, reachSecrets } from './coins.js';
+import { stepCoins, reachSecrets, reachStashes } from './coins.js';
 import { speedoReading, speedoZones, KMH } from './speedo.js';
 import {
   trackStats, nextCost, canBuyTrack, buyTrack, maxLevel, minLevel,
@@ -22,8 +22,11 @@ import { createFx } from './fx.js';
 import { unlockAudio, sfx, audioCtx } from './audio.js';
 import { createMusic } from './music.js';
 import { createFlightSound } from './flightsound.js';
+import { upgradeNames, chipNames } from './names.js';
+import { SWING } from './pockets.js';
 import { exportCode, groupCode, parseCode } from './codes.js';
 import { quote, stepAmount, transfer, transferProblem } from './transfer.js';
+import { bumpSummary } from './bumpables.js';
 
 const $ = (id) => document.getElementById(id);
 const DEG = Math.PI / 180;
@@ -98,11 +101,12 @@ for (let i = 0; i < 5; i++) stars.add(new THREE.Mesh(starGeo, starMat));
 stars.visible = false;
 scene.add(stars);
 
+let baseFov = 55;
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  camera.fov = camera.aspect < 1 ? 68 : 55; // portrait needs a taller view
+  camera.fov = baseFov = camera.aspect < 1 ? 68 : 55; // portrait needs a taller view
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -124,7 +128,7 @@ function showScreen(id) {
 }
 
 // ---------- home (the hangar) ----------
-const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙' };
+const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️' };
 let carouselIndex = 0;
 let lockedView = false;
 
@@ -204,7 +208,8 @@ function renderHangar() {
   const box = $('hangar-chips');
   box.textContent = '';
   for (const c of hangarChips(save, stageId)) {
-    const [icon, label] = CHIP_LOOK[c.id];
+    const [icon] = CHIP_LOOK[c.id];
+    const label = chipNames(planeId, stageId)[c.id];
     const b = document.createElement('button');
     b.className = 'chip-btn';
     b.dataset.chip = c.id;
@@ -346,7 +351,7 @@ function trackCard(item) {
     key: `track:${item.id}`,
     icon: item.icon,
     iconBg: item.id === 'band' ? hex(cur.color) : item.id === 'magnet' && lv ? hex(cur.color) : '',
-    name: item.name,
+    name: upgradeNames(planeId, stageId)[item.id],
     pips: pipsHtml(lv, minLevel(item.id), maxLevel(item.id), state === 'buyable'),
     effect,
     price: cost === null ? coinBtnMaxed : coinBtn(cost),
@@ -398,7 +403,7 @@ function refreshShop() {
   grid.textContent = '';
   for (const item of SHOP_ITEMS) grid.appendChild(trackCard(item));
   grid.appendChild(card({
-    key: 'eject', icon: '🪂', name: 'EJECTOR SEAT', effect: 'Pop out and parachute on!',
+    key: 'eject', icon: '🪂', name: upgradeNames(planeId, stageId).eject, effect: 'Pop out and parachute on!',
     price: rec.eject ? coinBtnMaxed : coinBtn(EJECT.cost),
     state: rec.eject ? 'maxed' : canBuyEject(rec) ? 'buyable' : 'poor',
     onBuy: () => purchase(buyEject(rec)),
@@ -413,8 +418,8 @@ function refreshShop() {
     parts.appendChild(card({
       key: `part:${p.id}`,
       icon: p.id === 'leftWing' ? '◀' : p.id === 'rightWing' ? '▶' : '▲',
-      name: p.name,
-      effect: owned || isNext ? p.blurb : `Buy the ${nxt.name} first`,
+      name: upgradeNames(planeId, stageId)[p.id],
+      effect: owned || isNext ? p.blurb : `Buy the ${upgradeNames(planeId, stageId)[nxt.id]} first`,
       price: owned ? '<span class="coin-btn">✓ BUILT</span>' : isNext ? coinBtn(p.cost) : '<span class="coin-btn">🔒</span>',
       state: owned ? 'maxed' : isNext && canBuyPart(rec, p.id) ? 'buyable' : isNext ? 'poor' : 'locked',
       onBuy: () => purchase(buyPart(rec, p.id)),
@@ -423,15 +428,19 @@ function refreshShop() {
 
   const paints = $('paints');
   paints.textContent = '';
+  $('shop-sec-parts').textContent = upgradeNames(planeId, stageId).parts;
+  $('shop-sec-paints').textContent = upgradeNames(planeId, stageId).paints;
   for (const p of PAINTS) {
+    if (p.only && p.only !== planeId) continue; // Nebula: the Starship's own skin
     const owned = rec.paints.owned.includes(p.id);
     const b = document.createElement('button');
     const poor = !owned && rec.coins < p.cost;
     b.className = `swatch${rec.paints.current === p.id ? ' current' : ''}${poor ? ' poor' : ''}`;
     b.dataset.key = `paint:${p.id}`;
     b.disabled = poor;
-    b.innerHTML = `<span class="dot ${p.rainbow ? 'rainbow-dot' : ''}" style="${p.rainbow ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
-    b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id)); });
+    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : '';
+    b.innerHTML = `<span class="dot ${fancy}" style="${fancy ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
+    b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id, planeId)); });
     paints.appendChild(b);
   }
   applyLooks();
@@ -446,6 +455,9 @@ let session = { ownsSeat: false, ejected: false, pilot: null };
 let runCoins = 0, landingBonus = 0, secretsFound = [], reached = new Set();
 let flop = false, endTimer = 0, crashTimer = 0, pull = 0, tumbleSpin = 0, acc = 0;
 let boostHeld = false, boostKey = false, flightSeed = 1, bonkWobble = 0;
+let bumpsRun = []; // this flight's bumps ({ type }) for the results line
+let inCloudTunnel = false;
+let stashReached = new Set();
 const input = { x: 0, y: 0, boost: false };
 const keys = { x: 0, y: 0 };
 const CRASH_FX_AFTER = 2.5;
@@ -475,8 +487,13 @@ function startRun() {
   applyLooks();
   effects = partEffects(rec.parts, PART_PHYSICS);
   params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: pstage.plane, modifiers: stage.modifiers });
+  // SKILLS: global, from the save; TILT also needs the flying plane's Left Wing.
+  const skills = new Set(save.skills ?? []);
+  params.canTilt = skills.has('tilt') && !!rec.parts.leftWing;
+  params.canDive = skills.has('dive');
   flight = null;
-  runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set();
+  runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set(); bumpsRun = []; stashReached = new Set();
+  world.setPocketLook(null);
   flop = false; pull = 0; endTimer = 0; crashTimer = 0; paused = false; tumbleSpin = 0;
   boostHeld = false;
   resetPilot();
@@ -546,6 +563,7 @@ function launch() {
   $('hud-flight').hidden = false;
   $('btn-boost').hidden = lo.tank.level === 0;
   $('btn-eject').hidden = !rec.eject;
+  showSkills(true);
   world.setUsed(flight.used);
   sfx.launch();
 }
@@ -556,7 +574,7 @@ function creditFlight(distance) {
   save = r.save;
   writeSave(save);
   reloadRecords();
-  return [...r.newly, ...r.newPlanes];
+  return [...r.newly, ...r.newPlanes, ...(r.newSkills ?? []).map((id) => `skill:${id}`)];
 }
 
 function distanceNow() {
@@ -569,7 +587,7 @@ function finishRun() {
   const pay = runPayout(dist, runCoins, landingBonus);
   const unlocked = creditFlight(dist);
   $('res-unlock').hidden = unlocked.length === 0;
-  $('res-unlock').textContent = unlocked.map((id) => (STAGES[id] ? `NEW STAGE UNLOCKED: ${STAGES[id].name}!` : EXTRA_PLANES[id].banner)).join(' ');
+  $('res-unlock').textContent = unlocked.map((id) => (id.startsWith('skill:') ? `NEW SKILL: ${id.slice(6).toUpperCase()}!` : STAGES[id] ? [`NEW STAGE UNLOCKED: ${STAGES[id].name}!`, STAGES[id].unlockBanner].filter(Boolean).join(' ') : EXTRA_PLANES[id].banner)).join(' ');
   if (unlocked.length) sfx.secret();
   $('res-dist').textContent = dist;
   $('res-coins').textContent = pay.collected;
@@ -583,6 +601,9 @@ function finishRun() {
   if (ejected) $('res-glide').textContent = Math.round(pilot.d - pilot.ejectD);
   const verdict = ejected ? LANDING.pilot : LANDING[flight.landing ?? 'rough'];
   $('res-verdict').textContent = verdict.bonus ? `${verdict.text} +${verdict.bonus}` : verdict.text;
+  const bs = bumpSummary(bumpsRun);
+  $('res-bumps').hidden = !bs;
+  if (bs) $('res-bumps').textContent = bs.text;
   $('res-msg').textContent = flop ? 'Oops, a little flop! Try a bigger pull!' : secretsFound.length ? `SECRET FOUND! (${wrec.secrets.length}/${stage.secrets.length})` : '';
   mode = 'results';
   showScreen('results');
@@ -638,7 +659,7 @@ function banner(text, seconds = 1.8) {
 }
 
 function eject() {
-  if (mode !== 'fly' || paused) return;
+  if (mode !== 'fly' || paused || flight?.swing) return; // EJECT is ignored during a sub-area swing
   pilot = tryEject(session, flight, PILOT);
   if (!pilot) return;
   ejected = true;
@@ -722,13 +743,58 @@ window.addEventListener('keydown', (e) => {
   if (k) { keys[k[0]] = k[1]; e.preventDefault(); }
   if (e.code === 'Space') { boostKey = true; e.preventDefault(); }
   if (e.code === 'KeyE') eject();
+  if (e.code === 'KeyT') useSkill('tilt');
+  if (e.code === 'KeyL') useSkill('loop');
+  if (e.code === 'KeyR') useSkill('roll');
+  if (e.code === 'KeyF') diveKey = true;
   if (e.code === 'Escape' || e.code === 'KeyP') setPaused(!paused);
 });
 window.addEventListener('keyup', (e) => {
   const k = KEYMAP[e.code];
   if (k && keys[k[0]] === k[1]) keys[k[0]] = 0;
   if (e.code === 'Space') boostKey = false;
+  if (e.code === 'KeyF') diveKey = false;
 });
+
+// ---------- SKILLS ----------
+let diveHeld = false, diveKey = false, lastSteer = 1, puffTimer = 0;
+function showSkills(on) {
+  const skills = new Set(save.skills ?? []);
+  for (const b of document.querySelectorAll('.skill-btn')) {
+    b.hidden = !on || !skills.has(b.dataset.skill);
+    b.classList.remove('on', 'held', 'cool');
+  }
+  const tilt = document.querySelector('.skill-btn[data-skill="tilt"]');
+  tilt.classList.toggle('nowing', !params?.canTilt);
+  tilt.querySelector('small').textContent = params?.canTilt ? '' : 'needs a wing';
+}
+function updateSkillButtons() {
+  if (!flight) return;
+  document.querySelector('.skill-btn[data-skill="tilt"]').classList.toggle('on', !!flight.tilted);
+  document.querySelector('.skill-btn[data-skill="roll"]').classList.toggle('cool', flight.rollCool > 0);
+  document.querySelector('.skill-btn[data-skill="dive"]').classList.toggle('held', diveHeld || diveKey);
+}
+function puffText(text) {
+  const el = $('puff-text');
+  el.textContent = text;
+  el.hidden = false;
+  el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  puffTimer = 1.1;
+}
+function useSkill(id) {
+  if (mode !== 'fly' || !flight || ejected || paused || !(save.skills ?? []).includes(id)) return;
+  if (id === 'tilt') { if (!params.canTilt) puffText('TILT needs a Left Wing!'); else toggleTilt(flight, params); }
+  if (id === 'loop') tryLoop(flight);
+  if (id === 'roll') tryRoll(flight, lastSteer);
+}
+for (const b of document.querySelectorAll('.skill-btn')) {
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    unlockAudio();
+    if (b.dataset.skill === 'dive') { diveHeld = true; b.setPointerCapture?.(e.pointerId); } else useSkill(b.dataset.skill);
+  });
+  if (b.dataset.skill === 'dive') for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { diveHeld = false; });
+}
 
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'fly') setPaused(true); });
 document.addEventListener('gesturestart', (e) => e.preventDefault()); // no pinch-zoom on iPad
@@ -749,12 +815,17 @@ $('btn-pause-home').addEventListener('click', goHome);
 
 // ---------- music ----------
 // menu.mp3 at home/shop/results, flight tracks in flight; a missing file is silence.
-const music = createMusic(audioCtx);
+// Rotation memory: the last numbered flight song per world lives in prefs (survives reloads).
+const music = createMusic(audioCtx, undefined, {
+  get: (w) => save.prefs.musicLast?.[w] ?? null,
+  set: (w, n) => { save = setPrefs(save, { musicLast: { ...save.prefs.musicLast, [w]: n } }); writeSave(save); },
+});
 const flightSound = createFlightSound(audioCtx);
 music.setEnabled(save.prefs.music);
 let musicKicked = false;
 function syncMusic() {
   if (!musicKicked && audioCtx()?.state === 'running') { musicKicked = true; music.kick(); } // first tap
+  music.prepare(stageId); // probes the world's three songs once per session (never waited on)
   music.play(mode === 'aim' || mode === 'fly' ? 'flight' : 'menu', stageId);
 }
 function renderMusicButtons() {
@@ -1046,6 +1117,16 @@ function cameraTarget(out, look) {
     const q = plane.pilot.group.position;
     out.set(q.x * 0.9, q.y + 2.5, q.z + 9);
     look.set(q.x, q.y + 1.2, q.z - 10);
+  } else if (mode === 'fly' && flight && (flight.swing || flight.lane)) {
+    // SUB-AREAS: the camera rides the lane (or arcs with the swing), never the main line.
+    const cx = flight.lane ? flight.lane.cx : p.x;
+    out.set(cx + (p.x - cx) * 0.9, p.y + 3.4, p.z + 9.5);
+    look.set(p.x, p.y + 0.8, p.z - 14);
+  } else if (flight?.loop) {
+    // LOOP: hold the camera behind the circle so the loop reads clearly (no swinging).
+    const L = flight.loop;
+    out.set(L.x * 0.9, L.y0 + L.R * 0.9, -(L.d0 - 16));
+    look.set(L.x, L.y0 + L.R, -L.d0);
   } else {
     out.set(p.x * 0.9, p.y + 3.4, p.z + 9.5);
     look.set(p.x, p.y + 0.8, p.z - 14);
@@ -1119,7 +1200,7 @@ function frame(now) {
     const flying = mode === 'fly' && flight && !flight.ended;
     const spinRate = (flying && !ejected ? 12 + flight.speed * 1.6 : mode === 'fly' ? 0 : 6) * lo.engine.propSpin;
     plane.prop.rotation.z += spinRate * dt;
-    plane.animate(dt, clock, flying);
+    plane.animate(dt, clock, flying, flying ? flight.speed : 0);
     animatePilot(dt);
     if (lo.magnet.sparkle && mode !== 'fly' && Math.random() < dt * 4) magnetSpark(0xffe14d);
     fx.update(dt);
@@ -1167,10 +1248,50 @@ function animatePilot(dt) {
   }
 }
 
+// Bump reward FX: a floating "+N" and a few coins flying to the coin counter (pooled DOM).
+const bumpCoins = [];
+for (let i = 0; i < 8; i++) { const d = document.createElement('div'); d.className = 'bump-coin'; $('bump-fx').appendChild(d); bumpCoins.push(d); }
+function bumpFx(n) {
+  const plus = $('bump-plus');
+  plus.textContent = `+${n}`;
+  plus.classList.remove('go'); void plus.offsetWidth; plus.classList.add('go');
+  const target = $('hud-coins').getBoundingClientRect();
+  const sx = innerWidth / 2, sy = innerHeight * 0.55;
+  bumpCoins.forEach((d, i) => {
+    d.style.transition = 'none';
+    d.style.opacity = '1';
+    d.style.transform = `translate(${sx + (i - 3.5) * 14}px, ${sy + Math.sin(i * 2) * 20}px)`;
+    void d.offsetWidth;
+    d.style.transition = '';
+    d.style.transitionDelay = `${i * 0.04}s`;
+    d.style.transform = `translate(${target.left + target.width / 2}px, ${target.top + target.height / 2}px)`;
+    d.style.opacity = '0';
+  });
+}
+
+// LOOP: anything collectible inside the circle is swept up when the loop completes.
+function sweepLoop(L) {
+  if (!L) return;
+  let got = 0;
+  for (const c of world.activeCoins()) {
+    if (!c.alive || c.token || Math.abs(c.x - L.x) > 3) continue;
+    if (Math.hypot(c.d - L.d0, c.y - (L.y0 + L.R)) < L.R + 1.5) { c.alive = false; got++; }
+  }
+  if (got) { runCoins += got; sfx.coin(); }
+}
+
 function collect(pos, opts) {
   const res = stepCoins(world.activeCoins(), pos, STEP, opts);
+  if (res.pulled) plane.tractor();
   if (res.collected) { runCoins += res.collected; sfx.coin(); }
   if (res.pulled && !ejected) magnetSpark(0xfff3b0);
+  for (const st of reachStashes(terrain, world.activeCoins(), pos, stashReached)) { // a sub-area's BONUS STASH
+    runCoins += st.coins;
+    plane.root.getWorldPosition(_v);
+    fx.sparkleBurst(_v.x, _v.y + 1, _v.z);
+    sfx.secret();
+    banner(`BONUS STASH! +${st.coins}`, 2.2);
+  }
   for (const s of reachSecrets(stage, terrain, world.activeCoins(), pos, reached)) {
     runCoins += s.coins;
     plane.root.getWorldPosition(_v);
@@ -1188,16 +1309,20 @@ function stepGame(dt) {
   input.x = pointerId === null ? keys.x : input.x;
   input.y = pointerId === null ? keys.y : input.y;
   input.boost = (boostHeld || boostKey) && !ejected;
+  input.dive = (diveHeld || diveKey) && !ejected;
+  if (Math.abs(input.x) > 0.25) lastSteer = Math.sign(input.x); // ROLL goes the way you last steered
+  if (puffTimer > 0 && (puffTimer -= dt) <= 0) $('puff-text').hidden = true;
+  flightSound.dive(!!flight.diving);
   acc += dt;
   let n = 0;
   while (acc >= STEP && n < 6) {
     // After an eject the empty plane noses down and flies on by itself.
     stepFlight(flight, ejected ? { x: 0, y: -0.4, boost: false } : input, STEP, params, terrain);
     if (!ejected) {
-      collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: COINS.pickupRadius, speed: flight.speed });
+      collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: pickupRadiusFor(flight, COINS.pickupRadius), speed: flight.speed });
     } else {
       const wasLanded = pilot.landed;
-      stepPilot(pilot, input, STEP, pilotParams(PILOT, stage.modifiers), terrain, FLIGHT.corridorHalfWidth);
+      stepPilot(pilot, input, STEP, pilotParams(PILOT, stage.modifiers), terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
       collect(pilot, { pickupRadius: PILOT.pickupRadius });
       if (pilot.landed && !wasLanded) {
         landingBonus += LANDING.pilot.bonus;
@@ -1210,7 +1335,14 @@ function stepGame(dt) {
   }
   if (n === 6) acc = 0;
   for (const ev of flight.events) {
-    if (ev === 'bounce') { sfx.bounce(); plane.squashWheels(); }
+    if (ev === 'bounce') {
+      sfx.bounce();
+      if (plane.isShip) { // RETRO THRUSTERS: blue puffs instead of a squash
+        plane.root.getWorldPosition(_v);
+        for (let i = 0; i < 6; i++) fx.spark(_v.x + (Math.random() - 0.5) * 1.4, _v.y - 0.5, _v.z + (Math.random() - 0.5) * 1.2, 0x7fc8ff);
+        fx.puff(_v.x, _v.y - 0.6, _v.z);
+      } else plane.squashWheels();
+    }
     if (ev === 'tumble') sfx.bonk();
     if (ev === 'bonk') { // bounced off something solid: bits + wobble, the flight goes on
       sfx.bonk();
@@ -1227,6 +1359,30 @@ function stepGame(dt) {
     }
     if (ejected) continue; // the empty plane earns nothing
     if (ev === 'arch') { runCoins += stage.archBonus; banner(`THROUGH THE ARCH! +${stage.archBonus}`, 1.6); sfx.secret(); }
+    // SKILLS
+    if (ev === 'tiltOn' || ev === 'tiltOff') sfx.tilt();
+    if (ev === 'loop') sfx.loop();
+    if (ev === 'loopSlow') { puffText('NEED MORE SPEED!'); bonkWobble = 0.4; }
+    if (ev === 'roll') sfx.roll();
+    if (ev === 'loopEnd') sweepLoop(flight.lastLoop);
+    if (ev === 'slot') {
+      for (const c of world.activeCoins()) if (c.alive && c.token && Math.abs(c.d - flight.d) < 8) c.alive = false; // the TOKEN
+      runCoins += 10; banner('THROUGH THE SLOT! +10', 1.6); sfx.slot();
+    }
+    if (ev === 'loopRing') { runCoins += 5; sfx.coin(); }
+    if (ev === 'loopMaster') { runCoins += 50; banner('LOOP MASTER! +50', 2); sfx.loopRing(); }
+    if (ev === 'diveGate') { runCoins += 15; banner('DIVE GATE! +15', 1.4); sfx.speedGate(flight.speed); }
+    // SUB-AREAS
+    if (ev === 'swingIn' || ev === 'swingOut') sfx.whoosh();
+    if (ev === 'pocketIn') { const p = terrain.pockets[flight.lane.pocket]; banner(p.name, 1.8); world.setPocketLook(p.look); }
+    if (ev === 'swingOut') world.setPocketLook(null);
+    if (ev === 'courseClear') { runCoins += 20; banner('COURSE CLEAR! +20', 1.8); sfx.slot(); }
+    if (ev === 'gateFast' || ev === 'gateSlow') {
+      const pay = stage.gateBonus[ev === 'gateFast' ? 'fast' : 'slow'];
+      runCoins += pay;
+      banner(ev === 'gateFast' ? `SPEED GATE! +${pay}` : `GATE +${pay} — go faster!`, 1.3);
+      sfx.speedGate(flight.speed);
+    }
     if (ev === 'ring') { runCoins += stage.ringBonus; banner(`THROUGH THE ${stage.ringName ?? 'RING'}! +${stage.ringBonus}`, 1.2); sfx.secret(); }
     if (ev === 'devil') { banner('WHOOSH! DUST DEVIL BOOST!', 1.4); sfx.whoosh(); }
     if (ev === 'updraft') sfx.whoosh();
@@ -1238,13 +1394,39 @@ function stepGame(dt) {
     }
   }
   flight.events.length = 0;
+  // BUMPABLES: pay instantly, start the set-piece, a "+N", coin sparkles and a silly sound.
+  for (const bp of flight.bumps) {
+    world.bump(bp.b.id, bp.lap);
+    if (ejected) continue;
+    const c = bp.b.cast;
+    runCoins += c.reward;
+    bumpsRun.push({ type: bp.b.type });
+    bumpFx(c.reward);
+    sfx[c.sound]?.();
+    plane.root.getWorldPosition(_v);
+    const [c1, c2] = c.leave === 'crack' ? [0xfff3b0, 0xc9d0da] : c.leave === 'pop3' || c.leave === 'popChute' ? [0xff4fa3, 0xffe14d] : [0xffffff, 0xe8e0d0];
+    fx.bits(_v.x, _v.y + 0.4, _v.z - 2, c1, c2); // feathers / confetti / star bits
+  }
+  flight.bumps.length = 0;
+  // COURSE CLEAR is paid in the event loop above. Into the Jetstream CLOUD TUNNEL: 2 s of fog.
+  const inCloud = stage.theme.jetstream && terrain.ceilingAt(flight.x, flight.d) < Infinity;
+  if (inCloud && !inCloudTunnel) world.fogIn(2);
+  inCloudTunnel = inCloud;
 
   // Plane pose.
   const bankMax = 50 * DEG;
   const onGround = flight.mode !== 'air';
   const steerVx = flight.vx - params.driftSpeed;
   const wob = onGround ? 0 : effects.wobbleDeg * DEG;
-  const bank = onGround ? 0 : (steerVx / params.lateralSpeed) * bankMax - effects.rollDeg * DEG + wob * Math.sin(clock * 2.3);
+  let bank = onGround ? 0 : (steerVx / params.lateralSpeed) * bankMax - effects.rollDeg * DEG + wob * Math.sin(clock * 2.3);
+  bank += -flight.tiltT * (Math.PI / 2 - bank * 0.5);
+  if (flight.swing) { // SUB-AREAS: bank HARD toward the turn, with a quick FOV kick
+    const k = Math.min(1, flight.swing.t / SWING.time), dir = Math.sign(flight.swing.to - flight.swing.from);
+    bank += dir * SWING.bankDeg * DEG * Math.sin(Math.PI * k);
+    camera.fov = baseFov + SWING.fovKick * Math.sin(Math.PI * k);
+    camera.updateProjectionMatrix();
+  } else if (camera.fov !== baseFov) { camera.fov = baseFov; camera.updateProjectionMatrix(); }                                         // TILT: knife-edge (left wing down)
+  if (flight.rollT > 0) bank += flight.rollDir * Math.PI * 2 * (1 - flight.rollT / SKILLS.rollTime); // ROLL: a barrel roll
   const yaw = -Math.atan2(flight.vx, Math.max(1, flight.speed)) * 0.6;
   bonkWobble = Math.max(0, bonkWobble - dt);
   const bw = bonkWobble * 0.5 * Math.sin(clock * 38); // a quick dizzy shake after a bonk
@@ -1289,7 +1471,8 @@ function stepGame(dt) {
     }
   }
 
-  if (flight.ended && !ejected) { $('btn-boost').hidden = true; $('btn-eject').hidden = true; }
+  if (flight.ended && !ejected) { $('btn-boost').hidden = true; $('btn-eject').hidden = true; showSkills(false); }
+  updateSkillButtons();
 
   // When is the flight over?
   if (ejected) {

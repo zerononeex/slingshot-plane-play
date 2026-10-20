@@ -3,14 +3,16 @@
 //
 // Shape (v2): { v: 2, currentStage, unlocked: [stageIds], planesUnlocked: [extra plane ids],
 //              planeChoice: { world: plane }, prefs: { music }, stages: { <stageId | extra plane id>: record } }
-// (planesUnlocked is v0.6, additive: older saves derive it from their unlocked worlds.)
+//              skills: [skill ids]
+// (planesUnlocked and skills are v0.6, additive: older saves derive them from their unlocked worlds.)
 // record = { coins, band, engine, tank, ramp, magnet, wheels, eject,
 //            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[] }
 //
 // Game code reads/writes progression ONLY through getStage(save, id) / setStage(save, id, rec).
 import { SAVE_KEY } from './config.js';
 import { STAGES, DEFAULT_STAGE, STAGE_ORDER, EXTRA_PLANES, EXTRA_PLANE_ORDER } from './stages.js';
-import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel } from './economy.js';
+import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel, paintFits } from './economy.js';
+import { PAINTS } from './config.js';
 
 const MAX_COINS = 10_000_000;
 const MAX_BEST = 10_000_000;
@@ -34,7 +36,7 @@ export function freshRecord() {
 export const freshPrefs = () => ({ music: true });
 
 export function freshSave() {
-  return { v: 2, currentStage: DEFAULT_STAGE, unlocked: [DEFAULT_STAGE], planesUnlocked: [], planeChoice: {}, prefs: freshPrefs(), stages: { [DEFAULT_STAGE]: freshRecord() } };
+  return { v: 2, currentStage: DEFAULT_STAGE, unlocked: [DEFAULT_STAGE], planesUnlocked: [], skills: [], planeChoice: {}, prefs: freshPrefs(), stages: { [DEFAULT_STAGE]: freshRecord() } };
 }
 
 // Which plane flies each world: only unlocked worlds → unlocked other planes (the default is implicit).
@@ -45,11 +47,27 @@ function cleanPlaneChoice(raw, unlocked, planes = []) {
   return out;
 }
 
+// SKILLS (global): each unlocks the first time its world does (stored, never lost).
+export const SKILL_ORDER = ['tilt', 'loop', 'roll', 'dive'];
+export const SKILL_WORLD = { tilt: 'canyon', loop: 'city', roll: 'snow', dive: 'desert' };
+export function deriveSkills(unlocked, stored = []) {
+  return SKILL_ORDER.filter((id) => stored.includes(id) || unlocked.includes(SKILL_WORLD[id]));
+}
+
 // Extra planes (the Barnstormer): stored once earned, and earned the moment their world unlocks.
 export function derivePlanes(unlocked, stored = []) {
   return EXTRA_PLANE_ORDER.filter((id) => stored.includes(id) || unlocked.includes(EXTRA_PLANES[id].unlock.world));
 }
-const cleanPrefs = (raw) => ({ music: !(isObj(raw) && raw.music === false) });
+// prefs.musicLast = { world: 1–3 } — the rotating flight song played last per world (only when set).
+function cleanPrefs(raw) {
+  const out = { music: !(isObj(raw) && raw.music === false) };
+  if (isObj(raw) && isObj(raw.musicLast)) {
+    const last = {};
+    for (const [w, n] of Object.entries(raw.musicLast)) if (STAGE_ORDER.includes(w) && [1, 2, 3].includes(n)) last[w] = n;
+    if (Object.keys(last).length) out.musicLast = last;
+  }
+  return out;
+}
 
 // Unlock chain: a stage is unlocked if it was unlocked before (stored, never re-locks),
 // if its own record exists, or if the previous stage's best meets its bar.
@@ -71,7 +89,11 @@ export function checkUnlocks(save) {
   const had = save.planesUnlocked ?? [];
   const planesUnlocked = derivePlanes(unlocked, had);
   const newPlanes = planesUnlocked.filter((id) => !had.includes(id));
-  return { save: newly.length || newPlanes.length ? { ...save, unlocked, planesUnlocked } : save, newly, newPlanes };
+  const hadSkills = save.skills ?? deriveSkills(save.unlocked);
+  const skills = deriveSkills(unlocked, hadSkills);
+  const newSkills = skills.filter((id) => !hadSkills.includes(id));
+  const changed = newly.length || newPlanes.length || newSkills.length || !save.skills;
+  return { save: changed ? { ...save, unlocked, planesUnlocked, skills } : save, newly, newPlanes, newSkills };
 }
 
 export const isUnlocked = (save, id) => save.unlocked.includes(id);
@@ -92,10 +114,10 @@ function cleanParts(raw) {
   return parts;
 }
 
-function cleanPaints(raw) {
+function cleanPaints(raw, stageId) {
   const owned = ['default'];
   if (isObj(raw) && Array.isArray(raw.owned)) {
-    for (const id of raw.owned) if (PAINT_IDS.includes(id) && !owned.includes(id)) owned.push(id);
+    for (const id of raw.owned) if (PAINT_IDS.includes(id) && !owned.includes(id) && paintFits(PAINTS.find((p) => p.id === id), stageId)) owned.push(id);
   }
   const current = isObj(raw) && owned.includes(raw.current) ? raw.current : 'default';
   return { owned, current };
@@ -116,7 +138,7 @@ export function validateRecord(raw, stageId = DEFAULT_STAGE) {
   for (const id of TRACK_IDS) rec[id] = intOr(r[id], minLevel(id), maxLevel(id), minLevel(id));
   rec.eject = r.eject === true;
   rec.parts = cleanParts(r.parts);
-  rec.paints = cleanPaints(r.paints);
+  rec.paints = cleanPaints(r.paints, stageId);
   rec.secrets = cleanSecrets(r.secrets, stageId);
   return rec;
 }
@@ -138,7 +160,7 @@ export function validateSave(data) {
     // Old flat save (v0 / v0.2).
     const stages = { [DEFAULT_STAGE]: migrateFlat(data) };
     const unlocked = deriveUnlocked(stages);
-    return { v: 2, currentStage: DEFAULT_STAGE, unlocked, planesUnlocked: derivePlanes(unlocked), planeChoice: {}, prefs: freshPrefs(), stages };
+    return { v: 2, currentStage: DEFAULT_STAGE, unlocked, planesUnlocked: derivePlanes(unlocked), skills: deriveSkills(unlocked), planeChoice: {}, prefs: freshPrefs(), stages };
   }
   const stages = {};
   for (const id of Object.keys(data.stages).slice(0, MAX_STAGES)) {
@@ -151,7 +173,8 @@ export function validateSave(data) {
     ? data.currentStage : DEFAULT_STAGE;
   const storedPlanes = Array.isArray(data.planesUnlocked) ? data.planesUnlocked : [];
   const planesUnlocked = derivePlanes(unlocked, storedPlanes);
-  return { v: 2, currentStage, unlocked, planesUnlocked, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked, planesUnlocked), prefs: cleanPrefs(data.prefs), stages };
+  const skills = deriveSkills(unlocked, Array.isArray(data.skills) ? data.skills : []);
+  return { v: 2, currentStage, unlocked, planesUnlocked, skills, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked, planesUnlocked), prefs: cleanPrefs(data.prefs), stages };
 }
 
 // The ONLY way game code reads progression: a validated copy of one stage's record.

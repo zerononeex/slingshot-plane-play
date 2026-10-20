@@ -33,6 +33,8 @@ function segmentContext(stage, terrain, k) {
     crater: stage.pits.find((p) => p.crater && p.d > d0 + 25 && p.d < d1 - 20) ?? null,
     water: !!stage.water && midKind === 'water' && zones.some((z) => z.kind === 'lowSwoop'),
     island: stage.bigHills.find((b) => b.shape === 'island' && Math.abs(b.x) < 10 && b.d > d0 + 10 && b.d < d1 - 10) ?? null,
+    gates: (terrain.gates ?? []).filter((g) => inSeg(g.d)),
+    cloudBridge: (terrain.bridges ?? []).find((b) => b.kind === 'cloud' && b.d > d0 + 25 && b.d < d1 - 25) ?? null,
   };
 }
 
@@ -45,6 +47,7 @@ const SPECIAL_NEEDS = {
   devilRider: (c) => !!c.devil, oasisDip: (c) => !!c.pond,
   waterSkim: (c) => c.water, islandHop: (c) => !!c.island,
   starRingLine: (c) => c.rings.length > 0, craterDip: (c) => !!c.crater,
+  gateLine: (c) => c.gates.length > 0, cloudDive: (c) => !!c.cloudBridge,
 };
 
 // A per-flight pattern sequence: seeded, never the same twice in a row,
@@ -141,6 +144,16 @@ function specialCoins(name, ctx, add, n) {
       for (let i = 0; i < n; i++) { const t = i / (n - 1); add(isl.x, 0, isl.d + o - isl.rd + t * isl.rd * 2, 2.5 + 8 * Math.sin(Math.PI * t)); }
       return;
     }
+    case 'gateLine':
+      // Through the middle of every speed gate in the segment (the GATE LINE trio is three in a row).
+      for (const g of ctx.gates) for (const dd of [-8, -4, 0, 4, 8]) add(g.x, 0, g.d + o + dd, g.h * 0.45);
+      return;
+    case 'cloudDive': {
+      // Dive under a cloud bridge and climb back out.
+      const b = ctx.cloudBridge;
+      for (let i = 0; i < n; i++) { const t = i / (n - 1); add(0, 0, b.d + o - 25 + 50 * t, b.under * 0.45 + 10 * (2 * t - 1) ** 2); }
+      return;
+    }
     default:
   }
 }
@@ -217,9 +230,45 @@ export function featureCoins(stage, terrain, lap) {
       }
     }
   }
+  // Coin rivers: 60+ coins in a flowing S-curve, every lap.
+  for (const rv of stage.coinRivers ?? []) {
+    const n = Math.max(60, Math.round(rv.len / 4));
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1), d = rv.d + t * rv.len;
+      const x = rv.x + rv.amp * Math.sin(t * Math.PI * 3);
+      out.push({ x, y: Math.max(rv.y, terrain.groundAt(x, d, Infinity) + 3) + 2 * Math.sin(t * Math.PI * 5), d: d + off });
+    }
+  }
+  // SLOTS: the 10-coin TOKEN right behind each slot (paid by a tilted pass, not by pickup) + a coin line.
+  for (const sl of terrain.slots ?? []) {
+    const y = sl.base + Math.min(sl.h - 1.5, 5);
+    out.push({ x: sl.x, y, d: sl.d + 3 + off, token: `${lap}:${sl.id}`, big: true });
+    for (let i = 0; i < 6; i++) out.push({ x: sl.x, y, d: sl.d + 7 + i * 3 + off });
+  }
+  // SUB-AREAS: two rich patterns chained down the pocket lane + the BONUS STASH (25) at the end.
+  for (const p of terrain.pockets ?? []) {
+    const len = p.end - p.start - 40;
+    for (let i = 0; i < 24; i++) { // a wave…
+      const t = i / 23, d = p.start + 10 + t * len * 0.5;
+      out.push({ x: p.cx + 4 * Math.sin(t * Math.PI * 4), y: terrain.groundAt(p.cx, d, Infinity) + 4 + 2 * Math.sin(t * Math.PI * 2), d: d + off });
+    }
+    for (let i = 0; i < 24; i++) { // …then a zig-zag
+      const t = i / 23, d = p.start + 15 + len * 0.5 + t * len * 0.5;
+      out.push({ x: p.cx + (Math.floor(i / 4) % 2 ? 4 : -4), y: terrain.groundAt(p.cx, d, Infinity) + 5, d: d + off });
+    }
+    const y = p.stashBase + p.stash.y;
+    for (let i = 0; i < 25; i++) {
+      const a = (i / 25) * Math.PI * 2, ring = 0.6 + (i % 3) * 0.6;
+      out.push({ x: p.stash.x + Math.cos(a) * ring, y: y + Math.sin(a * 2) * 0.5 + (i % 4) * 0.4, d: p.stash.d + Math.sin(a) * ring + off, stash: `${lap}:${p.index}` });
+    }
+  }
+  // The asteroid ring tunnel: a coin line down the safe middle of the tube.
+  if (stage.tube) for (let d = stage.tube.d0 + 2; d <= stage.tube.d1; d += 4) out.push({ x: stage.tube.x, y: terrain.groundAt(stage.tube.x, d) + stage.tube.y, d: d + off });
+  // Slalom courses: a coin line threading every gate.
+  for (const c of terrain.courses ?? []) for (const g of c.gates) for (const dd of [-3, 0, 3]) out.push({ x: g.x, y: g.base + g.h * 0.45, d: g.d + dd + off });
   // Threaded coins past the floating asteroids (the other side of the slalom, same height).
   for (const a of terrain.asteroids) {
-    if (a.hero) continue;
+    if (a.hero || a.tube) continue;
     const x = 2 * a.mid - a.x;
     out.push({ x, y: terrain.groundAt(x, a.d, Infinity) + a.y, d: a.d + off });
   }
@@ -248,7 +297,7 @@ export function stepCoins(coins, pos, dt, { magnetRadius = 0, pickupRadius = 2.4
   let collected = 0, pulled = 0;
   const reach = Math.max(magnetRadius, pickupRadius);
   for (const c of coins) {
-    if (!c.alive || Math.abs(c.d - pos.d) > reach + 1) continue;
+    if (!c.alive || c.token || Math.abs(c.d - pos.d) > reach + 1) continue;
     const dx = pos.x - c.x, dy = pos.y - c.y, dd = pos.d - c.d;
     const dist = Math.hypot(dx, dy, dd);
     if (dist <= pickupRadius) { c.alive = false; collected++; continue; }
@@ -260,6 +309,23 @@ export function stepCoins(coins, pos, dt, { magnetRadius = 0, pickupRadius = 2.4
     }
   }
   return { collected, pulled };
+}
+
+// SUB-AREA BONUS STASH: reaching it scoops all 25 at once (per flight, per lap; not a secret).
+export const STASH_RADIUS = 4;
+export function reachStashes(terrain, coins, pos, reached) {
+  const found = [];
+  const lap = Math.floor(pos.d / terrain.cycle), dl = terrain.local(pos.d);
+  for (const p of terrain.pockets ?? []) {
+    const id = `${lap}:${p.index}`;
+    if (reached.has(id) || Math.abs(dl - p.stash.d) > STASH_RADIUS) continue;
+    if (Math.hypot(pos.x - p.stash.x, pos.y - (p.stashBase + p.stash.y), dl - p.stash.d) > STASH_RADIUS) continue;
+    reached.add(id);
+    let got = 0;
+    for (const c of coins) if (c.alive && c.stash === id) { c.alive = false; got++; }
+    found.push({ id, coins: got, name: p.name });
+  }
+  return found;
 }
 
 // R4: secrets reached this step (by the plane or the parachuting pilot).

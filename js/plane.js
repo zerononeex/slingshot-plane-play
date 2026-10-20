@@ -240,6 +240,41 @@ export function buildPlane(tune) {
   exhaust.visible = false;
   model.add(exhaust);
 
+  // Jet (the Sky Dart): a dark nose intake instead of a propeller; the engine ring moves to the
+  // tail as the afterburner ring and the exhaust flame grows with speed.
+  const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.25, 12, 1, true).rotateX(Math.PI / 2), lam(0x1d2433, { side: THREE.DoubleSide }));
+  intake.position.z = -1.55;
+  intake.visible = false;
+  model.add(intake);
+  let jet = false;
+
+  // Starship (Space): a pointed nose, a cockpit bubble, fins (the wing parts), a stabilizer
+  // with an antenna, an ion exhaust (bigger + bluer per ION ENGINE level) and a TRACTOR BEAM.
+  const shipParts = new THREE.Group();
+  const shipNose = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.9, 10).rotateX(-Math.PI / 2), bodyMat);
+  shipNose.position.z = -1.9;
+  shipParts.add(shipNose);
+  const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 8), new THREE.MeshLambertMaterial({ color: 0x9fe6ff, transparent: true, opacity: 0.55, emissive: 0x1a4a66 }));
+  bubble.scale.set(1, 0.85, 1.4);
+  bubble.position.set(0, 0.32, -0.3);
+  shipParts.add(bubble);
+  shipParts.visible = false;
+  model.add(shipParts);
+  const antenna = new THREE.Group();
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 5), lam(0xdddddd));
+  mast.position.set(0, 0.95, 1.05);
+  antenna.add(mast);
+  const tipBall = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
+  tipBall.position.set(0, 1.32, 1.05);
+  antenna.add(tipBall);
+  antenna.visible = false;
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0x9ff6ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.2, 14, 1, true).translate(0, -1.6, 0), beamMat);
+  beam.position.set(0, -0.3, -0.2);
+  beam.visible = false;
+  model.add(beam);
+  let ship = false, beamT = 0, ionLevel = 1;
+  const ION = [0xffb06a, 0xc8e0ff, 0x9fd0ff, 0x6fb4ff, 0x3f7bff];
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
 
   // Each stage flies its own plane: colours, wing size, floats.
@@ -252,20 +287,34 @@ export function buildPlane(tune) {
     leftWing.scale.x = rightWing.scale.x = ws;
     tail.scale.x = ws;
     floats.visible = !!def.floats;
-    exhaust.visible = !!def.exhaust;
+    exhaust.visible = !!def.exhaust || !!def.jet;
     leftWing.userData.upper.visible = rightWing.userData.upper.visible = !!def.biplane;
+    jet = !!def.jet;
+    ship = !!def.ship;
+    prop.visible = !jet && !ship;
+    intake.visible = jet;
+    shipParts.visible = ship;
+    screen.visible = !ship;
+    cowl.position.z = jet || ship ? 1.35 : -1.48; // the afterburner / ion ring (colour = engine level)
+    leftWing.rotation.z = ship ? -0.3 : 0;        // fins angle up
+    rightWing.rotation.z = ship ? 0.3 : 0;
+    exhaustMat.color.setHex(jet ? 0xff7a2e : ship ? ION[ionLevel - 1] : 0xffa21f);
   }
 
   function setParts(parts) {
     leftWing.visible = !!parts.leftWing;
     rightWing.visible = !!parts.rightWing;
     tail.visible = !!parts.tail;
+    antenna.visible = ship && !!parts.tail;
   }
+  tail.add(antenna);
 
   // Show exactly what this stage record owns, at its level.
   function setLoadout(rec, { ENGINE_LV, TANK_LV, MAGNET_LV, WHEELS_LV, paint }) {
     setParts(rec.parts);
     cowlMat.color.setHex(ENGINE_LV.cowl);
+    ionLevel = ENGINE_LV.level;
+    if (ship) exhaustMat.color.setHex(ION[ionLevel - 1]);
     tank.visible = TANK_LV.level > 0;
     tank.scale.setScalar(TANK_LV.scale || 1);
     magnet.visible = MAGNET_LV.level > 0;
@@ -286,15 +335,27 @@ export function buildPlane(tune) {
     seat.visible = !!rec.eject;
     bodyMat.color.setHex(paint.id === 'default' ? defaultBody : paint.color);
     rainbow = !!paint.rainbow;
+    nebula = !!paint.nebula;
   }
 
-  let rainbow = false;
+  let rainbow = false, nebula = false;
   let squash = 0;
   const _hsl = new THREE.Color();
   // Per-frame visual life: rainbow paint, wheel squash after a bounce.
-  function animate(dt, t, flying) {
+  function animate(dt, t, flying, speed = 0) {
     if (rainbow) bodyMat.color.copy(_hsl.setHSL((t * (flying ? 0.12 : 0.08)) % 1, 0.85, 0.55));
-    if (exhaust.visible) { const f = 0.8 + Math.random() * 0.4; exhaust.scale.set(f, f, f * (flying ? 1.6 : 1)); }
+    if (nebula) bodyMat.color.copy(_hsl.setHSL(0.5 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.3)), 0.7, 0.5)); // swirling teal ↔ purple
+    if (beamT > 0) { beamT = Math.max(0, beamT - dt); beamMat.opacity = 0.28 * Math.min(1, beamT / 0.15) * (0.8 + 0.2 * Math.sin(t * 30)); }
+    beam.visible = beamT > 0;
+    if (exhaust.visible) {
+      const f = 0.8 + Math.random() * 0.4;
+      // The jet flame grows with speed; the ion exhaust pulses with speed and grows per ION ENGINE level.
+      const len = jet ? (flying ? 1 + Math.min(3, speed / 40) : 0.7)
+        : ship ? (0.7 + 0.18 * ionLevel) * (flying ? 1.2 + Math.min(1.2, speed / 70) * (0.8 + 0.2 * Math.sin(t * 18)) : 0.9)
+        : flying ? 1.6 : 1;
+      exhaust.scale.set(f, f, f * len);
+      exhaust.position.z = 1.55 + (len - 1) * 0.45;
+    }
     squash = Math.max(0, squash - dt);
     const k = squash > 0 ? 0.55 + 0.45 * (1 - squash / 0.15) : 1;
     for (const w of wheels) {
@@ -315,5 +376,7 @@ export function buildPlane(tune) {
     for (const a of pilot.arms) a.rotation.set(0, 0, 0);
   }
 
-  return { root, model, prop, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank };
+  // TRACTOR BEAM: a soft cone shimmer while a coin is being pulled (Starship only).
+  function tractor() { if (ship) beamT = 0.35; }
+  return { root, model, prop, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
 }

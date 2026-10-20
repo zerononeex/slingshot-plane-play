@@ -30,7 +30,10 @@ function envOf(env) {
   return env;
 }
 
-export function stepPilot(p, input, dt, PILOT, envIn, corridorHalfWidth = 26) {
+// corridor: the half-width of the main corridor, or (in a sub-area) a pocket lane { cx, half }.
+export function stepPilot(p, input, dt, PILOT, envIn, corridor = 26) {
+  const lo = typeof corridor === 'number' ? -corridor : corridor.cx - corridor.half;
+  const hi = typeof corridor === 'number' ? corridor : corridor.cx + corridor.half;
   if (p.landed) return p;
   const env = envOf(envIn);
   p.t += dt;
@@ -43,7 +46,7 @@ export function stepPilot(p, input, dt, PILOT, envIn, corridorHalfWidth = 26) {
   p.vd += (PILOT.glideSpeed - p.vd) * Math.min(1, PILOT.forwardDrag * dt);
   p.vx += (clamp(input.x ?? 0, -1, 1) * PILOT.sideSpeed - p.vx) * Math.min(1, 3 * dt);
 
-  p.x = clamp(p.x + p.vx * dt, -corridorHalfWidth, corridorHalfWidth);
+  p.x = clamp(p.x + p.vx * dt, lo, hi);
   p.d += p.vd * dt;
   p.y += p.vy * dt;
   const roof = env.ceilingAt(p.x, p.d);

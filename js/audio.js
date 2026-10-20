@@ -68,6 +68,12 @@ export const sfx = {
   cheer: () => { blip('triangle', 660, 990, 0.15, 0.18); setTimeout(() => blip('triangle', 990, 1320, 0.2, 0.18), 140); },
   whoosh: () => blip('sawtooth', 120, 520, 0.4, 0.05),
   splash: () => blip('triangle', 900, 120, 0.3, 0.12),
+  // Bumpables: soft, silly voices (v0.6 part 2)
+  squawk: () => { blip('sawtooth', 900, 500, 0.12, 0.07); setTimeout(() => blip('sawtooth', 1100, 600, 0.14, 0.07), 110); },
+  pop: () => { blip('square', 1400, 200, 0.06, 0.1); sweep(2000, 800, 400, 0.15, 0.06, 0.8); },
+  boing: () => blip('sine', 180, 720, 0.4, 0.2),
+  beep: () => { blip('square', 1500, 1500, 0.06, 0.05); setTimeout(() => blip('square', 1900, 1900, 0.06, 0.05), 90); },
+  honk: () => { blip('square', 320, 280, 0.15, 0.07); setTimeout(() => blip('square', 300, 260, 0.15, 0.07), 160); },
   // Skills + events (v0.6)
   tilt: () => { blip('square', 1800, 900, 0.03, 0.06); setTimeout(() => blip('triangle', 2400, 1600, 0.04, 0.08), 30); }, // click-snap
   loop: () => sweep(300, 1600, 350, 0.9, 0.09),          // rising-falling whoosh

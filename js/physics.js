@@ -1,6 +1,7 @@
 // Pure flight physics — no three.js, no DOM, so node tests can run it.
 // Coordinates: x = right, y = up, d = metres flown forward from the slingshot.
 import { WHEELS, LANDING, BOOST } from './config.js';
+import { SWING } from './pockets.js';
 
 const DEG = Math.PI / 180;
 
@@ -9,6 +10,81 @@ const DEG = Math.PI / 180;
 // so one tree can't bonk twice. The flight goes on.
 export const BONK = { keep: 0.55, grace: 0.6, popDeg: 20, kick: 6, back: 0.3, sameFor: 2 };
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+// SKILLS (v0.6 part 2). TILT = knife-edge toggle (needs the Left Wing); LOOP = a full circle
+// (needs 20 m/s); ROLL = a barrel roll that sweeps coins; DIVE (hold) = a steep, fast dive.
+export const SKILLS = {
+  tiltTime: 0.35, tiltSink: 2.5, tiltSteer: 0.8, tiltSpan: 0.3, wingSpan: 1.6,
+  loopMinSpeed: 20, loopTime: 1.15, loopExitKeep: 0.72, loopRadius: (v) => clamp(7 + 0.1 * v, 8, 13),
+  rollTime: 0.6, rollCooldown: 1.5, rollPickupMul: 2.2, rollDrift: 3,
+  diveDeg: -55, diveGravityMul: 1.6,
+};
+// Coin pickup reach: a ROLL sweeps × 2.2 wider while it lasts.
+export const pickupRadiusFor = (s, base) => (s.rollT > 0 ? base * SKILLS.rollPickupMul : base);
+// The plane's half-width against slot walls: knife-edge, wings out, or just the body.
+export const spanOf = (s, P) => (s.tilted ? SKILLS.tiltSpan : (P.lift ?? 1) > 0 ? SKILLS.wingSpan : P.clearance);
+
+// TILT toggle. Blocked without the Left Wing (P.canTilt), on the ground and mid-loop.
+export function toggleTilt(s, P) {
+  if (!P.canTilt || s.mode !== 'air' || s.loop || s.ended) return false;
+  s.tilted = !s.tilted;
+  s.events.push(s.tilted ? 'tiltOn' : 'tiltOff');
+  return true;
+}
+// LOOP: below 20 m/s it refuses ('loopSlow'); else a 1.15 s circle from here.
+export function tryLoop(s) {
+  if (s.mode !== 'air' || s.loop || s.ended) return false;
+  if (s.speed < SKILLS.loopMinSpeed) { s.events.push('loopSlow'); return false; }
+  if (s.tilted) s.tilted = false;
+  s.loop = { t: 0, R: SKILLS.loopRadius(s.speed), d0: s.d, y0: s.y, x: s.x, rings: new Set() };
+  s.events.push('loop');
+  return true;
+}
+// ROLL: 0.6 s barrel roll toward `dir` (−1 left, +1 right), 1.5 s cooldown, no speed cost.
+export function tryRoll(s, dir = 1) {
+  if (s.mode !== 'air' || s.loop || s.ended || s.rollCool > 0) return false;
+  s.rollT = SKILLS.rollTime;
+  s.rollCool = SKILLS.rollCooldown;
+  s.rollDir = dir < 0 ? -1 : 1;
+  s.events.push('roll');
+  return true;
+}
+
+// The loop itself: a full vertical circle (back to where it started), then exit at × 0.72.
+function stepLoop(s, dt, P, env) {
+  const L = s.loop;
+  L.t += dt;
+  const th = Math.min(1, L.t / SKILLS.loopTime) * Math.PI * 2;
+  s.d = L.d0 + L.R * Math.sin(th);
+  s.y = L.y0 + L.R * (1 - Math.cos(th));
+  s.pitch = th;
+  s.vy = 0;
+  const lr = env.loopRingAt ? env.loopRingAt(s.x, s.y, s.d) : null;
+  if (lr && !s.used.has(lr.id + 'loopRing')) {
+    s.used.add(lr.id + 'loopRing');
+    s.events.push('loopRing');
+    L.rings.add(lr.ring.set);
+    L.count = (L.count ?? 0) + 1;
+    L.set = lr.ring.set;
+  }
+  const hit = solidHit(s, env, P);
+  const g = env.groundAt(s.x, s.d, s.y);
+  if (hit || s.y - P.clearance < g) { // clipped something: the loop breaks off
+    s.loop = null;
+    s.pitch = 0;
+    if (s.y - P.clearance < g) s.y = g + P.clearance + 0.1;
+    if (hit) bonk(s, hit, P);
+    return;
+  }
+  if (L.t >= SKILLS.loopTime) {
+    s.loop = null;
+    s.lastLoop = { d0: L.d0, y0: L.y0, R: L.R, x: L.x };
+    s.d = L.d0; s.y = L.y0; s.pitch = 0;
+    s.speed *= SKILLS.loopExitKeep;
+    s.events.push('loopEnd');
+    if (L.count >= 8 && L.rings.size === 1) s.events.push('loopMaster'); // all 8 of one set in ONE loop
+  }
+}
 
 // What the owned plane parts do. No parts = all neutral = the v0 flight.
 export function partEffects(parts, pp) {
@@ -35,18 +111,24 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
   const e = effects ?? { sinkMul: 1, climbCostMul: 1, driftSpeed: 0, stallSpeed: null, stallSinkMul: 1, responseMul: 1 };
   const snow = modifiers.softSnow;
   const lowG = modifiers.lowGravity;
+  const thin = modifiers.thinAir;           // Jetstream: drag × 0.5, lift × 0.85 for every plane
   const g = lowG ? lowG.gravityScale : 1;
   return {
     ...flight,
     gravity: flight.gravity * g,              // low gravity: climbing costs and diving gains soften
     gravityScale: g,
     decay: engine.decay * plane.decayMul,
-    drag: flight.drag * plane.glideMul,
+    drag: flight.drag * plane.glideMul * (thin ? thin.dragMul : 1),
+    fastDecayMul: plane.fastDecayMul ?? 1,     // the Sky Dart: × 0.8 when fast…
+    slowDecayMul: plane.slowDecayMul ?? 1,     // …× 1.3 below slowBelow m/s
+    slowBelow: plane.slowBelow ?? 0,
     sinkMul: e.sinkMul,
     climbCostMul: e.climbCostMul,
-    lift: (e.lift ?? 1) * (plane.liftMul ?? 1), // no parts given (generic tests) = full lift
+    lift: (e.lift ?? 1) * (plane.liftMul ?? 1) * (thin ? thin.liftMul : 1), // no parts given (generic tests) = full lift
+    noLiftCarry: plane.noLiftCarry ?? flight.noLiftCarry, // per-plane wingless launch carry (v0.6 part 2)
     driftSpeed: e.driftSpeed,
-    stallSpeed: Math.min(e.stallSpeed ?? flight.stallSpeed, plane.stallSpeed ?? Infinity), // the biplane stalls at 8
+    // A plane's own stall speed (biplane 8, jet 16) replaces the stock 11; the tail lowers it by the same 9/11.
+    stallSpeed: plane.stallSpeed ? plane.stallSpeed * (e.stallSpeed ?? flight.stallSpeed) / flight.stallSpeed : e.stallSpeed ?? flight.stallSpeed,
     stallSink: flight.stallSink * e.stallSinkMul * g, // …and you sink slower
     pitchRateDeg: flight.pitchRateDeg * e.responseMul,
     lateralResponse: flight.lateralResponse * e.responseMul,
@@ -54,7 +136,7 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     bouncePop: wheels.pop,
     landingSinkBonus: (snow ? snow.sinkBonus : 0) + (lowG ? lowG.sinkBonus : 0),
     water: modifiers.water ?? null,
-    boostThrust: BOOST.thrust,
+    boostThrust: modifiers.warp ? modifiers.warp.boostThrust : BOOST.thrust, // Space: the WARP TANK
     boostCap: (band ? band.launchMax : 30) + BOOST.capOverBand,
   };
 }
@@ -79,6 +161,14 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 
     bounces: 0,
     tumbleT: 0,
     time: 0,                // s since launch
+    tilted: false, tiltT: 0, // TILT: knife-edge (tiltT animates 0 → 1)
+    loop: null, lastLoop: null,
+    rollT: 0, rollCool: 0, rollDir: 1,
+    diving: false,
+    swing: null,            // a sub-area swing in progress (§9)
+    lane: null,             // inside a sub-area: { cx, half, pocket, lap, end }
+    bumps: [],              // bumpables hit this flight ({ b, id, lap }), drained by the game
+    chain: null,            // a slalom course in progress { course, next, lap }
     noseUp: 0,              // extra nose-up (looks only) when a wingless plane holds "up"
     bonkGrace: 0,           // seconds of collision grace after a bonk
     bonks: 0,
@@ -117,23 +207,58 @@ export function stepFlight(s, input, dt, P, envIn) {
   if (s.scrapeCool > 0) s.scrapeCool -= dt;
   if (s.bonkGrace > 0) s.bonkGrace = Math.max(0, s.bonkGrace - dt);
   if (s.bonkWithT > 0) s.bonkWithT -= dt;
+  if (s.rollT > 0) s.rollT = Math.max(0, s.rollT - dt);
+  if (s.rollCool > 0) s.rollCool = Math.max(0, s.rollCool - dt);
+  s.tiltT = clamp(s.tiltT + (s.tilted ? dt : -dt) / SKILLS.tiltTime, 0, 1); // 0.35 s to knife-edge and back
   s.boosting = false;
-  if (s.mode === 'air') stepAir(s, input, dt, P, env);
+  if (s.mode !== 'air') { s.loop = null; s.tilted = false; }
+  if (s.swing && s.mode !== 'air') stepSwing(s, dt, P, env); // a landing mid-swing still finishes it
+  if (s.loop) stepLoop(s, dt, P, env);
+  else if (s.mode === 'air') stepAir(s, input, dt, P, env);
   else if (s.mode === 'ground') stepGround(s, input, dt, P, env);
   else stepTumble(s, dt, P, env);
   if (s.speed > s.peakSpeed) s.peakSpeed = s.speed;
   return s;
 }
 
-// Returns true when the plane was pushed against the corridor edge this step.
+// The lateral limits: the main corridor, or (in a sub-area) the pocket lane.
+export const laneOf = (s, P) => (s.lane ? { lo: s.lane.cx - s.lane.half, hi: s.lane.cx + s.lane.half } : { lo: -P.corridorHalfWidth, hi: P.corridorHalfWidth });
+
+// Returns true when the plane was pushed against the corridor edge this step (never in a pocket).
 function steerLateral(s, input, dt, P, scale, drift = 0) {
+  if (s.swing) return false; // the swing owns x
   const target = clamp(input.x, -1, 1) * P.lateralSpeed * scale + drift;
   s.vx += (target - s.vx) * Math.min(1, P.lateralResponse * dt);
   s.x += s.vx * dt;
-  const pushing = Math.abs(s.vx) > 1.5;
-  if (s.x > P.corridorHalfWidth) { s.x = P.corridorHalfWidth; s.vx = Math.min(s.vx, 0); return pushing; }
-  if (s.x < -P.corridorHalfWidth) { s.x = -P.corridorHalfWidth; s.vx = Math.max(s.vx, 0); return pushing; }
+  const pushing = Math.abs(s.vx) > 1.5 && !s.lane;
+  const L = laneOf(s, P);
+  if (s.x > L.hi) { s.x = L.hi; s.vx = Math.min(s.vx, 0); return pushing; }
+  if (s.x < L.lo) { s.x = L.lo; s.vx = Math.max(s.vx, 0); return pushing; }
   return false;
+}
+
+// SUB-AREAS: a ~1.1 s cinematic swing into a pocket (enter) or back to the corridor (exit).
+// x eases from → to while the flight carries on forward (distance keeps counting); bonks are
+// suspended and the plane rides over the ground. Then the pocket lane (or the corridor) takes over.
+function startSwing(s, pocket, lap, enter) {
+  s.swing = { t: 0, from: s.x, to: enter ? pocket.cx : pocket.exitX, enter, pocket: pocket.index, lap, end: pocket.end, half: pocket.half, cx: pocket.cx };
+  s.lane = null;
+  s.vx = 0;
+  if (s.tilted) s.tilted = false;
+  s.events.push(enter ? 'swingIn' : 'swingOut');
+}
+function stepSwing(s, dt, P, env) {
+  const w = s.swing;
+  w.t += dt;
+  const k = Math.min(1, w.t / SWING.time);
+  s.x = w.from + (w.to - w.from) * k * k * (3 - 2 * k);
+  const g = env.groundAt(s.x, s.d, s.y) + P.clearance + 0.5;
+  if (s.y < g) s.y += (g - s.y) * Math.min(1, 12 * dt); // ride over, never through, the ground
+  if (k >= 1) {
+    s.swing = null;
+    s.lane = w.enter ? { cx: w.cx, half: w.half, pocket: w.pocket, lap: w.lap, end: w.end } : null;
+    s.events.push(w.enter ? 'pocketIn' : 'pocketOut');
+  }
 }
 
 function startTumble(s) {
@@ -147,10 +272,24 @@ function startTumble(s) {
 // The obstacle to bonk on this step, if any. Never during the grace, and never the same
 // obstacle again while you are still in it or for BONK.sameFor seconds (trunk → its canopy).
 function solidHit(s, env, P) {
-  const hit = env.hitTest(s.x, s.y, s.d, P.clearance);
+  if (s.swing) return null; // a sub-area swing: bonks are suspended
+  const hit = env.hitTest(s.x, s.y, s.d, P.clearance, spanOf(s, P));
   if (!hit) { if (s.bonkGrace <= 0 && s.bonkWithT <= 0) s.bonkWith = null; return null; }
   if (s.bonkGrace > 0 || hit === s.bonkWith) return null;
   return hit;
+}
+
+// SLALOM COURSES: gate 0 starts a chain; each next gate in order extends it; all 5 = COURSE CLEAR
+// (+20), once per course per lap. Missing one ends the chain silently (checked in stepAir).
+function courseGate(s, c) {
+  if (c.k === 0) s.chain = { course: c.course, next: 1, lap: c.lap };
+  else if (s.chain && s.chain.course === c.course && s.chain.next === c.k) s.chain.next++;
+  else return;
+  if (s.chain.next === 5) {
+    const key = `${c.lap}:${c.course}courseClear`;
+    if (!s.used.has(key)) { s.used.add(key); s.events.push('courseClear'); }
+    s.chain = null;
+  }
 }
 
 // hit = the obstacle (has x or cx), or null for a terrain face (bounce straight back).
@@ -199,6 +338,11 @@ function stepAir(s, input, dt, P, env) {
   const stallAmt = s.stalled ? clamp(1 - (s.speed - P.minAirSpeed) / (P.stallSpeed - P.minAirSpeed), 0, 1) : 0;
   if (s.stalled) target = Math.min(target, 0) - stallAmt * P.stallNoseDropDeg * DEG;
   if (s.y >= P.ceiling) target = Math.min(target, 0);
+  // TILT: no climbing on knife-edge. DIVE (held): nose down to −55°.
+  if (s.tilted) target = Math.min(target, 0);
+  const diving = !!input.dive && P.canDive;
+  s.diving = diving;
+  if (diving) target = SKILLS.diveDeg * DEG;
 
   const lift = P.lift ?? 1;
   if (lift <= 0) {
@@ -226,11 +370,12 @@ function stepAir(s, input, dt, P, env) {
   // Energy: diving (pitch < 0) adds speed, climbing removes it (wings make climbing cheaper).
   // Decay + drag bleed speed, except while band momentum lasts. Boost pushes, up to its cap.
   const sin = Math.sin(s.pitch);
-  const energy = -P.gravity * sin * (sin > 0 ? P.climbCostMul ?? 1 : 1);
+  const energy = -P.gravity * sin * (sin > 0 ? P.climbCostMul ?? 1 : 1) * (diving ? SKILLS.diveGravityMul : 1);
   const carrying = s.holdLeft > 0 || s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry);
   const upBleed = (P.lift ?? 1) <= 0 && iy > 0 && !carrying ? P.noLiftUpBleed * iy : 0; // nose up with no wings = drag
   const pushed = s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry); // band push: no decay/drag
-  const bleed = (pushed ? 0 : P.decay + P.drag * s.speed * s.speed) + upBleed;
+  const decay = P.decay * (s.speed < (P.slowBelow ?? 0) ? P.slowDecayMul ?? 1 : P.fastDecayMul ?? 1);
+  const bleed = (pushed ? 0 : decay + P.drag * s.speed * s.speed) + upBleed;
   let thrust = 0;
   if (input.boost && s.fuel > 0) {
     s.boosting = true;
@@ -245,8 +390,10 @@ function stepAir(s, input, dt, P, env) {
   const xPrev = s.x, dPrev = s.d, yPrev = s.y;
   const forward = s.speed * Math.cos(s.pitch);
   // Updraft: the stall sink is cancelled and the air lifts you — at no speed cost.
-  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1)) + zone.lift;
-  if (steerLateral(s, input, dt, P, 1, (P.driftSpeed ?? 0) + zone.gust) && env.edgeWalls) scrape(s, P); // cliff / building walls
+  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1)) + zone.lift - s.tiltT * SKILLS.tiltSink; // tilted: lift fades to a gentle sink
+  const steer = s.tilted ? SKILLS.tiltSteer : 1;
+  const rollDrift = s.rollT > 0 ? s.rollDir * SKILLS.rollDrift : 0;
+  if (steerLateral(s, input, dt, P, steer, (P.driftSpeed ?? 0) + zone.gust + rollDrift) && env.edgeWalls) scrape(s, P); // cliff / building walls
   s.d += forward * dt;
   s.y = Math.min(P.ceiling, s.y + s.vy * dt);
 
@@ -254,8 +401,32 @@ function stepAir(s, input, dt, P, env) {
   if (env.crossings) {
     _cross.length = 0;
     for (const c of env.crossings(xPrev, yPrev, dPrev, s.x, s.y, s.d, _cross)) {
-      if (!s.used.has(c.id + c.type)) { s.used.add(c.id + c.type); s.events.push(c.type); }
+      if (s.used.has(c.id + c.type)) continue;
+      if (c.type === 'slot' && (!s.tilted || s.bonkGrace > 0)) continue; // the slot's treasure is for a clean knife-edge pass
+      if (c.type === 'courseGate') { courseGate(s, c); continue; }
+      if (c.type === 'portal') { if (!s.lane && !s.swing && env.pockets) startSwing(s, env.pockets[c.pocket], c.lap, true); continue; }
+      s.used.add(c.id + c.type);
+      // A speed gate pays more if you're fast: 'gateFast' / 'gateSlow'.
+      s.events.push(c.type === 'gate' ? (s.speed >= (P.gateFast ?? 40) ? 'gateFast' : 'gateSlow') : c.type);
     }
+  }
+  // BUMPABLES: a soft bump — a little speed (× 0.90 / big × 0.85), never a bonk; once per flight each.
+  if (env.bumpAt) {
+    const bp = env.bumpAt(s.x, s.y, s.d, P.clearance);
+    if (bp && !s.used.has(bp.id + 'bump')) {
+      s.used.add(bp.id + 'bump');
+      s.speed = Math.max(P.minAirSpeed, s.speed * bp.b.slow);
+      s.bumps.push(bp);
+      s.events.push('bump');
+    }
+  }
+  // The pocket's end: swing back to the main corridor.
+  if (s.lane && env.pockets && (env.local(s.d) >= s.lane.end || Math.floor(s.d / env.cycle) !== s.lane.lap)) startSwing(s, env.pockets[s.lane.pocket], s.lane.lap, false);
+  if (s.swing) stepSwing(s, dt, P, env);
+  // A course chain ends silently if you fly past the next gate without going through it.
+  if (s.chain && env.courses) {
+    const g = env.courses[s.chain.course]?.gates[s.chain.next];
+    if (!g || env.local(s.d) > g.d + 2 || Math.floor(s.d / env.cycle) !== s.chain.lap) s.chain = null;
   }
   // Dust devil: a swirling boost, once per devil.
   if (env.devilAt) {
@@ -283,6 +454,7 @@ function stepAir(s, input, dt, P, env) {
 
   let g = env.groundAt(s.x, s.d, s.y);
   if (s.y - P.clearance > g) return;
+  if (s.swing) { s.y = g + P.clearance; return; } // mid-swing: ride over the ground (no face bonks)
 
   // Ground rose much more than we came down = we flew into a wall or a face, not onto the ground.
   if (g - (yPrev - P.clearance) > P.faceStep) {
@@ -398,7 +570,8 @@ function stepTumble(s, dt, P, env) {
   s.tumbleT += dt;
   s.speed = Math.max(0, s.speed - P.tumbleFriction * dt);
   s.vx *= Math.max(0, 1 - 3 * dt);
-  s.x = clamp(s.x + s.vx * dt, -P.corridorHalfWidth, P.corridorHalfWidth);
+  const L = laneOf(s, P);
+  s.x = clamp(s.x + s.vx * dt, L.lo, L.hi);
   const dPrev = s.d;
   s.d += s.speed * dt;
   const g = env.groundAt(s.x, s.d, s.y);

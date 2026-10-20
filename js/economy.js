@@ -54,9 +54,11 @@ export function buyEject(rec) {
 }
 
 // Paint jobs: buying one also puts it on; owned ones can be switched for free.
-export function buyOrWearPaint(rec, id) {
+// planeId: whose record this is (a plane-only paint like Nebula only fits its own plane).
+export const paintFits = (paint, planeId) => !paint.only || paint.only === planeId;
+export function buyOrWearPaint(rec, id, planeId = null) {
   const paint = PAINTS.find((p) => p.id === id);
-  if (!paint) return null;
+  if (!paint || !paintFits(paint, planeId)) return null;
   if (rec.paints.owned.includes(id)) return { ...rec, paints: { ...rec.paints, current: id } };
   if (rec.coins < paint.cost) return null;
   return { ...rec, coins: rec.coins - paint.cost, paints: { owned: [...rec.paints.owned, id], current: id } };
@@ -69,7 +71,7 @@ export function completionTotals() {
   t.parts = PARTS.reduce((a, p) => a + p.cost, 0);
   t.eject = EJECT.cost;
   t.core = Object.values(t).reduce((a, v) => a + v, 0);
-  t.paints = PAINTS.reduce((a, p) => a + p.cost, 0);
+  t.paints = PAINTS.filter((p) => !p.only).reduce((a, p) => a + p.cost, 0); // shared paints (Nebula is Starship-only)
   t.allIn = t.core + t.paints;
   return t;
 }

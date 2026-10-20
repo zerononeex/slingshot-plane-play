@@ -161,6 +161,8 @@ export const PAINTS = [
   { id: 'yellow',  name: 'Sunshine Yellow', cost: 80, color: 0xffd400 },
   { id: 'grape',   name: 'Grape Purple',    cost: 110, color: 0x8a3fd1 },
   { id: 'rainbow', name: 'RAINBOW',         cost: 230, color: 0xff4040, rainbow: true },
+  // Space-only STAR SKIN: belongs to the Starship record only (not in the shared totals).
+  { id: 'nebula',  name: 'Nebula',          cost: 230, color: 0x7a3fd1, nebula: true, only: 'space' },
 ];
 
 // PLANE PARTS — one-time buys, in this order. Start = body + propeller only.
