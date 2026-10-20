@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { WORLD, LAUNCH } from './config.js';
 import { DECK } from './terrain.js';
 import { rng, makePatternPicker, patternCoins, featureCoins } from './coins.js';
+import { fillSceneryChunk, newSceneryChunk, TREE_SLOTS, ROCK_SLOTS, columnCap } from './scenery.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -28,16 +29,16 @@ function terrainXs(half) {
   return xs;
 }
 
-// Column looks per kind: body colour, cap colour, cap shape scale (x, y), cap lift.
+// Column colours per kind (cap sizes live in scenery.js COLUMN_CAPS, shared with the colliders).
 const COLUMN_LOOK = {
-  tree: { body: 0x7a4a28, cap: 0x3a9a3a, capScale: [5, 4.5], hero: [7, 6.3] },
-  pine: { body: 0x6b4423, cap: 0x2f6b4f, capScale: [4, 7], hero: [6, 10] },
-  pillar: { body: 0xb85a32, cap: 0xc96a3a, capScale: [1.15, 0.6] },
-  cactus: { body: 0x3f9a4a, cap: 0x4fb35a, capScale: [1, 1], hero: [1, 1] },
-  waterTower: { body: 0x8fa3b8, cap: 0xd14b3b, capScale: [1.2, 0.6] },
-  antenna: { body: 0xdddddd, cap: 0xff3030, capScale: [2.5, 2.5], glow: true },
-  post: { body: 0x7d5230, cap: 0x7d5230, capScale: [1, 0.3] },
-  lighthouse: { body: 0xffffff, cap: 0xe8262c, capScale: [1.3, 1.1], glow: true },
+  tree: { body: 0x7a4a28, cap: 0x3a9a3a },
+  pine: { body: 0x6b4423, cap: 0x2f6b4f },
+  pillar: { body: 0xb85a32, cap: 0xc96a3a },
+  cactus: { body: 0x3f9a4a, cap: 0x4fb35a },
+  waterTower: { body: 0x8fa3b8, cap: 0xd14b3b },
+  antenna: { body: 0xdddddd, cap: 0xff3030, glow: true },
+  post: { body: 0x7d5230, cap: 0x7d5230 },
+  lighthouse: { body: 0xffffff, cap: 0xe8262c, glow: true },
 };
 
 export function createWorld(scene) {
@@ -110,7 +111,7 @@ export function createWorld(scene) {
     const mesh = new THREE.Mesh(geo, groundMat);
     mesh.frustumCulled = false;
     scene.add(mesh);
-    chunks.push({ slot: i, index: -9999, mesh });
+    chunks.push({ slot: i, index: -9999, mesh, scenery: newSceneryChunk() });
   }
 
   // Instanced small scenery (shared by all stages; looks change with the theme).
@@ -122,7 +123,7 @@ export function createWorld(scene) {
     parent.add(m);
     return m;
   };
-  const TP = 14, RP = 8, CP = WORLD.cloudsPerChunk * 3;
+  const TP = TREE_SLOTS, RP = ROCK_SLOTS, CP = WORLD.cloudsPerChunk * 3;
   const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 1, 6).translate(0, 0.5, 0);
   const trunkMat = lam(0x8a5a35);
   const trunks = inst(trunkGeo, trunkMat, N * TP);
@@ -186,10 +187,8 @@ export function createWorld(scene) {
       const g = terrain.surfaceAt(t.x, t.d, -Infinity);
       setInst(colBody, i, t.x, g - 0.5, t.d, t.r, t.h + 0.5, t.r);
       colBody.setColorAt(i, _c.setHex(t.kind === 'lighthouse' && i % 2 ? 0xe8262c : look.body));
-      const cs = t.hero && look.hero ? look.hero : look.capScale;
-      const capR = t.kind === 'tree' || t.kind === 'pine' ? cs[0] : t.r * cs[0];
-      const capY = t.kind === 'tree' || t.kind === 'pine' ? cs[1] : t.r * cs[1];
-      setInst(colCap, i, t.x, g + t.h + capY * 0.4, t.d, capR, capY, capR);
+      const cap = columnCap(t);
+      setInst(colCap, i, t.x, g + t.h + cap.y * 0.4, t.d, cap.r, cap.y, cap.r);
       colCap.setColorAt(i, _c.setHex(look.cap));
     });
     colBody.instanceMatrix.needsUpdate = true;
@@ -329,18 +328,7 @@ export function createWorld(scene) {
     lapGroup.position.set(0, 0, -lap * terrain.cycle);
   }
 
-  // ---------- small scenery ----------
-  // Keep small scenery out of the tunnels, the obstacle slaloms and the launch lane.
-  function sceneryX(x, d) {
-    const dl = terrain.local(d);
-    for (const c of stage.caverns) {
-      const left = c.laneMax < 0;
-      if (dl > c.start - 10 && dl < c.end + 10 && (left ? x > -30 && x < -6 : x < 30 && x > 6)) return x + (left ? -40 : 40);
-    }
-    for (const z of stage.zones) if (dl > z.from - 10 && dl < z.to + 10 && Math.abs(x) > 6 && Math.abs(x) < 28 && (z.side === 'left') === (x < 0)) return x + Math.sign(x) * 30;
-    if (d < 60 && Math.abs(x) < 10) return x + (x < 0 ? -12 : 12);
-    return x;
-  }
+  // ---------- small scenery ---------- (placement lives in scenery.js, shared with the colliders)
 
   function groundColor(h, x, d) {
     const G = theme.ground;
@@ -373,58 +361,43 @@ export function createWorld(scene) {
     pos.needsUpdate = true;
     col.needsUpdate = true;
 
-    const r = rng(k * 7919 + 17);
-    const kind = theme.scenery;
+    const sc = fillSceneryChunk(stage, terrain, k, ch.scenery);
     for (let t = 0; t < TP; t++) {
       const idx = ch.slot * TP + t;
-      const d = d0 + r() * L;
-      let x = sceneryX((r() * 2 - 1) * (HALF - 10), d);
-      if (kind === 'street') x = (r() < 0.5 ? -1 : 1) * (7.5 + r() * 1.5);
-      const h = terrain.surfaceAt(x, d, Infinity);
-      const s = 0.8 + r() * 0.9;
-      const hide = t >= theme.treesPerChunk || (terrain.surfaceKind(x, d) === 'water') || (kind === 'street' && h > 0.5);
-      const roll = r(), spin = r() * 6;
-      if (hide) { trunks.setMatrixAt(idx, ZERO); cones.setMatrixAt(idx, ZERO); balls.setMatrixAt(idx, ZERO); continue; }
-      if (kind === 'cactus') {
+      const o = sc.trees[t];
+      const { x, d, h, s, spin } = o;
+      if (o.kind === 'none') { trunks.setMatrixAt(idx, ZERO); cones.setMatrixAt(idx, ZERO); balls.setMatrixAt(idx, ZERO); continue; }
+      if (o.kind === 'cactus') {
         setInst(trunks, idx, x, h, d, 1.4 * s, 4 * s, 1.4 * s);
         setInst(balls, idx, x, h + 4 * s, d, 0.45 * s, 0.45 * s, 0.45 * s);
         cones.setMatrixAt(idx, ZERO);
         continue;
       }
-      if (kind === 'palm') {
+      if (o.kind === 'palm') {
         setInst(trunks, idx, x, h, d, 0.7 * s, 5 * s, 0.7 * s, 0, 0.12);
         setInst(balls, idx, x, h + 5 * s, d, 2.2 * s, 0.6 * s, 2.2 * s, spin);
         cones.setMatrixAt(idx, ZERO);
         continue;
       }
-      const trunkH = 1.2 * s;
-      setInst(trunks, idx, x, h, d, s, trunkH, s);
-      const cone = kind === 'pine' || kind === 'snowpine' || (kind === 'mixed' && roll < 0.55);
-      if (cone) {
-        setInst(cones, idx, x, h + trunkH, d, 1.5 * s, 3.4 * s, 1.5 * s, spin);
+      setInst(trunks, idx, x, h, d, s, o.trunkH, s);
+      if (o.kind === 'cone') {
+        setInst(cones, idx, x, h + o.trunkH, d, 1.5 * s, 3.4 * s, 1.5 * s, spin);
         balls.setMatrixAt(idx, ZERO);
       } else {
-        setInst(balls, idx, x, h + trunkH + 1.2 * s, d, (kind === 'street' ? 1.1 : 1.5) * s, 1.4 * s, (kind === 'street' ? 1.1 : 1.5) * s, spin);
+        setInst(balls, idx, x, h + o.trunkH + 1.2 * s, d, (o.street ? 1.1 : 1.5) * s, 1.4 * s, (o.street ? 1.1 : 1.5) * s, spin);
         cones.setMatrixAt(idx, ZERO);
       }
     }
     for (let t = 0; t < RP; t++) {
-      const d = d0 + r() * L;
-      const x = sceneryX((r() * 2 - 1) * (HALF - 10), d);
-      const s = 0.6 + r() * 1.4;
-      if (t >= theme.rocksPerChunk || terrain.surfaceKind(x, d) === 'water') { rocks.setMatrixAt(ch.slot * RP + t, ZERO); continue; }
-      setInst(rocks, ch.slot * RP + t, x, terrain.surfaceAt(x, d, Infinity), d, s * 1.3, s, s, r() * 6);
+      const o = sc.rocks[t];
+      if (!o.on) { rocks.setMatrixAt(ch.slot * RP + t, ZERO); continue; }
+      setInst(rocks, ch.slot * RP + t, o.x, o.h, o.d, o.s * 1.3, o.s, o.s, o.ry);
     }
-    for (let c = 0; c < WORLD.cloudsPerChunk; c++) {
-      const side = r() < 0.5 ? -1 : 1;
-      const cx = side * (20 + r() * 80);
-      const cy = 48 + r() * 30;
-      const cd = d0 + r() * L;
-      const s = 3 + r() * 3;
+    sc.clouds.forEach((c, ci) => {
       for (let p = 0; p < 3; p++) {
-        setInst(clouds, ch.slot * CP + c * 3 + p, cx + (p - 1) * s * 1.2, cy + (p === 1 ? s * 0.3 : 0), cd, s * (p === 1 ? 1.3 : 1), s * 0.8, s);
+        setInst(clouds, ch.slot * CP + ci * 3 + p, c.x + (p - 1) * c.s * 1.2, c.y + (p === 1 ? c.s * 0.3 : 0), c.d, c.s * (p === 1 ? 1.3 : 1), c.s * 0.8, c.s);
       }
-    }
+    });
     trunks.instanceMatrix.needsUpdate = true;
     cones.instanceMatrix.needsUpdate = true;
     balls.instanceMatrix.needsUpdate = true;

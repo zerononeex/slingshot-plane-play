@@ -3,6 +3,11 @@
 import { WHEELS, LANDING, BOOST } from './config.js';
 
 const DEG = Math.PI / 180;
+
+// Hitting anything solid (a tree, a pillar, a building face, an asteroid) is a BONK, never a
+// crash: the plane keeps 55 % of its speed, is popped up and away, and gets 0.6 s of grace
+// so one tree can't bonk twice. The flight goes on.
+export const BONK = { keep: 0.55, grace: 0.6, popDeg: 20, kick: 6, back: 0.3, sameFor: 2 };
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 // What the owned plane parts do. No parts = all neutral = the v0 flight.
@@ -12,6 +17,7 @@ export function partEffects(parts, pp) {
   return {
     sinkMul: wings.sinkMul,
     climbCostMul: wings.climbCostMul,
+    lift: wings.lift ?? 1,
     driftSpeed: wings.driftSpeed ?? 0,   // only ever non-zero with the left wing alone
     rollDeg: wings.rollDeg ?? 0,
     stallSpeed: p.tail ? pp.tail.stallSpeed : null,
@@ -38,8 +44,9 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     drag: flight.drag * plane.glideMul,
     sinkMul: e.sinkMul,
     climbCostMul: e.climbCostMul,
+    lift: (e.lift ?? 1) * (plane.liftMul ?? 1), // no parts given (generic tests) = full lift
     driftSpeed: e.driftSpeed,
-    stallSpeed: e.stallSpeed ?? flight.stallSpeed,
+    stallSpeed: Math.min(e.stallSpeed ?? flight.stallSpeed, plane.stallSpeed ?? Infinity), // the biplane stalls at 8
     stallSink: flight.stallSink * e.stallSinkMul * g, // …and you sink slower
     pitchRateDeg: flight.pitchRateDeg * e.responseMul,
     lateralResponse: flight.lateralResponse * e.responseMul,
@@ -71,6 +78,13 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 
     stalled: false,
     bounces: 0,
     tumbleT: 0,
+    time: 0,                // s since launch
+    noseUp: 0,              // extra nose-up (looks only) when a wingless plane holds "up"
+    bonkGrace: 0,           // seconds of collision grace after a bonk
+    bonks: 0,
+    bonkWith: null,
+    bonkWithT: 0,         // the obstacle last bonked (can't bonk again until you leave it)
+    lastBonk: null,         // kind of the last thing bonked (for the bits it throws)
     momentumLeft: momentum, // s of band momentum left (no decay/drag)
     fuel,                   // s of boost left (refilled free every flight)
     fuelMax: fuel,
@@ -98,8 +112,11 @@ const _cross = [];
 export function stepFlight(s, input, dt, P, envIn) {
   if (s.ended) return s;
   const env = envOf(envIn);
+  s.time += dt;
   if (s.momentumLeft > 0) s.momentumLeft = Math.max(0, s.momentumLeft - dt);
   if (s.scrapeCool > 0) s.scrapeCool -= dt;
+  if (s.bonkGrace > 0) s.bonkGrace = Math.max(0, s.bonkGrace - dt);
+  if (s.bonkWithT > 0) s.bonkWithT -= dt;
   s.boosting = false;
   if (s.mode === 'air') stepAir(s, input, dt, P, env);
   else if (s.mode === 'ground') stepGround(s, input, dt, P, env);
@@ -125,6 +142,36 @@ function startTumble(s) {
   s.landing = 'bad';
   s.crashFX = true;
   s.events.push('tumble');
+}
+
+// The obstacle to bonk on this step, if any. Never during the grace, and never the same
+// obstacle again while you are still in it or for BONK.sameFor seconds (trunk → its canopy).
+function solidHit(s, env, P) {
+  const hit = env.hitTest(s.x, s.y, s.d, P.clearance);
+  if (!hit) { if (s.bonkGrace <= 0 && s.bonkWithT <= 0) s.bonkWith = null; return null; }
+  if (s.bonkGrace > 0 || hit === s.bonkWith) return null;
+  return hit;
+}
+
+// hit = the obstacle (has x or cx), or null for a terrain face (bounce straight back).
+function bonk(s, hit, P) {
+  s.bonkWith = hit;
+  s.bonkWithT = BONK.sameFor;
+  s.speed = Math.max(P.minAirSpeed, s.speed * BONK.keep);
+  s.bonkGrace = BONK.grace;
+  s.bonks++;
+  s.lastBonk = hit ? hit.kind ?? 'rock' : 'face';
+  const hx = hit ? hit.cx ?? hit.x : undefined;
+  if (hx !== undefined && !hit.w) { // sideways off its middle (arch rock just pushes back)
+    const away = Math.sign(s.x - hx) || (s.x >= 0 ? 1 : -1);
+    s.vx = away * BONK.kick;
+    s.x += away * BONK.back;
+  }
+  s.d -= BONK.back;
+  s.mode = 'air';
+  s.pitch = Math.max(s.pitch, BONK.popDeg * DEG);
+  s.holdLeft = 0;
+  s.events.push('bonk');
 }
 
 function scrape(s, P, amount = P.scrapeLoss) {
@@ -153,14 +200,37 @@ function stepAir(s, input, dt, P, env) {
   if (s.stalled) target = Math.min(target, 0) - stallAmt * P.stallNoseDropDeg * DEG;
   if (s.y >= P.ceiling) target = Math.min(target, 0);
 
-  const maxTurn = P.pitchRateDeg * DEG * dt;
-  s.pitch += clamp(target - s.pitch, -maxTurn, maxTurn);
+  const lift = P.lift ?? 1;
+  if (lift <= 0) {
+    // No wings: up can't make a climb. The path bends down like a thrown dart toward a
+    // shallow glide; pushing down still dives; a dive flattens back slowly (a little zoom).
+    const glide = P.noLiftGlideDeg * DEG;
+    const want = iy < 0 ? Math.min(iy * P.maxDiveDeg * DEG, glide) : glide;
+    // The launch carry: while the band's push lasts (hold + momentum window) the dart rides its launch line.
+    const carry = iy >= 0 && (s.holdLeft > 0 || s.momentumLeft > 0 || s.time < P.noLiftCarry);
+    const tgt = carry ? Math.max(want, s.launchPitch) : s.stalled ? Math.min(want, target) : want;
+    const down = (P.gravity * Math.cos(s.pitch)) / Math.max(s.speed, 4) * dt;          // ballistic bend
+    const up = P.pitchRateDeg * P.noLiftRecoverRate * DEG * dt;                         // dive flattening
+    const turnDown = iy < 0 || s.stalled ? Math.max(down, P.pitchRateDeg * DEG * dt) : down;
+    s.pitch += clamp(tgt - s.pitch, -turnDown, up);
+    s.noseUp += ((iy > 0 ? iy * P.noLiftNoseDeg * DEG : 0) - s.noseUp) * Math.min(1, 6 * dt);
+  } else {
+    // Wings: the nose (and path) follows the finger; one wing climbs at 60 % of the angle,
+    // the Barnstormer's eager wings at 115 %.
+    if (target > 0) target *= lift;
+    const maxTurn = P.pitchRateDeg * DEG * dt;
+    s.pitch += clamp(target - s.pitch, -maxTurn, maxTurn);
+    s.noseUp = 0;
+  }
 
   // Energy: diving (pitch < 0) adds speed, climbing removes it (wings make climbing cheaper).
   // Decay + drag bleed speed, except while band momentum lasts. Boost pushes, up to its cap.
   const sin = Math.sin(s.pitch);
   const energy = -P.gravity * sin * (sin > 0 ? P.climbCostMul ?? 1 : 1);
-  const bleed = s.momentumLeft > 0 ? 0 : P.decay + P.drag * s.speed * s.speed;
+  const carrying = s.holdLeft > 0 || s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry);
+  const upBleed = (P.lift ?? 1) <= 0 && iy > 0 && !carrying ? P.noLiftUpBleed * iy : 0; // nose up with no wings = drag
+  const pushed = s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry); // band push: no decay/drag
+  const bleed = (pushed ? 0 : P.decay + P.drag * s.speed * s.speed) + upBleed;
   let thrust = 0;
   if (input.boost && s.fuel > 0) {
     s.boosting = true;
@@ -198,8 +268,9 @@ function stepAir(s, input, dt, P, env) {
     }
   }
 
-  // Solid obstacles (trunks, pillars, towers, arch rock): a proper hit is a Bonk.
-  if (env.hitTest(s.x, s.y, s.d, P.clearance)) { s.d = dPrev; startTumble(s); return; }
+  // Solid obstacles (trees, pillars, towers, arch rock, asteroids): a Bonk.
+  const hit = solidHit(s, env, P);
+  if (hit) { s.d = dPrev; s.x = xPrev; bonk(s, hit, P); return; }
 
   // Tunnel roof: scrape along it.
   const roof = env.ceilingAt(s.x, s.d);
@@ -222,9 +293,9 @@ function stepAir(s, input, dt, P, env) {
       scrape(s, P);
     }
     if (env.groundAt(s.x, s.d, s.y) > s.y - P.clearance) {
-      // Head-on into a face: a steep (it's a wall) and fast hit Bonks, otherwise scrape back.
+      // Head-on into a face (mesa, building, pyramid wall): fast = a Bonk back off it, else scrape back.
       s.d = dPrev;
-      if (s.speed > P.crashSpeed) { startTumble(s); return; }
+      if (s.speed > P.crashSpeed && s.bonkGrace <= 0) { bonk(s, null, P); return; }
       s.d -= 0.3;
       scrape(s, P);
     }
@@ -303,7 +374,8 @@ function stepGround(s, input, dt, P, env) {
   }
   const dPrev = s.d;
   s.d += s.speed * Math.cos(slope) * dt;
-  if (env.hitTest(s.x, s.y, s.d, P.clearance)) { s.d = dPrev; startTumble(s); return; }
+  const hit = solidHit(s, env, P);
+  if (hit) { s.d = dPrev; s.y += 0.2; bonk(s, hit, P); return; } // rolled into it: hop off
   const g = env.groundAt(s.x, s.d, s.y);
   if (g > s.y - P.clearance + P.faceStep) {
     // Rolled into a wall: stop there.

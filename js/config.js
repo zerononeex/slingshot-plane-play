@@ -44,6 +44,13 @@ export const FLIGHT = {
   maxBounces: 2,
   // bounce speed kept + upward pop now come from the BOUNCY WHEELS level (WHEELS below)
   launchHold: 0.5,      // s after launch the nose keeps (at least) the ramp angle unless you push down
+  // No wings = no lift (v0.6): the flight path follows a ballistic arc (it bends down at
+  // g·cos θ / v) toward a shallow paper-dart glide; "up" only lifts the nose and bleeds speed.
+  noLiftGlideDeg: -6,   // where a wingless plane's path settles
+  noLiftUpBleed: 2.5,   // m/s² extra speed loss while holding "up" with no wings
+  noLiftNoseDeg: 14,    // how far the nose lifts (looks only) when holding "up" with no wings
+  noLiftRecoverRate: 0.35, // × pitchRate when a dive flattens back toward the glide (a small zoom)
+  noLiftCarry: 6,       // s: the launch carry — a wingless dart rides its launch line this long (unless pushed down)
   faceStep: 1.5,        // m: ground rising more than this in one step = a wall/face, not a landing
   scrapeLoss: 2,        // m/s lost per wall scrape
   roofScrapeDecel: 6,   // m/s² while scraping a tunnel roof
@@ -60,10 +67,10 @@ export const FLIGHT = {
 // (launch power moved to the SLINGSHOT upgrade).
 export const ENGINE = [
   { level: 1, decay: 0.90, cost: 0, propSpin: 1.0, cowl: 0x888888 },
-  { level: 2, decay: 0.78, cost: 40, propSpin: 1.25, cowl: 0xc0c0c0 },
-  { level: 3, decay: 0.66, cost: 100, propSpin: 1.5, cowl: 0x4fd1ff },
-  { level: 4, decay: 0.54, cost: 200, propSpin: 1.8, cowl: 0xff8a3d },
-  { level: 5, decay: 0.42, cost: 400, propSpin: 2.2, cowl: 0xffc61a },
+  { level: 2, decay: 0.78, cost: 30, propSpin: 1.25, cowl: 0xc0c0c0 },
+  { level: 3, decay: 0.66, cost: 80, propSpin: 1.5, cowl: 0x4fd1ff },
+  { level: 4, decay: 0.54, cost: 150, propSpin: 1.8, cowl: 0xff8a3d },
+  { level: 5, decay: 0.42, cost: 300, propSpin: 2.2, cowl: 0xffc61a },
 ];
 
 // RUBBER BAND (was "Slingshot") = "a stronger launch". launchMax = m/s at full
@@ -71,21 +78,21 @@ export const ENGINE = [
 // colour = strength: on the ramp model, the shop icon and the speedometer accent.
 export const BAND = [
   { level: 1, name: 'Hemp Rope', launchMax: 30, momentum: 0,   cost: 0,   color: 0xd9b77a, thickness: 1.0, doubleBands: false, frameScale: 1.0 },
-  { level: 2, name: 'Red',       launchMax: 35, momentum: 2.0, cost: 40,  color: 0xe0342f, thickness: 1.3, doubleBands: false, frameScale: 1.0 },
-  { level: 3, name: 'Blue',      launchMax: 40, momentum: 2.5, cost: 100, color: 0x2f7fe0, thickness: 1.3, doubleBands: true,  frameScale: 1.0 },
-  { level: 4, name: 'Purple',    launchMax: 46, momentum: 3.0, cost: 200, color: 0x9b3fe0, thickness: 1.6, doubleBands: true,  frameScale: 1.2 },
-  { level: 5, name: 'GOLD',      launchMax: 52, momentum: 3.5, cost: 400, color: 0xffc61a, thickness: 1.9, doubleBands: true,  frameScale: 1.6 },
+  { level: 2, name: 'Red',       launchMax: 35, momentum: 2.0, cost: 30,  color: 0xe0342f, thickness: 1.3, doubleBands: false, frameScale: 1.0 },
+  { level: 3, name: 'Blue',      launchMax: 40, momentum: 2.5, cost: 80, color: 0x2f7fe0, thickness: 1.3, doubleBands: true,  frameScale: 1.0 },
+  { level: 4, name: 'Purple',    launchMax: 46, momentum: 3.0, cost: 150, color: 0x9b3fe0, thickness: 1.6, doubleBands: true,  frameScale: 1.2 },
+  { level: 5, name: 'GOLD',      launchMax: 52, momentum: 3.5, cost: 300, color: 0xffc61a, thickness: 1.9, doubleBands: true,  frameScale: 1.6 },
 ];
 
 // FUEL TANK = the BOOST. Level 0 = no tank (no BOOST button). Refills free every flight.
 // NOTE: the brief lists 5 tank sizes but only 4 prices; Lv5 uses 800 (see BALANCE.md).
 export const TANK = [
   { level: 0, seconds: 0,   cost: 0,   scale: 0 },
-  { level: 1, seconds: 3,   cost: 50,  scale: 0.8 },
-  { level: 2, seconds: 4.5, cost: 100, scale: 1.0 },
-  { level: 3, seconds: 6,   cost: 200, scale: 1.2 },
-  { level: 4, seconds: 8,   cost: 400, scale: 1.4 },
-  { level: 5, seconds: 10,  cost: 800, scale: 1.65 },
+  { level: 1, seconds: 3,   cost: 40,  scale: 0.8 },
+  { level: 2, seconds: 4.5, cost: 80, scale: 1.0 },
+  { level: 3, seconds: 6,   cost: 150, scale: 1.2 },
+  { level: 4, seconds: 8,   cost: 300, scale: 1.4 },
+  { level: 5, seconds: 10,  cost: 600, scale: 1.65 },
 ];
 export const BOOST = {
   thrust: 6,            // m/s² while the BOOST button is held
@@ -95,21 +102,21 @@ export const BOOST = {
 // LAUNCH RAMP: taller pad + steeper launch angle (launch speed unchanged).
 export const RAMP = [
   { level: 1, height: 0,   angleDeg: 0, cost: 0,   rails: false },
-  { level: 2, height: 1.5, angleDeg: 2, cost: 40,  rails: false },
-  { level: 3, height: 3,   angleDeg: 4, cost: 100, rails: false },
-  { level: 4, height: 4.5, angleDeg: 6, cost: 200, rails: true },
-  { level: 5, height: 6,   angleDeg: 8, cost: 400, rails: true },
+  { level: 2, height: 1.5, angleDeg: 2, cost: 30,  rails: false },
+  { level: 3, height: 3,   angleDeg: 4, cost: 80, rails: false },
+  { level: 4, height: 4.5, angleDeg: 6, cost: 150, rails: true },
+  { level: 5, height: 6,   angleDeg: 8, cost: 300, rails: true },
 ];
 
 // COIN MAGNET: coins within `radius` drift to the plane. Level 0 = none.
 // NOTE: 5 radii but only 4 prices in the brief; Lv5 uses 800 (see BALANCE.md).
 export const MAGNET = [
   { level: 0, radius: 0,   cost: 0,   scale: 0,    color: 0x000000, tips: 0x000000, glowTips: false, sparkle: false },
-  { level: 1, radius: 2.5, cost: 50,  scale: 0.7,  color: 0x9a6b6b, tips: 0xb8b8b8, glowTips: false, sparkle: false }, // small dull grey-red
-  { level: 2, radius: 4,   cost: 100, scale: 0.85, color: 0xd63a3a, tips: 0xdddddd, glowTips: false, sparkle: false }, // red
-  { level: 3, radius: 5.5, cost: 200, scale: 1.05, color: 0xff2a2a, tips: 0xffffff, glowTips: false, sparkle: false }, // big bright red
-  { level: 4, radius: 7,   cost: 400, scale: 1.2,  color: 0xff2a2a, tips: 0xffffff, glowTips: true,  sparkle: false }, // glowing white tips
-  { level: 5, radius: 9,   cost: 800, scale: 1.4,  color: 0xffc61a, tips: 0xfff3b0, glowTips: true,  sparkle: true },  // GOLD + sparkles
+  { level: 1, radius: 2.5, cost: 40,  scale: 0.7,  color: 0x9a6b6b, tips: 0xb8b8b8, glowTips: false, sparkle: false }, // small dull grey-red
+  { level: 2, radius: 4,   cost: 80, scale: 0.85, color: 0xd63a3a, tips: 0xdddddd, glowTips: false, sparkle: false }, // red
+  { level: 3, radius: 5.5, cost: 150, scale: 1.05, color: 0xff2a2a, tips: 0xffffff, glowTips: false, sparkle: false }, // big bright red
+  { level: 4, radius: 7,   cost: 300, scale: 1.2,  color: 0xff2a2a, tips: 0xffffff, glowTips: true,  sparkle: false }, // glowing white tips
+  { level: 5, radius: 9,   cost: 600, scale: 1.4,  color: 0xffc61a, tips: 0xfff3b0, glowTips: true,  sparkle: true },  // GOLD + sparkles
 ];
 export const MAGNET_PULL_SPEED = 22; // m/s (on top of the plane's own speed) a pulled coin flies at
 
@@ -117,14 +124,14 @@ export const MAGNET_PULL_SPEED = 22; // m/s (on top of the plane's own speed) a 
 // NOTE: the brief lists 6 retention numbers for 5 levels; 55% was dropped (see BALANCE.md).
 export const WHEELS = [
   { level: 1, keep: 0.45, pop: 3,   cost: 0,   scale: 0.8,  tire: 0x222222, rim: 0x888888, stripe: false }, // small black
-  { level: 2, keep: 0.65, pop: 4,   cost: 40,  scale: 0.95, tire: 0x6b4423, rim: 0xc8a070, stripe: false }, // brown
-  { level: 3, keep: 0.75, pop: 5,   cost: 100, scale: 1.1,  tire: 0xff7a1a, rim: 0xffffff, stripe: false }, // orange
-  { level: 4, keep: 0.85, pop: 6,   cost: 200, scale: 1.25, tire: 0x222222, rim: 0xffffff, stripe: true },  // red-striped
-  { level: 5, keep: 0.92, pop: 7.5, cost: 400, scale: 1.5,  tire: 0x222222, rim: 0xffc61a, stripe: true },  // big GOLD-rimmed
+  { level: 2, keep: 0.65, pop: 4,   cost: 30,  scale: 0.95, tire: 0x6b4423, rim: 0xc8a070, stripe: false }, // brown
+  { level: 3, keep: 0.75, pop: 5,   cost: 80, scale: 1.1,  tire: 0xff7a1a, rim: 0xffffff, stripe: false }, // orange
+  { level: 4, keep: 0.85, pop: 6,   cost: 150, scale: 1.25, tire: 0x222222, rim: 0xffffff, stripe: true },  // red-striped
+  { level: 5, keep: 0.92, pop: 7.5, cost: 300, scale: 1.5,  tire: 0x222222, rim: 0xffc61a, stripe: true },  // big GOLD-rimmed
 ];
 
 // EJECTOR SEAT: one-time buy. The parachuting pilot glides on.
-export const EJECT = { cost: 250 };
+export const EJECT = { cost: 190 };
 export const PILOT = {
   popUp: 6,             // m/s upward kick when the seat fires ("POING!")
   canopySink: 3.2,      // m/s steady sink under the parachute
@@ -149,26 +156,27 @@ export const LANDING = {
 // PAINT JOBS (cosmetic). The first is the free default.
 export const PAINTS = [
   { id: 'default', name: 'Bubblegum',       cost: 0,   color: 0xff4fa3 },
-  { id: 'sky',     name: 'Sky Blue',        cost: 100, color: 0x45b6ff },
-  { id: 'red',     name: 'Racing Red',      cost: 100, color: 0xe8262c },
-  { id: 'yellow',  name: 'Sunshine Yellow', cost: 100, color: 0xffd400 },
-  { id: 'grape',   name: 'Grape Purple',    cost: 150, color: 0x8a3fd1 },
-  { id: 'rainbow', name: 'RAINBOW',         cost: 300, color: 0xff4040, rainbow: true },
+  { id: 'sky',     name: 'Sky Blue',        cost: 80, color: 0x45b6ff },
+  { id: 'red',     name: 'Racing Red',      cost: 80, color: 0xe8262c },
+  { id: 'yellow',  name: 'Sunshine Yellow', cost: 80, color: 0xffd400 },
+  { id: 'grape',   name: 'Grape Purple',    cost: 110, color: 0x8a3fd1 },
+  { id: 'rainbow', name: 'RAINBOW',         cost: 230, color: 0xff4040, rainbow: true },
 ];
 
 // PLANE PARTS — one-time buys, in this order. Start = body + propeller only.
 export const PARTS = [
-  { id: 'leftWing',  name: 'LEFT WING',  cost: 50,  blurb: 'A wing lifts you up — but one wing pulls you left!' },
-  { id: 'rightWing', name: 'RIGHT WING', cost: 120, blurb: 'Two wings balance you and lift you even more.' },
-  { id: 'tail',      name: 'TAIL',       cost: 250, blurb: 'The tail keeps you steady and quick.' },
+  { id: 'leftWing',  name: 'LEFT WING',  cost: 30,  blurb: 'A wing lifts you up — but one wing pulls you left!' },
+  { id: 'rightWing', name: 'RIGHT WING', cost: 90, blurb: 'Two wings balance you and lift you even more.' },
+  { id: 'tail',      name: 'TAIL',       cost: 190, blurb: 'The tail keeps you steady and quick.' },
 ];
 
 // What the parts do to the flight. No parts = exactly the v0 flight.
 export const PART_PHYSICS = {
   // sinkMul scales the extra stall sink; climbCostMul scales the speed lost to climbing.
-  noWings:   { sinkMul: 1.0,  climbCostMul: 1.0 },
-  leftWing:  { sinkMul: 0.85, climbCostMul: 0.85, driftSpeed: -1.8, rollDeg: 6 }, // gentle pull + roll to the LEFT
-  bothWings: { sinkMul: 0.75, climbCostMul: 0.75 },
+  // lift (v0.6): 0 = no wings, can't climb; 0.6 = one wing, gentle climbs; 1 = both wings.
+  noWings:   { sinkMul: 1.0,  climbCostMul: 1.0, lift: 0 },
+  leftWing:  { sinkMul: 0.85, climbCostMul: 0.85, driftSpeed: -1.8, rollDeg: 6, lift: 0.6 }, // gentle pull + roll to the LEFT
+  bothWings: { sinkMul: 0.75, climbCostMul: 0.75, lift: 1 },
   tail:      { stallSpeed: 9, stallSinkMul: 0.7, responseMul: 1.15 },
   noTailWobbleDeg: 2, // visual sway (roll + pitch) without a tail; the tail removes it
 };

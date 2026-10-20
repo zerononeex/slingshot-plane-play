@@ -99,9 +99,26 @@ export function buildPlane(tune) {
     const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 0.1, 8), wingMat);
     tip.position.set(side * span / 2, -0.08, -0.35);
     g.add(tip);
+    // Biplane (the Barnstormer): a top wing on two struts, part of the same owned half.
+    const upper = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(span / 2 - 0.3, 0.09, 0.7), wingMat);
+    top.position.set(side * (span / 4 + 0.15), 0.72, -0.5);
+    upper.add(top);
+    const topTip = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.09, 8), wingMat);
+    topTip.position.set(side * span / 2, 0.72, -0.5);
+    upper.add(topTip);
+    for (const k of [0.45, 0.85]) {
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.8, 0.06), strutMat);
+      strut.position.set(side * (span / 2) * k, 0.32, -0.42);
+      upper.add(strut);
+    }
+    upper.visible = false;
+    g.add(upper);
+    g.userData.upper = upper;
     model.add(g);
     return g;
   };
+  const strutMat = lam(0x5a3a22);
   const leftWing = makeWing(-1);  // -x = screen-left from the chase camera
   const rightWing = makeWing(1);
 
@@ -236,6 +253,7 @@ export function buildPlane(tune) {
     tail.scale.x = ws;
     floats.visible = !!def.floats;
     exhaust.visible = !!def.exhaust;
+    leftWing.userData.upper.visible = rightWing.userData.upper.visible = !!def.biplane;
   }
 
   function setParts(parts) {

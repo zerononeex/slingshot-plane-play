@@ -4,7 +4,7 @@ Drop your own MP3s here (nothing is shipped). Every slot is optional: a missing 
 
 | File | Plays |
 |---|---|
-| `menu.mp3` | Home / hangar, shop, save codes, results |
+| `menu.mp3` | Home / hangar, upgrades, save codes, results |
 | `flight.mp3` | In flight, every world (the default) |
 | `space.mp3` | In flight in Space (beats `flight.mp3`) |
 | `flight-<world>.mp3` | In flight in that world (beats everything) |

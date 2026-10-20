@@ -7,7 +7,7 @@ import {
 import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects } from './physics.js';
 import { stepPilot, tryEject, runDistance, runOver, pilotParams } from './pilot.js';
 import { makeTerrain } from './terrain.js';
-import { STAGES, STAGE_ORDER, stageBand } from './stages.js';
+import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
 import { stepCoins, reachSecrets } from './coins.js';
 import { speedoReading, speedoZones, KMH } from './speedo.js';
 import {
@@ -15,13 +15,15 @@ import {
   nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, applyRun, runPayout, newSecrets,
 } from './economy.js';
 import { loadSave, writeSave, getStage, setStage, checkUnlocks, isUnlocked, selectStage, setPrefs } from './save.js';
-import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, HANGAR } from './planes.js';
+import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, HANGAR, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
 import { buildPlane } from './plane.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
 import { unlockAudio, sfx, audioCtx } from './audio.js';
 import { createMusic } from './music.js';
+import { createFlightSound } from './flightsound.js';
 import { exportCode, groupCode, parseCode } from './codes.js';
+import { quote, stepAmount, transfer, transferProblem } from './transfer.js';
 
 const $ = (id) => document.getElementById(id);
 const DEG = Math.PI / 180;
@@ -31,26 +33,27 @@ const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
 // ---------- save + stage ----------
 // stageId/stage = the WORLD being flown (terrain, rules, earnings: `wrec`).
-// planeId/pstage = the PLANE flying it (its home record `rec` = loadout + purchases).
+// planeId/pstage = the PLANE flying it (`rec` = its record — loadout + purchases — with the
+// paying wallet's coins: its home world's, or the world's for a plane with no home).
 let save = loadSave();
 let stageId = save.currentStage;
 let stage = STAGES[stageId];
 let planeId = planeFor(save, stageId);
-let pstage = STAGES[planeId];
-let rec = getStage(save, planeId);
+let pstage = planeEntry(planeId);
+let rec = planeRecord(save, stageId);
 let wrec = getStage(save, stageId);
 function reloadRecords() {
   planeId = planeFor(save, stageId);
-  pstage = STAGES[planeId];
-  rec = getStage(save, planeId);
+  pstage = planeEntry(planeId);
+  rec = planeRecord(save, stageId);
   wrec = getStage(save, stageId);
 }
 // Plane-aware shop stats: the band's caps come from the flying plane.
 const statsFor = (id, lv) => (id === 'band' ? stageBand(pstage, trackStats('band', lv)) : trackStats(id, lv));
 const topSpeed = () => pstage.plane.caps[pstage.plane.caps.length - 1] + 10;
-// Purchases write the flying plane's home record.
+// Purchases write the flying plane's record (coins to whichever wallet paid).
 function commit(next) {
-  save = setStage(save, planeId, next);
+  save = commitPlaneRecord(save, stageId, next);
   writeSave(save);
   reloadRecords();
 }
@@ -197,7 +200,7 @@ function onCarouselScroll() {
 const CHIP_LOOK = { band: ['➰', 'ELASTIC'], engine: ['🌀', 'PROPELLER'], leftWing: ['◀', 'LEFT WING'], rightWing: ['▶', 'RIGHT WING'], tail: ['▲', 'TAIL'] };
 function renderHangar() {
   const borrowed = planeId !== stageId;
-  $('hangar-label').textContent = borrowed ? `Shopping for: ${pstage.plane.name} (${pstage.name} wallet: ${rec.coins})` : 'Hangar';
+  $('hangar-label').textContent = borrowed ? `Upgrading: ${pstage.plane.name} (${STAGES[walletOf(save, stageId)].name} wallet: ${rec.coins})` : 'Hangar';
   const box = $('hangar-chips');
   box.textContent = '';
   for (const c of hangarChips(save, stageId)) {
@@ -259,12 +262,13 @@ function openPlanes() {
   const list = $('plane-list');
   list.textContent = '';
   for (const id of availablePlanes(save)) {
-    const st = STAGES[id];
+    const st = planeEntry(id);
     const b = document.createElement('button');
     b.className = `plane-card${id === planeId ? ' selected' : ''}`;
     b.dataset.plane = id;
+    const home = id === stageId ? 'This world\'s own plane' : st.home ? `From ${st.name} · flies with its own upgrades` : `${st.name} · its own upgrades, paid from the world you fly`;
     b.innerHTML = `<span class="pc-swatch" style="background:linear-gradient(90deg, ${hex(st.plane.body)} 50%, ${hex(st.plane.wing)} 50%)"></span>
-      <span class="pc-name">${st.plane.name}${id === stageId ? ' ★' : ''}</span><span class="pc-home">${id === stageId ? 'This world\'s own plane' : `From ${st.name} · flies with its own upgrades`}</span>`;
+      <span class="pc-name">${st.plane.name}${id === stageId ? ' ★' : ''}</span><span class="pc-home">${home}</span>`;
     b.addEventListener('click', () => {
       save = choosePlane(save, stageId, id);
       writeSave(save);
@@ -288,46 +292,64 @@ const SHOP_ITEMS = [
   { id: 'wheels', name: 'BOUNCY WHEELS', icon: '🛞', effect: (l) => `Bounce keeps ${pct(l.keep)} speed, pop ${l.pop} m/s` },
 ];
 
-function pipsHtml(level, min, max) {
+// One pip per level: filled = owned; the next one pulses when you can afford it.
+function pipsHtml(level, min, max, pulseNext = false) {
   let h = '<span class="pips">';
-  for (let i = Math.max(1, min); i <= max; i++) h += `<span class="pip${i <= level ? ' on' : ''}"></span>`;
+  for (let i = Math.max(1, min); i <= max; i++) h += `<span class="pip${i <= level ? ' on' : i === level + 1 && pulseNext ? ' next' : ''}"></span>`;
   return `${h}</span>`;
 }
 
-function card({ icon, iconBg, name, pips = '', effect, price, state, onBuy }) {
+const coinBtnMaxed = '<span class="coin-btn">★ MAXED</span>';
+const coinBtn = (cost) => `<span class="coin-btn"><span class="coin-dot"></span>${cost}</span>`;
+
+// state: buyable | poor (can't afford yet) | maxed | locked (needs an earlier part)
+function card({ key, icon, iconBg, name, pips = '', effect, price, state, onBuy }) {
   const b = document.createElement('button');
   b.className = `card ${state}`;
+  b.dataset.key = key;
   b.disabled = state !== 'buyable';
   b.innerHTML = `<span class="icon" style="${iconBg ? `background:${iconBg}` : ''}">${icon}</span>
-    <span class="name">${name} ${pips}</span><span class="effect">${effect}</span><span class="price">${price}</span>`;
-  b.addEventListener('click', onBuy);
+    <span class="name">${name}</span><span class="effect">${effect}</span><span class="price">${pips}${price}</span>`;
+  b.addEventListener('click', () => { lastBought = key; onBuy(); });
   return b;
 }
+let lastBought = null; // which card/swatch gets the happy bounce after the screen rebuilds
 
 // One purchase path for the shop AND the title quick cards (one source of truth: the stage record).
 function purchase(next) {
   if (!next) return;
   commit(next);
   sfx.coin();
-  if (mode === 'shop') refreshShop(); else refreshTitle();
+  if (mode === 'shop') { refreshShop(); celebrateBuy(); } else refreshTitle();
+}
+
+// The plane pops and sparkles; the bought card bounces.
+let shopPop = 0;
+function celebrateBuy() {
+  shopPop = 0.5;
+  plane.root.getWorldPosition(_v);
+  fx.sparkleBurst(_v.x, _v.y + 0.6, _v.z);
+  const el = lastBought && document.querySelector(`#shop [data-key="${lastBought}"]`);
+  if (el) { el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce'); }
 }
 // (The hangar chips go through planes.hangarBuy → the same buyTrack/buyPart on the same record.)
 
-// A level-track card (shop grid and title quick cards share this).
-function trackCard(item, quick = false) {
+// A level-track card.
+function trackCard(item) {
   const lv = rec[item.id];
   const cur = statsFor(item.id, lv);
   const cost = nextCost(item.id, lv);
   const next = cost === null ? null : statsFor(item.id, lv + 1);
-  const state = cost === null ? 'maxed' : canBuyTrack(rec, item.id) ? 'buyable' : 'locked-soft';
-  const effect = next ? (quick ? `▸ ${item.effect(next)}` : `${item.effect(cur)}<br>▸ ${item.effect(next)}`) : item.effect(cur);
+  const state = cost === null ? 'maxed' : canBuyTrack(rec, item.id) ? 'buyable' : 'poor';
+  const effect = next ? `▸ ${item.effect(next)}` : item.effect(cur);
   const c = card({
+    key: `track:${item.id}`,
     icon: item.icon,
     iconBg: item.id === 'band' ? hex(cur.color) : item.id === 'magnet' && lv ? hex(cur.color) : '',
     name: item.name,
-    pips: pipsHtml(lv, minLevel(item.id), maxLevel(item.id)),
+    pips: pipsHtml(lv, minLevel(item.id), maxLevel(item.id), state === 'buyable'),
     effect,
-    price: cost === null ? 'MAX ★' : `<span class="coin-dot"></span>${cost}`,
+    price: cost === null ? coinBtnMaxed : coinBtn(cost),
     state,
     onBuy: () => purchase(buyTrack(rec, item.id)),
   });
@@ -335,16 +357,50 @@ function trackCard(item, quick = false) {
   return c;
 }
 
+// UPGRADES is tinted by the selected world: [accent, dark] (Jetstream is reserved for its world).
+const WORLD_TINT = {
+  plains: [0x3ccf5a, 0x24a33f], canyon: [0xc8572a, 0x8f3517], city: [0xe8b100, 0xa87c00], snow: [0x5cb8ff, 0x2f86d1],
+  desert: [0xe2b064, 0xb07f2f], ocean: [0x16a89f, 0x0b7470], space: [0x7c5cff, 0x5136d1], jetstream: [0xff9a4d, 0xd9661b],
+};
+const rgba = (n, a) => `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+function applyTint() {
+  const [t, d] = WORLD_TINT[stageId] ?? WORLD_TINT.plains;
+  const el = $('shop').style;
+  el.setProperty('--tint', hex(t));
+  el.setProperty('--tint-dark', hex(d));
+  el.setProperty('--tint-soft', rgba(t, 0.16));
+  el.setProperty('--tint-bg', `linear-gradient(180deg, ${rgba(t, 0.12)} 0%, ${rgba(t, 0.35)} 35%, ${rgba(t, 0.85)} 100%)`);
+}
+
+// Wallet: ticks down to the new amount with a coin flip when a purchase lands.
+let walletShown = null, walletAnim = 0;
+function showWallet(coins) {
+  const el = $('shop-coins');
+  cancelAnimationFrame(walletAnim);
+  if (walletShown === null || coins >= walletShown) { walletShown = coins; el.textContent = coins; return; }
+  const from = walletShown, t0 = performance.now();
+  walletShown = coins;
+  const coin = $('shop-coin');
+  coin.classList.remove('flip'); void coin.offsetWidth; coin.classList.add('flip');
+  const tick = (now) => {
+    const k = Math.min(1, (now - t0) / 550);
+    el.textContent = Math.round(from + (coins - from) * k);
+    if (k < 1) walletAnim = requestAnimationFrame(tick);
+  };
+  walletAnim = requestAnimationFrame(tick);
+}
+
 function refreshShop() {
-  $('shop-coins').textContent = rec.coins;
-  $('shop-for').textContent = planeId !== stageId ? `Shopping for: ${pstage.plane.name}` : pstage.plane.name;
+  applyTint();
+  showWallet(rec.coins);
+  $('shop-for').textContent = `${planeId !== stageId ? 'Upgrading: ' : ''}${pstage.plane.name} · ${pstage.home ? `${pstage.name} plane` : pstage.name}`;
   const grid = $('shop-grid');
   grid.textContent = '';
   for (const item of SHOP_ITEMS) grid.appendChild(trackCard(item));
   grid.appendChild(card({
-    icon: '🪂', name: 'EJECTOR SEAT', effect: 'Once per flight: pop out and parachute on!',
-    price: rec.eject ? 'OWNED ✓' : `<span class="coin-dot"></span>${EJECT.cost}`,
-    state: rec.eject ? 'maxed' : canBuyEject(rec) ? 'buyable' : 'locked-soft',
+    key: 'eject', icon: '🪂', name: 'EJECTOR SEAT', effect: 'Pop out and parachute on!',
+    price: rec.eject ? coinBtnMaxed : coinBtn(EJECT.cost),
+    state: rec.eject ? 'maxed' : canBuyEject(rec) ? 'buyable' : 'poor',
     onBuy: () => purchase(buyEject(rec)),
   }));
 
@@ -355,11 +411,12 @@ function refreshShop() {
     const owned = rec.parts[p.id];
     const isNext = nxt && nxt.id === p.id;
     parts.appendChild(card({
+      key: `part:${p.id}`,
       icon: p.id === 'leftWing' ? '◀' : p.id === 'rightWing' ? '▶' : '▲',
       name: p.name,
       effect: owned || isNext ? p.blurb : `Buy the ${nxt.name} first`,
-      price: owned ? '✓' : isNext ? `<span class="coin-dot"></span>${p.cost}` : '🔒',
-      state: owned ? 'maxed' : isNext && canBuyPart(rec, p.id) ? 'buyable' : isNext ? 'locked-soft' : 'locked',
+      price: owned ? '<span class="coin-btn">✓ BUILT</span>' : isNext ? coinBtn(p.cost) : '<span class="coin-btn">🔒</span>',
+      state: owned ? 'maxed' : isNext && canBuyPart(rec, p.id) ? 'buyable' : isNext ? 'poor' : 'locked',
       onBuy: () => purchase(buyPart(rec, p.id)),
     }));
   }
@@ -369,10 +426,12 @@ function refreshShop() {
   for (const p of PAINTS) {
     const owned = rec.paints.owned.includes(p.id);
     const b = document.createElement('button');
-    b.className = `swatch${rec.paints.current === p.id ? ' current' : ''}`;
-    b.disabled = !owned && rec.coins < p.cost;
-    b.innerHTML = `<span class="dot ${p.rainbow ? 'rainbow-dot' : ''}" style="${p.rainbow ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : `<span class="coin-dot"></span>${p.cost}`}</b>`;
-    b.addEventListener('click', () => purchase(buyOrWearPaint(rec, p.id)));
+    const poor = !owned && rec.coins < p.cost;
+    b.className = `swatch${rec.paints.current === p.id ? ' current' : ''}${poor ? ' poor' : ''}`;
+    b.dataset.key = `paint:${p.id}`;
+    b.disabled = poor;
+    b.innerHTML = `<span class="dot ${p.rainbow ? 'rainbow-dot' : ''}" style="${p.rainbow ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
+    b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id)); });
     paints.appendChild(b);
   }
   applyLooks();
@@ -386,7 +445,7 @@ let pilot = null, ejected = false, pilotDizzy = false, pilotChuteT = 0;
 let session = { ownsSeat: false, ejected: false, pilot: null };
 let runCoins = 0, landingBonus = 0, secretsFound = [], reached = new Set();
 let flop = false, endTimer = 0, crashTimer = 0, pull = 0, tumbleSpin = 0, acc = 0;
-let boostHeld = false, boostKey = false, flightSeed = 1;
+let boostHeld = false, boostKey = false, flightSeed = 1, bonkWobble = 0;
 const input = { x: 0, y: 0, boost: false };
 const keys = { x: 0, y: 0 };
 const CRASH_FX_AFTER = 2.5;
@@ -497,7 +556,7 @@ function creditFlight(distance) {
   save = r.save;
   writeSave(save);
   reloadRecords();
-  return r.newly;
+  return [...r.newly, ...r.newPlanes];
 }
 
 function distanceNow() {
@@ -510,7 +569,7 @@ function finishRun() {
   const pay = runPayout(dist, runCoins, landingBonus);
   const unlocked = creditFlight(dist);
   $('res-unlock').hidden = unlocked.length === 0;
-  $('res-unlock').textContent = unlocked.map((id) => `NEW STAGE UNLOCKED: ${STAGES[id].name}!`).join(' ');
+  $('res-unlock').textContent = unlocked.map((id) => (STAGES[id] ? `NEW STAGE UNLOCKED: ${STAGES[id].name}!` : EXTRA_PLANES[id].banner)).join(' ');
   if (unlocked.length) sfx.secret();
   $('res-dist').textContent = dist;
   $('res-coins').textContent = pay.collected;
@@ -530,6 +589,7 @@ function finishRun() {
 }
 
 function goHome() {
+  flightSound.stop();
   if (mode === 'fly' && flight) creditFlight(distanceNow()); // leaving mid-flight keeps what you earned
   mode = 'title';
   paused = false;
@@ -546,6 +606,7 @@ function goHome() {
 
 function openShop() {
   mode = 'shop';
+  walletShown = null; // no tick-down on open
   refreshShop();
   showScreen('shop');
 }
@@ -562,6 +623,7 @@ function setPaused(p) {
   if (mode !== 'fly' && mode !== 'aim') return;
   paused = p;
   $('pause').hidden = !p;
+  if (p) flightSound.stop(true); // restarts on the next flying frame
 }
 
 let bannerTimer = 0;
@@ -688,6 +750,7 @@ $('btn-pause-home').addEventListener('click', goHome);
 // ---------- music ----------
 // menu.mp3 at home/shop/results, flight tracks in flight; a missing file is silence.
 const music = createMusic(audioCtx);
+const flightSound = createFlightSound(audioCtx);
 music.setEnabled(save.prefs.music);
 let musicKicked = false;
 function syncMusic() {
@@ -791,6 +854,7 @@ function confirmReplace() {
   $('codes').hidden = true;
   resetPilot();
   fx.clear();
+  flightSound.stop(true);
   stageId = save.currentStage;
   stage = STAGES[stageId];
   lockedView = false;
@@ -809,6 +873,135 @@ $('btn-code-import').addEventListener('click', tryImport);
 $('btn-code-replace').addEventListener('click', confirmReplace);
 $('btn-code-cancel').addEventListener('click', resetImport);
 $('code-in').addEventListener('input', resetImport);
+
+// ---------- coin transfers + THE BANKER ----------
+let xferFrom = null, xferTo = null, xferAmt = 0;
+function worldChips(box, pick, isOn, isOff) {
+  box.textContent = '';
+  for (const id of STAGE_ORDER) {
+    if (!isUnlocked(save, id)) continue;
+    const b = document.createElement('button');
+    b.className = `xfer-world${isOn(id) ? ' on' : ''}`;
+    b.dataset.world = id;
+    b.disabled = isOff(id);
+    b.innerHTML = `${STAGES[id].name}<small><span class="coin-dot"></span>${getStage(save, id).coins}</small>`;
+    b.addEventListener('click', () => pick(id));
+    box.appendChild(b);
+  }
+}
+function renderTransfer() {
+  const open = STAGE_ORDER.filter((id) => isUnlocked(save, id));
+  if (!open.includes(xferFrom)) xferFrom = stageId;
+  if (xferTo === xferFrom || !open.includes(xferTo)) xferTo = open.find((id) => id !== xferFrom) ?? null;
+  xferAmt = stepAmount(xferAmt, '', getStage(save, xferFrom).coins); // clamp to the wallet
+  worldChips($('xfer-from'), (id) => { xferFrom = id; renderTransfer(); }, (id) => id === xferFrom, () => false);
+  worldChips($('xfer-to'), (id) => { xferTo = id; renderTransfer(); }, (id) => id === xferTo, (id) => id === xferFrom);
+  $('xfer-amt').textContent = xferAmt;
+  const q = quote(xferAmt);
+  $('xfer-math').innerHTML = !xferTo ? 'Unlock another world to send coins there!'
+    : `Send ${q.send} → ${q.arrive} arrive · <em>Banker keeps ${q.toll}</em>`;
+  $('btn-xfer-send').disabled = !xferTo || !!transferProblem(save, xferFrom, xferTo, xferAmt);
+}
+function openTransfer() {
+  mode = 'transfer';
+  xferFrom = stageId; xferTo = null; xferAmt = 0;
+  renderTransfer();
+  showScreen('transfer');
+}
+function sendTransfer() {
+  const next = transfer(save, xferFrom, xferTo, xferAmt);
+  if (!next) return;
+  const before = { from: getStage(save, xferFrom).coins, to: getStage(save, xferTo).coins };
+  save = next;
+  writeSave(save); // saved BEFORE the show: skipping or a crash mid-animation loses nothing
+  reloadRecords();
+  playTransferShow(xferFrom, xferTo, quote(xferAmt), before);
+  xferAmt = 0;
+  renderTransfer();
+}
+document.querySelectorAll('.xfer-steps [data-step]').forEach((b) => b.addEventListener('click', () => {
+  xferAmt = stepAmount(xferAmt, b.dataset.step, getStage(save, xferFrom).coins);
+  renderTransfer();
+}));
+$('btn-transfer').addEventListener('click', () => { unlockAudio(); openTransfer(); });
+$('btn-xfer-back').addEventListener('click', () => { mode = 'title'; showScreen('title'); refreshTitle(); });
+$('btn-xfer-send').addEventListener('click', sendTransfer);
+
+// The show (~2.2 s, tap to skip): a cargo plane crosses the top trailing coins that rain onto
+// the destination card; every 5th coin veers into THE BANKER's bag (cha-ching); he tips his hat.
+const XS_COINS = 15;
+const xsPool = [];
+for (let i = 0; i < XS_COINS; i++) { const c = document.createElement('div'); c.className = 'xs-coin'; $('xs-coinpool').appendChild(c); xsPool.push(c); }
+let xsAnim = 0, xsDone = null, xsFinalTo = 0;
+function playTransferShow(from, to, q, before) {
+  const show = $('xfer-show');
+  const fromCard = $('xs-from'), toCard = $('xs-to');
+  fromCard.querySelector('b').textContent = STAGES[from].name;
+  toCard.querySelector('b').textContent = STAGES[to].name;
+  fromCard.querySelector('i').textContent = before.from - q.send;
+  const toCoins = toCard.querySelector('i');
+  toCoins.textContent = before.to;
+  xsFinalTo = before.to + q.arrive;
+  $('bk-hat').classList.remove('tip');
+  show.hidden = false;
+  const W = innerWidth, H = innerHeight;
+  const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+  const dest = rect(toCard), bag = rect($('bk-bag'));
+  const T = 2.2, flyT = 0.75;
+  const banked = (i) => i % 5 === 4; // every 5th coin = the 20 %
+  const plane = (t) => ({ x: -80 + (W + 160) * Math.min(1, t / 1.7), y: H * 0.13 + Math.sin(t * 5) * 6 });
+  const drops = xsPool.map((_, i) => ({ t0: 0.12 + i * 0.075, landed: false }));
+  let landedNormal = 0;
+  const normals = drops.filter((_, i) => !banked(i)).length;
+  const t0 = performance.now();
+  cancelAnimationFrame(xsAnim);
+  const finish = () => {
+    cancelAnimationFrame(xsAnim);
+    xsDone = null;
+    for (const c of xsPool) c.style.display = 'none';
+    show.hidden = true;
+    renderTransfer();
+  };
+  xsDone = finish;
+  const tick = (now) => {
+    const t = (now - t0) / 1000;
+    const p = plane(t);
+    $('xs-cargo').style.transform = `translate(${p.x}px, ${p.y}px)`;
+    drops.forEach((d, i) => {
+      const c = xsPool[i];
+      const k = (t - d.t0) / flyT;
+      if (k < 0) { c.style.display = 'none'; return; }
+      if (k >= 1) {
+        c.style.display = 'none';
+        if (!d.landed) {
+          d.landed = true;
+          if (banked(i)) { sfx.chaChing(); const b = $('bk-bag'); b.classList.remove('bounce'); void b.offsetWidth; b.classList.add('bounce'); }
+          else {
+            landedNormal++;
+            toCoins.textContent = before.to + Math.round((q.arrive * landedNormal) / normals);
+            toCard.classList.remove('pop'); void toCard.offsetWidth; toCard.classList.add('pop');
+          }
+        }
+        return;
+      }
+      if (!d.start) d.start = plane(d.t0);
+      // An arc down onto the card; the banker's coins set off the same way, then veer to his bag.
+      const end = banked(i) ? bag : dest;
+      const ctrl = { x: (d.start.x + dest.x) / 2 + 40, y: d.start.y - 40 };
+      const a = (1 - k) * (1 - k), b2 = 2 * (1 - k) * k, c2 = k * k;
+      c.style.display = 'block';
+      c.style.transform = `translate(${a * d.start.x + b2 * ctrl.x + c2 * end.x}px, ${a * d.start.y + b2 * ctrl.y + c2 * end.y}px)`;
+    });
+    if (t > T - 0.35) $('bk-hat').classList.add('tip'); // he tips his hat
+    if (t < T + 0.25) xsAnim = requestAnimationFrame(tick); else finish();
+  };
+  xsAnim = requestAnimationFrame(tick);
+}
+$('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are already saved)
+  if (!xsDone) return;
+  $('xs-to').querySelector('i').textContent = xsFinalTo;
+  xsDone();
+});
 
 // ---------- visuals ----------
 const camPos = new THREE.Vector3();
@@ -834,12 +1027,13 @@ function placeShadow(x, y, d) {
 function cameraTarget(out, look) {
   const p = plane.root.position;
   if (mode === 'shop') {
-    // Side view with the plane high on screen (above the shop panel).
-    out.set(p.x + 7, p.y + 1.6, p.z + 5);
-    look.set(p.x, p.y - 3.2, p.z - 0.5);
+    // 3/4 view with the plane in the gap above the cards (portrait: high on screen).
+    const portrait = camera.aspect < 1;
+    out.set(p.x + 8.5, p.y + 2.6, p.z + 7.5);
+    look.set(p.x, p.y - (portrait ? 4.2 : 3.4), p.z);
     return;
   }
-  if (mode === 'title' || mode === 'planes' || mode === 'codes') {
+  if (mode === 'title' || mode === 'planes' || mode === 'codes' || mode === 'transfer') {
     // The hangar: a 3/4 view with the plane in the middle of the screen.
     out.set(p.x + 7, p.y + 2.2, p.z + 6);
     look.set(p.x, p.y - 0.9, p.z - 0.4);
@@ -913,9 +1107,13 @@ function frame(now) {
       updateSpeedo();
     } else if (mode === 'fly') {
       stepGame(dt);
-    } else if (mode === 'shop' || mode === 'title' || mode === 'planes' || mode === 'codes') {
+    } else if (mode === 'shop' || mode === 'title' || mode === 'planes' || mode === 'codes' || mode === 'transfer') {
       plane.root.rotation.y += dt * 0.6; // turntable
     }
+    // Upgrades: a gentle bob, and a pop when something is bought.
+    shopPop = Math.max(0, shopPop - dt);
+    plane.model.position.y = mode === 'shop' ? Math.sin(clock * 1.8) * 0.15 : 0;
+    plane.model.scale.setScalar(1 + Math.sin((shopPop / 0.5) * Math.PI) * 0.18);
     if (mode !== 'aim') world.setBands(world.restPoint);
     world.update(Math.max(0, -plane.root.position.z), plane.root.position.x, dt, camera.position);
     const flying = mode === 'fly' && flight && !flight.ended;
@@ -1014,6 +1212,13 @@ function stepGame(dt) {
   for (const ev of flight.events) {
     if (ev === 'bounce') { sfx.bounce(); plane.squashWheels(); }
     if (ev === 'tumble') sfx.bonk();
+    if (ev === 'bonk') { // bounced off something solid: bits + wobble, the flight goes on
+      sfx.bonk();
+      plane.root.getWorldPosition(_v);
+      const [c1, c2] = stage.theme.bits ?? [0xffffff, 0xdddddd];
+      fx.bits(_v.x, _v.y + 0.3, _v.z - 1, c1, c2);
+      bonkWobble = 0.6;
+    }
     if (ev === 'scrape') sfx.scrape();
     if ((ev === 'perfect' || ev === 'good') && !ejected) {
       landingBonus += LANDING[ev].bonus;
@@ -1041,7 +1246,15 @@ function stepGame(dt) {
   const wob = onGround ? 0 : effects.wobbleDeg * DEG;
   const bank = onGround ? 0 : (steerVx / params.lateralSpeed) * bankMax - effects.rollDeg * DEG + wob * Math.sin(clock * 2.3);
   const yaw = -Math.atan2(flight.vx, Math.max(1, flight.speed)) * 0.6;
-  placePlane(flight, flight.pitch + wob * Math.sin(clock * 1.7 + 1), bank, yaw);
+  bonkWobble = Math.max(0, bonkWobble - dt);
+  const bw = bonkWobble * 0.5 * Math.sin(clock * 38); // a quick dizzy shake after a bonk
+  placePlane(flight, flight.pitch + flight.noseUp + wob * Math.sin(clock * 1.7 + 1) + bw * 0.5, bank + bw, yaw); // noseUp: a wingless plane lifts its nose but can't climb
+  // Engine + wind follow airspeed; a hard steer (not the passive one-wing roll) whooshes.
+  if (flight.ended) flightSound.stop();
+  else {
+    if (!flightSound.running) flightSound.start(pstage.plane.engineSound ?? 'prop', { deep: pstage.plane.deepPutter });
+    flightSound.update(flight.speed, onGround ? 0 : (steerVx / params.lateralSpeed) * 50);
+  }
   if (ejected) placeShadow(pilot.x, pilot.y, pilot.d);
   else placeShadow(flight.x, flight.y, flight.d);
 
@@ -1104,5 +1317,5 @@ requestAnimationFrame(frame);
 window.__game = {
   get mode() { return mode; }, get flight() { return flight; }, get pilot() { return pilot; },
   get save() { return save; }, get rec() { return rec; }, get coins() { return world.activeCoins(); },
-  get pattern() { return flightSeed; }, eject, get music() { return music.file; },
+  get pattern() { return flightSeed; }, eject, get music() { return music.file; }, get sound() { return flightSound.kind; },
 };

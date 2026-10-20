@@ -34,7 +34,7 @@ export const STAGES = {
     id: 'plains', name: 'Plains',
     plane: { name: 'Wooden Trainer', body: 0xff4fa3, wing: 0xffd23f, accent: 0x3fc5ff, wingScale: 1.15, floats: false,
       caps: [30, 35, 40, 46, 52], decayMul: 1, glideMul: 1 },
-    theme: { sky: 0x9fdcff, fogNear: 90, fogFar: 400, hemiGround: 0x6f9a52, sun: 0xfff3d6,
+    theme: { bits: [0x4fb34a, 0x9ad65a], sky: 0x9fdcff, fogNear: 90, fogFar: 400, hemiGround: 0x6f9a52, sun: 0xfff3d6,
       ground: { low: [0.5, 0.4, 0.28], grass: [0.42, 0.74, 0.32], high: [0.55, 0.5, 0.42], water: null },
       base: 0x7cc95a, rock: 0x8d7f6e, scenery: 'mixed', treesPerChunk: 14, rocksPerChunk: 4 },
     ground: { style: 'rolling', center: 5, side: 14 },
@@ -78,7 +78,7 @@ export const STAGES = {
     unlock: { after: 'plains', best: 500 },
     plane: { name: 'Canyon Cruiser', body: 0xd9622b, wing: 0xe8c48a, accent: 0x7a2a12, wingScale: 1.05, floats: false,
       caps: [36, 42, 48, 55, 62], decayMul: 1.0, glideMul: 1.0 },
-    theme: { sky: 0xf6b98a, fogNear: 80, fogFar: 380, hemiGround: 0xb5643a, sun: 0xffc48a,
+    theme: { bits: [0xb0703a, 0x8d7f6e], sky: 0xf6b98a, fogNear: 80, fogFar: 380, hemiGround: 0xb5643a, sun: 0xffc48a,
       ground: { low: [0.85, 0.63, 0.4], grass: [0.82, 0.55, 0.33], high: [0.7, 0.33, 0.18], water: null },
       base: 0xb2532c, rock: 0xa8502e, scenery: 'pine', treesPerChunk: 5, rocksPerChunk: 8 },
     ground: { style: 'canyon', center: 3, side: 12 },
@@ -135,7 +135,7 @@ export const STAGES = {
     unlock: { after: 'canyon', best: 1200 },
     plane: { name: 'City Hopper', body: 0xf4f4f4, wing: 0xe8262c, accent: 0x2b3a55, wingScale: 1.1, floats: false,
       caps: [42, 48, 55, 63, 70], decayMul: 1.3, glideMul: 0.6 },
-    theme: { sky: 0xffc98a, fogNear: 90, fogFar: 380, hemiGround: 0x8a7a6a, sun: 0xffd29a,
+    theme: { bits: [0xffffff, 0xffe14d], sky: 0xffc98a, fogNear: 90, fogFar: 380, hemiGround: 0x8a7a6a, sun: 0xffd29a,
       ground: { low: [0.36, 0.37, 0.4], grass: [0.42, 0.43, 0.46], high: [0.79, 0.72, 0.6], water: null },
       base: 0x5d6068, rock: 0x9aa0aa, scenery: 'street', treesPerChunk: 6, rocksPerChunk: 0, windows: true },
     ground: { style: 'city', center: 0, side: 0 },
@@ -194,7 +194,7 @@ export const STAGES = {
     unlock: { after: 'city', best: 1600 },
     plane: { name: 'Snow Owl', body: 0xeef7ff, wing: 0x3f86e8, accent: 0x9fd8ff, wingScale: 1.4, floats: false,
       caps: [48, 55, 63, 71, 79], decayMul: 1.6, glideMul: 0.3 },
-    theme: { sky: 0xcfe8ff, fogNear: 80, fogFar: 360, hemiGround: 0xc9d8e8, sun: 0xffffff,
+    theme: { bits: [0xffffff, 0xdff0ff], sky: 0xcfe8ff, fogNear: 80, fogFar: 360, hemiGround: 0xc9d8e8, sun: 0xffffff,
       ground: { low: [0.82, 0.86, 0.92], grass: [0.93, 0.96, 1.0], high: [1, 1, 1], water: null },
       base: 0xeef4fb, rock: 0x9fb3c8, scenery: 'snowpine', treesPerChunk: 14, rocksPerChunk: 3 },
     ground: { style: 'snow', center: 4, side: 18, peaks: 40 },
@@ -241,7 +241,7 @@ export const STAGES = {
     unlock: { after: 'snow', best: 2000 },
     plane: { name: 'Dune Hawk', body: 0xe2c27a, wing: 0xd4a017, accent: 0x8a5a1a, wingScale: 1.15, floats: false,
       caps: [54, 62, 71, 80, 89], decayMul: 1.8, glideMul: 0.15 },
-    theme: { sky: 0xffe3a8, fogNear: 70, fogFar: 340, hemiGround: 0xd8b070, sun: 0xfff0c0,
+    theme: { bits: [0xe8c98a, 0xd4a860], sky: 0xffe3a8, fogNear: 70, fogFar: 340, hemiGround: 0xd8b070, sun: 0xfff0c0,
       ground: { low: [0.82, 0.67, 0.42], grass: [0.91, 0.79, 0.54], high: [0.86, 0.7, 0.43], water: [0.2, 0.6, 0.75] },
       base: 0xe8c98a, rock: 0xb07a45, scenery: 'cactus', treesPerChunk: 6, rocksPerChunk: 5 },
     ground: { style: 'dunes', center: 6, side: 16 },
@@ -290,7 +290,7 @@ export const STAGES = {
     unlock: { after: 'desert', best: 2400 },
     plane: { name: 'Sea Falcon', body: 0x1fa5a0, wing: 0xffffff, accent: 0x0d5c63, wingScale: 1.2, floats: true,
       caps: [60, 69, 79, 89, 99], decayMul: 2.2, glideMul: 0.05 },
-    theme: { sky: 0x8fd3ff, fogNear: 90, fogFar: 400, hemiGround: 0x2f8fc6, sun: 0xffffff,
+    theme: { bits: [0xffffff, 0x9fd8ff], sky: 0x8fd3ff, fogNear: 90, fogFar: 400, hemiGround: 0x2f8fc6, sun: 0xffffff,
       ground: { low: [0.94, 0.86, 0.6], grass: [0.36, 0.75, 0.29], high: [0.55, 0.5, 0.42], water: [0.12, 0.56, 0.84] },
       base: 0x1f8fd6, rock: 0x9a8f80, scenery: 'palm', treesPerChunk: 8, rocksPerChunk: 2 },
     ground: { style: 'ocean', center: 0, side: 0 },
@@ -338,7 +338,7 @@ STAGES.space = {
   unlock: { after: 'ocean', best: 2800 },
   plane: { name: 'Comet', body: 0xf4f4f4, wing: 0xff7a1a, accent: 0xff9a3c, wingScale: 0.85, floats: false, exhaust: true,
     caps: [66, 76, 87, 98, 110], decayMul: 2.4, glideMul: 0.02 },
-  theme: { sky: 0x0b1030, fogNear: 140, fogFar: 460, hemiGround: 0x3a3f52, sun: 0xf2f4ff,
+  theme: { bits: [0xfff3b0, 0xff9a3c], sky: 0x0b1030, fogNear: 140, fogFar: 460, hemiGround: 0x3a3f52, sun: 0xf2f4ff,
     ground: { low: [0.33, 0.34, 0.38], grass: [0.55, 0.56, 0.6], high: [0.72, 0.72, 0.76], water: null },
     base: 0x5c5f68, rock: 0x8a8d96, scenery: 'none', treesPerChunk: 0, rocksPerChunk: 6, space: true },
   ground: { style: 'rolling', center: 3, side: 12 },          // the moon's grey surface
@@ -386,4 +386,26 @@ export function stageData(id) {
 // Rubber band table for a stage: shared looks/momentum/prices, the stage plane's caps.
 export function stageBand(stage, bandRow) {
   return { ...bandRow, launchMax: stage.plane.caps[bandRow.level - 1] };
+}
+
+// ---------- planes that don't belong to a world (v0.6) ----------
+// A full plane in the plane system: its own upgrade record (save.stages.<id>), picked in
+// CHANGE PLANE for any world under the borrowed-plane rules. It has no home wallet, so its
+// upgrades are paid from the wallet of the world you are in.
+export const EXTRA_PLANES = {
+  biplane: {
+    id: 'biplane', name: 'Barnstormer', kind: 'Stunt biplane', unlock: { world: 'canyon' },
+    banner: 'NEW PLANE: BARNSTORMER BIPLANE!',
+    plane: { name: 'Barnstormer', body: 0xd8262c, wing: 0xfff1d6, accent: 0x2b3a55, wingScale: 1.0, floats: false, biplane: true,
+      caps: [34, 40, 47, 54, 62], decayMul: 1.05, glideMul: 1, liftMul: 1.15, stallSpeed: 8, deepPutter: true },
+  },
+};
+export const EXTRA_PLANE_ORDER = ['biplane'];
+// Every plane id in picker order: the world planes, then the extras.
+export const PLANE_ORDER = [...STAGE_ORDER.slice(0, 2), ...EXTRA_PLANE_ORDER, ...STAGE_ORDER.slice(2)];
+// { id, name (home label), plane } for any plane id — world planes come from their stage.
+export function planeEntry(id) {
+  if (STAGES[id]) return { id, name: STAGES[id].name, plane: STAGES[id].plane, home: id };
+  const e = EXTRA_PLANES[id];
+  return e ? { id, name: e.kind, plane: e.plane, home: null } : null;
 }

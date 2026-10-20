@@ -79,6 +79,13 @@ export function createFx(scene) {
         spawn(x, y, z, { color: i % 2 ? 0xffe14d : 0xffffff, size: 0.5, life: 0.9, vx: Math.cos(a) * 6, vy: Math.sin(a) * 6, vz: (r() - 0.5) * 4, grow: -0.4, flicker: true });
       }
     },
+    // Bonk: a burst of stage-flavoured bits (leaves, pebbles, paper, puffs, sand, spray, sparks).
+    bits(x, y, z, c1, c2) {
+      for (let i = 0; i < 16; i++) {
+        const a = r() * Math.PI * 2, sp = 3 + r() * 5;
+        spawn(x, y, z, { color: i % 2 ? c1 : c2, size: 0.25 + r() * 0.3, life: 0.6 + r() * 0.4, vx: Math.cos(a) * sp, vy: 1 + r() * 5, vz: Math.sin(a) * sp, grow: -0.2 });
+      }
+    },
     update(dt) {
       for (const p of pool) {
         if (!p.s.visible) continue;

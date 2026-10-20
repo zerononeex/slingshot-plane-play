@@ -5,9 +5,10 @@
 // groundAt(x, d, y): ground height under (x, d). `y` matters only inside tunnels:
 // below the roof you stand on the tunnel floor, above it on the top. Leave y out
 // (or -Infinity) for the floor; pass +Infinity for the top surface.
-import { LAUNCH } from './config.js';
+import { LAUNCH, WORLD } from './config.js';
 import { STAGES, DEFAULT_STAGE } from './stages.js';
 import { rng } from './rng.js';
+import { columnCap, fillSceneryChunk, newSceneryChunk } from './scenery.js';
 
 export const DECK = { start: -8, end: 1.5, halfWidth: 2.2 };
 
@@ -206,14 +207,71 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     return Math.abs(x - a.cx) < a.w / 2 - pad && y > a.y0abs + pad && y < a.y0abs + a.h - pad;
   }
 
-  // Solid obstacles: returns what you hit (a column or an arch), else null.
+  // ---- Colliders: everything that reads as solid (v0.6) ----
+  // Columns (trees, pillars, cacti, towers, posts, lighthouse): trunk cylinder + cap ellipsoid,
+  // bucketed by lap-local distance so a step only tests what is near.
+  const BUCKET = 40;
+  const colBuckets = new Map();
+  for (const c of columns) {
+    c.base = featuresAt(c.x, c.d, -Infinity);
+    c.cap = columnCap(c);
+    const reach = Math.max(c.r, c.cap.r) + 2;
+    for (let k = Math.floor((c.d - reach) / BUCKET); k <= Math.floor((c.d + reach) / BUCKET); k++) {
+      if (!colBuckets.has(k)) colBuckets.set(k, []);
+      colBuckets.get(k).push(c);
+    }
+  }
+  const inEllipsoid = (dx, dy, dd, rx, ry, pad) => (dx / (rx + pad)) ** 2 + (dy / (ry + pad)) ** 2 + (dd / (rx + pad)) ** 2 < 1;
+  function hitColumn(c, x, y, dl, radius) {
+    const dx = x - c.x, dd = dl - c.d;
+    if (Math.abs(dd) > Math.max(c.r, c.cap.r) + radius) return false;
+    if (Math.hypot(dx, dd) < c.r + radius && y < c.base + c.h) return true;              // trunk / body
+    return inEllipsoid(dx, y - (c.base + c.h + c.cap.y * 0.4), dd, c.cap.r, c.cap.y, radius); // canopy / cap
+  }
+
+  // Small scenery (decor trees, cacti, palms; moon rocks in Space) from the same placement
+  // the renderer draws. A few pooled chunk records, rewritten in place (no allocation).
+  const SCN = WORLD.chunkLength;
+  const scnPool = [newSceneryChunk(), newSceneryChunk(), newSceneryChunk(), newSceneryChunk()];
+  let scnNext = 0;
+  const solidRocks = !!stage.theme.space;
+  function sceneryAt(k) {
+    for (const c of scnPool) if (c.k === k) return c;
+    const c = scnPool[scnNext];
+    scnNext = (scnNext + 1) % scnPool.length;
+    return fillSceneryChunk(stage, terrainApi, k, c);
+  }
+  function hitScenery(o, x, y, d, radius) {
+    const dx = x - o.x, dd = d - o.d, s = o.s;
+    if (Math.abs(dd) > 3 * s + radius || Math.abs(dx) > 3 * s + radius) return false;
+    const flat = Math.hypot(dx, dd);
+    switch (o.kind) {
+      case 'cactus': return flat < 0.45 * s + radius && y < o.h + 4.45 * s;
+      case 'palm': return (flat < 0.3 + radius && y < o.h + 5 * s) || inEllipsoid(dx, y - (o.h + 5 * s), dd, 2.2 * s, 0.6 * s, radius);
+      case 'cone': return (flat < 0.5 + radius && y < o.h + o.trunkH) || inEllipsoid(dx, y - (o.h + o.trunkH + 1.4 * s), dd, 1.2 * s, 1.9 * s, radius);
+      case 'ball': return (flat < 0.5 + radius && y < o.h + o.trunkH) || inEllipsoid(dx, y - (o.h + o.trunkH + 1.2 * s), dd, (o.street ? 1.1 : 1.5) * s, 1.4 * s, radius);
+      default: return false;
+    }
+  }
+  function sceneryHit(x, y, d, radius) {
+    if (y > 40 || Math.abs(x) > WORLD.chunkHalfWidth) return null; // decor never reaches up here
+    const k = Math.floor(d / SCN);
+    for (let kk = k - 1; kk <= k + 1; kk++) {
+      if (kk < 0) continue;
+      const c = sceneryAt(kk);
+      for (const o of c.trees) if (o.kind !== 'none' && hitScenery(o, x, y, d, radius)) return o;
+      if (solidRocks) for (const o of c.rocks) {
+        if (o.on && inEllipsoid(x - o.x, y - o.h, d - o.d, 1.1 * o.s, o.s, radius)) { o.kind = 'rock'; return o; }
+      }
+    }
+    return null;
+  }
+
+  // Solid obstacles: returns what you hit (a column, scenery, an asteroid or arch rock), else null.
   function hitTest(x, y, d, radius = 0.6) {
     const dl = local(d);
-    for (const t of columns) {
-      if (Math.abs(t.d - dl) > t.r + radius) continue;
-      if (Math.hypot(t.x - x, t.d - dl) > t.r + radius) continue;
-      if (y < featuresAt(t.x, t.d, -Infinity) + t.h) return t;
-    }
+    const bucket = colBuckets.get(Math.floor(dl / BUCKET));
+    if (bucket) for (const t of bucket) if (hitColumn(t, x, y, dl, radius)) return t;
     for (const a of asteroids) {
       if (Math.abs(a.d - dl) > a.r + radius) continue;
       if (Math.hypot(a.x - x, a.d - dl, featuresAt(a.x, a.d, -Infinity) + a.y - y) < a.r + radius) return a;
@@ -223,7 +281,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
       if (Math.abs(x) > 30 || y >= a.top + radius) continue;
       if (!inOpening(a, x, y, radius * 0.5)) return a;
     }
-    return null;
+    return sceneryHit(x, y, d, radius);
   }
 
   // Gimmick forces at a point (one shared result object — no allocation per step).
@@ -256,11 +314,13 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
 
   // surfaceAt = the ground without the launch deck (what the terrain mesh draws).
-  return {
+  // (The scenery colliders read it too: local, surfaceAt, surfaceKind.)
+  const terrainApi = {
     stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt,
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     edgeWalls: !!stage.edgeWalls,
   };
+  return terrainApi;
 }
 
 // Default Plains terrain with the stock ramp (handy for tests and the title scene).
