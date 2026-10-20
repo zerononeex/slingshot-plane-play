@@ -10,6 +10,9 @@ export function unlockAudio() {
   }
 }
 
+// The shared context (null until the first tap) — the music player plays through it too.
+export const audioCtx = () => ctx;
+
 function blip(type, f0, f1, dur, vol) {
   if (!ctx || ctx.state !== 'running') return;
   const t = ctx.currentTime;

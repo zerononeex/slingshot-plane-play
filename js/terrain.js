@@ -58,6 +58,18 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   for (const c of stage.columns) columns.push({ hero: false, slalom: false, ...c });
   columns.forEach((c, i) => { c.id = i; });
 
+  // Floating asteroids (spheres): y = centre height above the ground under them.
+  const asteroids = [];
+  for (const set of stage.asteroidSets) {
+    let i = 0;
+    const mid = (set.xs[0] + set.xs[1]) / 2;
+    for (let d = set.from; d <= set.to; d += set.step, i++) {
+      if (set.hero && Math.abs(d - set.hero.d) < set.step) { if (!asteroids.some((a) => a.hero && a.set === set)) asteroids.push({ ...set.hero, hero: true, set, mid }); continue; }
+      asteroids.push({ x: set.xs[i % set.xs.length], d, y: set.ys[i % set.ys.length], r: set.r, hero: false, set, mid });
+    }
+  }
+  for (const a of stage.asteroids) asteroids.push({ hero: false, ...a });
+
   const blocks = cityBlocks(stage);
   const blockBuckets = new Map();
   for (const b of blocks) for (let k = Math.floor(b.d0 / 50); k <= Math.floor(b.d1 / 50); k++) {
@@ -150,6 +162,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     for (const p of stage.pits) {
       const r = Math.hypot(x - p.x, dl - p.d) / p.radius;
       if (r < 1) g -= p.depth * bump(r);
+      if (p.rim && r > 0.6 && r < 1.4) g += p.rim * bump(Math.abs(r - 1) / 0.4); // crater rim
     }
     if (waterLevel !== null && g < waterLevel) g = waterLevel; // the sea is the floor
     return g;
@@ -201,6 +214,10 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
       if (Math.hypot(t.x - x, t.d - dl) > t.r + radius) continue;
       if (y < featuresAt(t.x, t.d, -Infinity) + t.h) return t;
     }
+    for (const a of asteroids) {
+      if (Math.abs(a.d - dl) > a.r + radius) continue;
+      if (Math.hypot(a.x - x, a.d - dl, featuresAt(a.x, a.d, -Infinity) + a.y - y) < a.r + radius) return a;
+    }
     for (const a of arches) {
       if (Math.abs(dl - a.d) > a.depth / 2 + radius) continue;
       if (Math.abs(x) > 30 || y >= a.top + radius) continue;
@@ -241,7 +258,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   // surfaceAt = the ground without the launch deck (what the terrain mesh draws).
   return {
     stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt,
-    columns, trunks: columns, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
+    columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     edgeWalls: !!stage.edgeWalls,
   };
 }

@@ -30,6 +30,7 @@ function segmentContext(stage, terrain, k) {
     mound: stage.mounds.find((m) => m.d > d0 + 22 && m.d < d1 - 22) ?? null,
     devil: stage.devils.find((v) => v.d > d0 + 12 && v.d < d1 - 6) ?? null,
     pond: stage.pits.find((p) => p.pond && p.d > d0 + 25 && p.d < d1 - 20) ?? null,
+    crater: stage.pits.find((p) => p.crater && p.d > d0 + 25 && p.d < d1 - 20) ?? null,
     water: !!stage.water && midKind === 'water' && zones.some((z) => z.kind === 'lowSwoop'),
     island: stage.bigHills.find((b) => b.shape === 'island' && Math.abs(b.x) < 10 && b.d > d0 + 10 && b.d < d1 - 10) ?? null,
   };
@@ -43,6 +44,7 @@ const SPECIAL_NEEDS = {
   gustRider: (c) => !!c.tailwind, driftDip: (c) => !!c.mound,
   devilRider: (c) => !!c.devil, oasisDip: (c) => !!c.pond,
   waterSkim: (c) => c.water, islandHop: (c) => !!c.island,
+  starRingLine: (c) => c.rings.length > 0, craterDip: (c) => !!c.crater,
 };
 
 // A per-flight pattern sequence: seeded, never the same twice in a row,
@@ -98,8 +100,15 @@ function specialCoins(name, ctx, add, n) {
       return;
     }
     case 'ringLine':
+    case 'starRingLine':
       for (const r of ctx.rings) for (const dd of [-6, 0, 6]) add(r.x, r.y, r.d + o + dd);
       return;
+    case 'craterDip': {
+      // Dive into the crater and out again (follows the floor, over the rim).
+      const p = ctx.crater;
+      for (let i = 0; i < n; i++) add(p.x, 0, p.d + o - 22.5 + i * 5, 2.2, true);
+      return;
+    }
     case 'rooftopSkim':
       for (const b of ctx.rooftops.slice(0, 2)) for (let i = 0; i < 5; i++) add((b.x0 + b.x1) / 2, 0, b.d0 + o + 2 + i * (b.d1 - b.d0 - 4) / 4, 2.5);
       return;
@@ -207,6 +216,12 @@ export function featureCoins(stage, terrain, lap) {
         out.push({ x, y: 3.5 + Math.sin(i * 0.7) * 1.2, d: d + off });
       }
     }
+  }
+  // Threaded coins past the floating asteroids (the other side of the slalom, same height).
+  for (const a of terrain.asteroids) {
+    if (a.hero) continue;
+    const x = 2 * a.mid - a.x;
+    out.push({ x, y: terrain.groundAt(x, a.d, Infinity) + a.y, d: a.d + off });
   }
   // Threaded coins through every non-tree slalom (pillars, cacti, pier posts).
   for (const c of terrain.columns) {

@@ -5,7 +5,7 @@ import {
   PLANE_TUNE, LAUNCH, FLIGHT, PARTS, PART_PHYSICS, RENDER, COINS, PILOT, LANDING, PAINTS, EJECT,
 } from './config.js';
 import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects } from './physics.js';
-import { stepPilot, tryEject, runDistance, runOver } from './pilot.js';
+import { stepPilot, tryEject, runDistance, runOver, pilotParams } from './pilot.js';
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand } from './stages.js';
 import { stepCoins, reachSecrets } from './coins.js';
@@ -14,11 +14,14 @@ import {
   trackStats, nextCost, canBuyTrack, buyTrack, maxLevel, minLevel,
   nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, applyRun, runPayout, newSecrets,
 } from './economy.js';
-import { loadSave, writeSave, getStage, setStage, checkUnlocks, isUnlocked, selectStage } from './save.js';
+import { loadSave, writeSave, getStage, setStage, checkUnlocks, isUnlocked, selectStage, setPrefs } from './save.js';
+import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, HANGAR } from './planes.js';
 import { buildPlane } from './plane.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
-import { unlockAudio, sfx } from './audio.js';
+import { unlockAudio, sfx, audioCtx } from './audio.js';
+import { createMusic } from './music.js';
+import { exportCode, groupCode, parseCode } from './codes.js';
 
 const $ = (id) => document.getElementById(id);
 const DEG = Math.PI / 180;
@@ -27,17 +30,29 @@ const PULL_BACK_M = 5;            // how far the plane slides back at full pull
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
 // ---------- save + stage ----------
+// stageId/stage = the WORLD being flown (terrain, rules, earnings: `wrec`).
+// planeId/pstage = the PLANE flying it (its home record `rec` = loadout + purchases).
 let save = loadSave();
 let stageId = save.currentStage;
 let stage = STAGES[stageId];
-let rec = getStage(save, stageId);
-// Stage-aware shop stats: the band's caps come from the stage's plane.
-const statsFor = (id, lv) => (id === 'band' ? stageBand(stage, trackStats('band', lv)) : trackStats(id, lv));
-const topSpeed = () => stage.plane.caps[stage.plane.caps.length - 1] + 10;
+let planeId = planeFor(save, stageId);
+let pstage = STAGES[planeId];
+let rec = getStage(save, planeId);
+let wrec = getStage(save, stageId);
+function reloadRecords() {
+  planeId = planeFor(save, stageId);
+  pstage = STAGES[planeId];
+  rec = getStage(save, planeId);
+  wrec = getStage(save, stageId);
+}
+// Plane-aware shop stats: the band's caps come from the flying plane.
+const statsFor = (id, lv) => (id === 'band' ? stageBand(pstage, trackStats('band', lv)) : trackStats(id, lv));
+const topSpeed = () => pstage.plane.caps[pstage.plane.caps.length - 1] + 10;
+// Purchases write the flying plane's home record.
 function commit(next) {
-  rec = next;
-  save = setStage(save, stageId, rec);
+  save = setStage(save, planeId, next);
   writeSave(save);
+  reloadRecords();
 }
 const loadout = () => ({
   band: statsFor('band', rec.band),
@@ -64,7 +79,7 @@ let terrain = terrainFor(loadout());
 world.setStage(stage, terrain);
 
 const plane = buildPlane(PLANE_TUNE);
-plane.setStagePlane(stage.plane);
+plane.setStagePlane(pstage.plane);
 scene.add(plane.root);
 
 // Fake blob shadow.
@@ -102,41 +117,117 @@ function applyLooks() {
 function showScreen(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
   $('hud').hidden = !(id === 'hud');
+  if (id === 'title') requestAnimationFrame(() => scrollToCard(carouselIndex, 'auto')); // re-centre after being hidden
 }
 
-// ---------- title ----------
+// ---------- home (the hangar) ----------
+const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙' };
+let carouselIndex = 0;
+let lockedView = false;
+
 function refreshTitle() {
-  $('title-coins').textContent = rec.coins;
-  $('title-best').textContent = rec.best;
-  $('title-secrets').textContent = `${rec.secrets.length}/${stage.secrets.length}`;
-  renderStageRow();
-  // Quick cards: Rubber Band + Engine for the SELECTED stage (same cards + purchase path as the shop).
-  const quick = $('quick-cards');
-  quick.textContent = '';
-  for (const item of SHOP_ITEMS.filter((i) => i.id === 'band' || i.id === 'engine')) quick.appendChild(trackCard(item, true));
+  $('title-coins').textContent = wrec.coins;
+  $('title-world').textContent = stage.name;
+  updateCarousel();
+  renderHangar();
+  $('fly-label').textContent = lockedView ? '🔒 LOCKED' : 'FLY!';
+  $('btn-fly').disabled = lockedView;
+  $('btn-change-plane').textContent = `✈ ${pstage.plane.name.toUpperCase()} · CHANGE`;
   applyLooks();
 }
 
-// Stage picker: one card per stage, locked ones say how to unlock them.
-function renderStageRow() {
-  const row = $('stage-row');
+// World carousel: one big card per world; the centred card is the selected world.
+function buildCarousel() {
+  const row = $('carousel');
   row.textContent = '';
   for (const id of STAGE_ORDER) {
     const st = STAGES[id];
-    const r = getStage(save, id);
-    const open = isUnlocked(save, id);
     const b = document.createElement('button');
-    b.className = `stage-card${id === stageId ? ' selected' : ''}${open ? '' : ' locked'}`;
+    b.className = 'stage-card';
     b.dataset.stage = id;
-    const prev = st.unlock ? STAGES[st.unlock.after] : null;
-    b.innerHTML = open
-      ? `<span class="st-name">${st.name}</span><span class="st-plane">${st.plane.name}</span><span class="st-best">Best ${r.best} m</span><span class="st-secrets">Secrets ${r.secrets.length}/${st.secrets.length}</span>`
-      : `<span class="st-name">🔒 ${st.name}</span><span class="st-lock">Fly ${st.unlock.best} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)</span>`;
-    b.disabled = !open;
-    b.addEventListener('click', () => switchStage(id));
+    const sky = hex(st.theme.sky), base = hex(st.theme.base);
+    b.innerHTML = `<span class="st-art" style="background:linear-gradient(180deg, ${sky} 0%, ${sky} 55%, ${base} 56%, ${hex(st.theme.rock)} 100%)"><span class="st-motif">${MOTIF[id] ?? '✈️'}</span></span>
+      <span class="st-name"></span><span class="st-plane"></span><span class="st-best"></span><span class="st-secrets"></span><span class="st-lock"></span>`;
+    b.addEventListener('click', () => scrollToCard(STAGE_ORDER.indexOf(id)));
     row.appendChild(b);
   }
-  row.querySelector('.selected')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+  carouselIndex = STAGE_ORDER.indexOf(stageId);
+  requestAnimationFrame(() => scrollToCard(carouselIndex, 'auto'));
+}
+
+function updateCarousel() {
+  for (const b of $('carousel').children) {
+    const id = b.dataset.stage, st = STAGES[id], r = getStage(save, id), open = isUnlocked(save, id);
+    const prev = st.unlock ? STAGES[st.unlock.after] : null;
+    b.classList.toggle('selected', id === stageId);
+    b.classList.toggle('locked', !open);
+    b.disabled = !open;
+    b.querySelector('.st-name').textContent = open ? st.name : `🔒 ${st.name}`;
+    b.querySelector('.st-plane').textContent = open ? st.plane.name : '';
+    b.querySelector('.st-best').textContent = open ? `Best ${r.best} m` : '';
+    b.querySelector('.st-secrets').textContent = open ? `Secrets ${r.secrets.length}/${st.secrets.length}` : '';
+    b.querySelector('.st-lock').textContent = open ? '' : `Fly ${st.unlock.best} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)`;
+  }
+}
+
+function scrollToCard(i, behavior = 'smooth') {
+  const row = $('carousel');
+  const card = row.children[Math.max(0, Math.min(STAGE_ORDER.length - 1, i))];
+  if (card) row.scrollTo({ left: card.offsetLeft - (row.clientWidth - card.clientWidth) / 2, behavior });
+}
+
+// After a swipe settles: select the centred world (a locked one just shows its lock).
+let scrollTimer = 0;
+function onCarouselScroll() {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => {
+    if (mode !== 'title') return; // a hidden carousel measures every card at 0: never switch worlds then
+    const row = $('carousel');
+    const mid = row.scrollLeft + row.clientWidth / 2;
+    let best = 0, bestDist = Infinity;
+    [...row.children].forEach((c, i) => { const d = Math.abs(c.offsetLeft + c.clientWidth / 2 - mid); if (d < bestDist) { bestDist = d; best = i; } });
+    carouselIndex = best;
+    const id = STAGE_ORDER[best];
+    lockedView = !isUnlocked(save, id);
+    if (!lockedView) switchStage(id); else refreshTitle();
+  }, 120);
+}
+
+// Hangar strip: ELASTIC · PROPELLER · LEFT WING · RIGHT WING · TAIL for the flying plane's home record.
+const CHIP_LOOK = { band: ['➰', 'ELASTIC'], engine: ['🌀', 'PROPELLER'], leftWing: ['◀', 'LEFT WING'], rightWing: ['▶', 'RIGHT WING'], tail: ['▲', 'TAIL'] };
+function renderHangar() {
+  const borrowed = planeId !== stageId;
+  $('hangar-label').textContent = borrowed ? `Shopping for: ${pstage.plane.name} (${pstage.name} wallet: ${rec.coins})` : 'Hangar';
+  const box = $('hangar-chips');
+  box.textContent = '';
+  for (const c of hangarChips(save, stageId)) {
+    const [icon, label] = CHIP_LOOK[c.id];
+    const b = document.createElement('button');
+    b.className = 'chip-btn';
+    b.dataset.chip = c.id;
+    let state, price;
+    if (c.kind === 'track') {
+      state = c.cost === null ? 'maxed' : c.canBuy ? 'buyable' : 'poor';
+      price = c.cost === null ? 'MAX' : `<span class="coin-dot"></span>${c.cost}`;
+      b.innerHTML = `<span class="chip-icon" style="${c.id === 'band' ? `background:${hex(statsFor('band', c.level).color)}` : ''}">${icon}</span><span class="chip-name">${label}</span>${pipsHtml(c.level, c.min, c.max)}<span class="chip-price">${price}</span>`;
+    } else {
+      state = c.owned ? 'maxed' : c.locked ? 'locked' : c.canBuy ? 'buyable' : 'poor';
+      price = c.owned ? '✓' : c.locked ? '🔒' : `<span class="coin-dot"></span>${c.cost}`;
+      b.innerHTML = `<span class="chip-icon">${icon}</span><span class="chip-name">${label}</span><span class="chip-price">${price}</span>`;
+    }
+    b.classList.add(state);
+    b.disabled = lockedView || state !== 'buyable';
+    b.addEventListener('click', () => {
+      const next = hangarBuy(save, stageId, c.id);
+      if (!next) return;
+      save = next;
+      writeSave(save);
+      reloadRecords();
+      sfx.coin();
+      refreshTitle();
+    });
+    box.appendChild(b);
+  }
 }
 
 function switchStage(id) {
@@ -145,22 +236,52 @@ function switchStage(id) {
   writeSave(save);
   stageId = id;
   stage = STAGES[id];
-  rec = getStage(save, id);
+  lockedView = false;
+  applyWorldAndPlane();
+}
+
+// Rebuild the 3D world + plane for the current world/plane choice.
+function applyWorldAndPlane() {
+  reloadRecords();
   lo = loadout();
   terrain = terrainFor(lo);
   world.setStage(stage, terrain);
-  plane.setStagePlane(stage.plane);
+  plane.setStagePlane(pstage.plane);
   newWorld();
   refreshTitle();
   placePlane(restPose(0), 0, 0, 0);
   snapCamera();
 }
 
+// CHANGE PLANE: every unlocked plane; picking one flies it in this world (remembered per world).
+function openPlanes() {
+  mode = 'planes';
+  const list = $('plane-list');
+  list.textContent = '';
+  for (const id of availablePlanes(save)) {
+    const st = STAGES[id];
+    const b = document.createElement('button');
+    b.className = `plane-card${id === planeId ? ' selected' : ''}`;
+    b.dataset.plane = id;
+    b.innerHTML = `<span class="pc-swatch" style="background:linear-gradient(90deg, ${hex(st.plane.body)} 50%, ${hex(st.plane.wing)} 50%)"></span>
+      <span class="pc-name">${st.plane.name}${id === stageId ? ' ★' : ''}</span><span class="pc-home">${id === stageId ? 'This world\'s own plane' : `From ${st.name} · flies with its own upgrades`}</span>`;
+    b.addEventListener('click', () => {
+      save = choosePlane(save, stageId, id);
+      writeSave(save);
+      mode = 'title';
+      showScreen('title');
+      applyWorldAndPlane();
+    });
+    list.appendChild(b);
+  }
+  showScreen('planes');
+}
+
 // ---------- shop ----------
 const pct = (v) => `${Math.round(v * 100)}%`;
 const SHOP_ITEMS = [
   { id: 'band', name: 'RUBBER BAND', icon: '➰', effect: (l) => `${l.name} · launch ${Math.round(l.launchMax * KMH)} km/h${l.momentum ? ` · ${l.momentum}s momentum` : ''}` },
-  { id: 'engine', name: 'ENGINE', icon: '⚙️', effect: (l) => `Fly longer: loses ${(l.decay * stage.plane.decayMul).toFixed(2)} m/s each second` },
+  { id: 'engine', name: 'PROPELLER ENGINE', icon: '🌀', effect: (l) => `Fly longer: loses ${(l.decay * pstage.plane.decayMul).toFixed(2)} m/s each second` },
   { id: 'tank', name: 'FUEL TANK', icon: '⛽', effect: (l) => (l.level ? `BOOST for ${l.seconds} s, refills every flight` : 'Get a BOOST button!') },
   { id: 'ramp', name: 'LAUNCH RAMP', icon: '📐', effect: (l) => `Pad +${l.height} m, angle +${l.angleDeg}°` },
   { id: 'magnet', name: 'COIN MAGNET', icon: '🧲', effect: (l) => (l.level ? `Pulls coins from ${l.radius} m` : 'Coins fly to you!') },
@@ -190,6 +311,7 @@ function purchase(next) {
   sfx.coin();
   if (mode === 'shop') refreshShop(); else refreshTitle();
 }
+// (The hangar chips go through planes.hangarBuy → the same buyTrack/buyPart on the same record.)
 
 // A level-track card (shop grid and title quick cards share this).
 function trackCard(item, quick = false) {
@@ -215,6 +337,7 @@ function trackCard(item, quick = false) {
 
 function refreshShop() {
   $('shop-coins').textContent = rec.coins;
+  $('shop-for').textContent = planeId !== stageId ? `Shopping for: ${pstage.plane.name}` : pstage.plane.name;
   const grid = $('shop-grid');
   grid.textContent = '';
   for (const item of SHOP_ITEMS) grid.appendChild(trackCard(item));
@@ -292,7 +415,7 @@ function startRun() {
   newWorld();
   applyLooks();
   effects = partEffects(rec.parts, PART_PHYSICS);
-  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: stage.plane, modifiers: stage.modifiers });
+  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: pstage.plane, modifiers: stage.modifiers });
   flight = null;
   runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set();
   flop = false; pull = 0; endTimer = 0; crashTimer = 0; paused = false; tumbleSpin = 0;
@@ -368,11 +491,13 @@ function launch() {
   sfx.launch();
 }
 
-// Unlock chain: store anything newly earned (never re-locks).
-function storeUnlocks() {
-  const u = checkUnlocks(save);
-  if (u.newly.length) { save = u.save; writeSave(save); }
-  return u.newly;
+// A flight credits the WORLD flown (coins, best, secrets); unlocks read world bests.
+function creditFlight(distance) {
+  const r = creditRun(save, stageId, { distance, coins: runCoins, landingBonus, secrets: secretsFound });
+  save = r.save;
+  writeSave(save);
+  reloadRecords();
+  return r.newly;
 }
 
 function distanceNow() {
@@ -381,10 +506,9 @@ function distanceNow() {
 
 function finishRun() {
   const dist = Math.floor(distanceNow());
-  const prevBest = rec.best;
+  const prevBest = wrec.best;
   const pay = runPayout(dist, runCoins, landingBonus);
-  commit(applyRun(rec, dist, runCoins, landingBonus, secretsFound));
-  const unlocked = storeUnlocks();
+  const unlocked = creditFlight(dist);
   $('res-unlock').hidden = unlocked.length === 0;
   $('res-unlock').textContent = unlocked.map((id) => `NEW STAGE UNLOCKED: ${STAGES[id].name}!`).join(' ');
   if (unlocked.length) sfx.secret();
@@ -393,20 +517,20 @@ function finishRun() {
   $('res-bonus').textContent = pay.bonus;
   $('res-landing').textContent = pay.landing;
   $('res-total').textContent = pay.total;
-  $('res-best').textContent = rec.best;
+  $('res-best').textContent = wrec.best;
   $('res-top').textContent = Math.round(flight.peakSpeed * KMH);
   $('res-newbest').hidden = !(dist > prevBest && dist > 0);
   $('res-glide-box').hidden = !ejected;
   if (ejected) $('res-glide').textContent = Math.round(pilot.d - pilot.ejectD);
   const verdict = ejected ? LANDING.pilot : LANDING[flight.landing ?? 'rough'];
   $('res-verdict').textContent = verdict.bonus ? `${verdict.text} +${verdict.bonus}` : verdict.text;
-  $('res-msg').textContent = flop ? 'Oops, a little flop! Try a bigger pull!' : secretsFound.length ? `SECRET FOUND! (${rec.secrets.length}/${stage.secrets.length})` : '';
+  $('res-msg').textContent = flop ? 'Oops, a little flop! Try a bigger pull!' : secretsFound.length ? `SECRET FOUND! (${wrec.secrets.length}/${stage.secrets.length})` : '';
   mode = 'results';
   showScreen('results');
 }
 
 function goHome() {
-  if (mode === 'fly' && flight) { commit(applyRun(rec, distanceNow(), runCoins, landingBonus, secretsFound)); storeUnlocks(); } // leaving mid-flight keeps what you earned
+  if (mode === 'fly' && flight) creditFlight(distanceNow()); // leaving mid-flight keeps what you earned
   mode = 'title';
   paused = false;
   $('pause').hidden = true;
@@ -427,7 +551,6 @@ function openShop() {
 }
 function closeShop() {
   mode = 'title';
-  plane.root.rotation.set(0, 0, 0);
   newWorld();
   refreshTitle();
   showScreen('title');
@@ -551,11 +674,141 @@ document.addEventListener('gesturestart', (e) => e.preventDefault()); // no pinc
 $('btn-fly').addEventListener('click', () => { unlockAudio(); startRun(); });
 $('btn-shop').addEventListener('click', () => { unlockAudio(); openShop(); });
 $('btn-shop-back').addEventListener('click', closeShop);
+$('btn-change-plane').addEventListener('click', () => { unlockAudio(); openPlanes(); });
+$('btn-planes-back').addEventListener('click', () => { mode = 'title'; showScreen('title'); refreshTitle(); });
+$('car-prev').addEventListener('click', () => scrollToCard(carouselIndex - 1));
+$('car-next').addEventListener('click', () => scrollToCard(carouselIndex + 1));
+$('carousel').addEventListener('scroll', onCarouselScroll, { passive: true });
 $('btn-again').addEventListener('click', () => { unlockAudio(); startRun(); });
 $('btn-home').addEventListener('click', goHome);
 $('btn-pause').addEventListener('click', () => setPaused(true));
 $('btn-resume').addEventListener('click', () => setPaused(false));
 $('btn-pause-home').addEventListener('click', goHome);
+
+// ---------- music ----------
+// menu.mp3 at home/shop/results, flight tracks in flight; a missing file is silence.
+const music = createMusic(audioCtx);
+music.setEnabled(save.prefs.music);
+let musicKicked = false;
+function syncMusic() {
+  if (!musicKicked && audioCtx()?.state === 'running') { musicKicked = true; music.kick(); } // first tap
+  music.play(mode === 'aim' || mode === 'fly' ? 'flight' : 'menu', stageId);
+}
+function renderMusicButtons() {
+  const on = save.prefs.music;
+  $('btn-music').textContent = on ? '🎵 ON' : '🔇 OFF';
+  $('btn-pause-music').textContent = on ? '🎵 MUSIC ON' : '🔇 MUSIC OFF';
+}
+function toggleMusic() {
+  unlockAudio();
+  save = setPrefs(save, { music: !save.prefs.music });
+  writeSave(save);
+  music.setEnabled(save.prefs.music);
+  renderMusicButtons();
+}
+$('btn-music').addEventListener('click', toggleMusic);
+$('btn-pause-music').addEventListener('click', toggleMusic);
+
+// ---------- save codes ----------
+let codesFromPause = false;
+let pendingImport = null;
+let replaceArmed = false;
+function resetImport() {
+  pendingImport = null;
+  replaceArmed = false;
+  $('code-confirm').hidden = true;
+  $('code-error').hidden = true;
+  $('btn-code-replace').classList.remove('armed');
+  $('btn-code-replace').textContent = 'REPLACE';
+}
+function openCodes(fromPause) {
+  codesFromPause = fromPause;
+  const code = exportCode(save);
+  $('code-out').textContent = groupCode(code);
+  $('code-out').dataset.code = code;
+  $('code-in').value = '';
+  $('btn-code-copy').textContent = '📋 COPY';
+  resetImport();
+  if (fromPause) { $('pause').hidden = true; $('codes').hidden = false; } else { mode = 'codes'; showScreen('codes'); }
+}
+function closeCodes() {
+  resetImport();
+  if (codesFromPause) { $('codes').hidden = true; $('pause').hidden = false; } else { mode = 'title'; showScreen('title'); refreshTitle(); }
+}
+async function copyCode() {
+  const code = $('code-out').dataset.code;
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch {
+    const range = document.createRange(); // no clipboard API: select it so a long-press copies
+    range.selectNodeContents($('code-out'));
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    try { document.execCommand('copy'); } catch { /* selected is good enough */ }
+  }
+  $('btn-code-copy').textContent = '✓ COPIED';
+}
+function tryImport() {
+  resetImport();
+  const r = parseCode($('code-in').value);
+  if (!r.ok) {
+    $('code-error').textContent = r.error;
+    $('code-error').hidden = false;
+    return;
+  }
+  pendingImport = r.save;
+  const sum = r.summary;
+  const box = $('code-summary');
+  box.textContent = '';
+  const head = document.createElement('p');
+  head.className = 'msg';
+  head.textContent = `${sum.worldsUnlocked} world${sum.worldsUnlocked === 1 ? '' : 's'} unlocked · ${sum.totalCoins} coins`;
+  const ul = document.createElement('ul');
+  for (const w of sum.worlds) {
+    const li = document.createElement('li');
+    li.textContent = `${w.name}: best ${w.best} m`;
+    ul.appendChild(li);
+  }
+  box.append(head, ul);
+  $('code-confirm').hidden = false;
+}
+function confirmReplace() {
+  if (!pendingImport) return;
+  if (!replaceArmed) { // a second, deliberate tap is needed
+    replaceArmed = true;
+    $('btn-code-replace').classList.add('armed');
+    $('btn-code-replace').textContent = 'TAP AGAIN TO REPLACE';
+    return;
+  }
+  save = pendingImport;
+  writeSave(save);
+  resetImport();
+  // Leave any flight WITHOUT crediting it (the old progress is gone), then rebuild everything.
+  mode = 'title';
+  paused = false;
+  $('pause').hidden = true;
+  $('codes').hidden = true;
+  resetPilot();
+  fx.clear();
+  stageId = save.currentStage;
+  stage = STAGES[stageId];
+  lockedView = false;
+  music.setEnabled(save.prefs.music);
+  renderMusicButtons();
+  buildCarousel();
+  showScreen('title');
+  plane.model.rotation.set(0, 0, 0);
+  applyWorldAndPlane();
+}
+$('btn-codes').addEventListener('click', () => { unlockAudio(); openCodes(false); });
+$('btn-pause-codes').addEventListener('click', () => openCodes(true));
+$('btn-codes-back').addEventListener('click', closeCodes);
+$('btn-code-copy').addEventListener('click', copyCode);
+$('btn-code-import').addEventListener('click', tryImport);
+$('btn-code-replace').addEventListener('click', confirmReplace);
+$('btn-code-cancel').addEventListener('click', resetImport);
+$('code-in').addEventListener('input', resetImport);
 
 // ---------- visuals ----------
 const camPos = new THREE.Vector3();
@@ -586,7 +839,13 @@ function cameraTarget(out, look) {
     look.set(p.x, p.y - 3.2, p.z - 0.5);
     return;
   }
-  if (mode === 'aim' || mode === 'title') {
+  if (mode === 'title' || mode === 'planes' || mode === 'codes') {
+    // The hangar: a 3/4 view with the plane in the middle of the screen.
+    out.set(p.x + 7, p.y + 2.2, p.z + 6);
+    look.set(p.x, p.y - 0.9, p.z - 0.4);
+    return;
+  }
+  if (mode === 'aim') {
     out.set(0, p.y + 2.6, p.z + 9);
     look.set(0, p.y + 0.8, p.z - 14);
   } else if (ejected) {
@@ -643,6 +902,7 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
 
+  syncMusic();
   if (!paused) {
     clock += dt;
     if (mode === 'aim') {
@@ -653,11 +913,11 @@ function frame(now) {
       updateSpeedo();
     } else if (mode === 'fly') {
       stepGame(dt);
-    } else if (mode === 'shop') {
+    } else if (mode === 'shop' || mode === 'title' || mode === 'planes' || mode === 'codes') {
       plane.root.rotation.y += dt * 0.6; // turntable
     }
     if (mode !== 'aim') world.setBands(world.restPoint);
-    world.update(Math.max(0, -plane.root.position.z), plane.root.position.x, dt);
+    world.update(Math.max(0, -plane.root.position.z), plane.root.position.x, dt, camera.position);
     const flying = mode === 'fly' && flight && !flight.ended;
     const spinRate = (flying && !ejected ? 12 + flight.speed * 1.6 : mode === 'fly' ? 0 : 6) * lo.engine.propSpin;
     plane.prop.rotation.z += spinRate * dt;
@@ -719,7 +979,7 @@ function collect(pos, opts) {
     if (ejected) plane.pilot.group.getWorldPosition(_v);
     fx.sparkleBurst(_v.x, _v.y + 1, _v.z);
     sfx.secret();
-    if (newSecrets(rec, [...secretsFound, s.id]).includes(s.id) && !secretsFound.includes(s.id)) {
+    if (newSecrets(wrec, [...secretsFound, s.id]).includes(s.id) && !secretsFound.includes(s.id)) {
       secretsFound.push(s.id);
       banner(`SECRET FOUND! +${s.coins}`, 2.4);
     }
@@ -739,7 +999,7 @@ function stepGame(dt) {
       collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: COINS.pickupRadius, speed: flight.speed });
     } else {
       const wasLanded = pilot.landed;
-      stepPilot(pilot, input, STEP, PILOT, terrain, FLIGHT.corridorHalfWidth);
+      stepPilot(pilot, input, STEP, pilotParams(PILOT, stage.modifiers), terrain, FLIGHT.corridorHalfWidth);
       collect(pilot, { pickupRadius: PILOT.pickupRadius });
       if (pilot.landed && !wasLanded) {
         landingBonus += LANDING.pilot.bonus;
@@ -762,7 +1022,7 @@ function stepGame(dt) {
     }
     if (ejected) continue; // the empty plane earns nothing
     if (ev === 'arch') { runCoins += stage.archBonus; banner(`THROUGH THE ARCH! +${stage.archBonus}`, 1.6); sfx.secret(); }
-    if (ev === 'ring') { runCoins += stage.ringBonus; banner(`THROUGH THE RING! +${stage.ringBonus}`, 1.2); sfx.secret(); }
+    if (ev === 'ring') { runCoins += stage.ringBonus; banner(`THROUGH THE ${stage.ringName ?? 'RING'}! +${stage.ringBonus}`, 1.2); sfx.secret(); }
     if (ev === 'devil') { banner('WHOOSH! DUST DEVIL BOOST!', 1.4); sfx.whoosh(); }
     if (ev === 'updraft') sfx.whoosh();
     if (ev === 'splash' || ev === 'bigSplash') {
@@ -832,7 +1092,9 @@ function stepGame(dt) {
 // ---------- boot ----------
 lo = loadout();
 newWorld();
+buildCarousel();
 refreshTitle();
+renderMusicButtons();
 showScreen('title');
 placePlane(restPose(0), 0, 0, 0);
 placeShadow(0, restPose(0).y, 0);
@@ -842,5 +1104,5 @@ requestAnimationFrame(frame);
 window.__game = {
   get mode() { return mode; }, get flight() { return flight; }, get pilot() { return pilot; },
   get save() { return save; }, get rec() { return rec; }, get coins() { return world.activeCoins(); },
-  get pattern() { return flightSeed; }, eject,
+  get pattern() { return flightSeed; }, eject, get music() { return music.file; },
 };

@@ -8,7 +8,7 @@
 // (secrets only in the first lap).
 
 export const DEFAULT_STAGE = 'plains';
-export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean'];
+export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space'];
 
 const range = (from, to, step) => { const a = []; for (let d = from; d <= to; d += step) a.push(d); return a; };
 const SHARED_PATTERNS = ['line', 'highArc', 'slalom', 'dive', 'stairs', 'wave', 'fork', 'ring'];
@@ -23,7 +23,7 @@ const patterns = (specials) => ({
 // Default stage shape: anything a stage leaves out is empty.
 const base = {
   flatStart: 40, cycle: 2000, ditches: [], pits: [], mounds: [], caverns: [], bigHills: [], columnSets: [], columns: [],
-  arches: [], rings: [], updrafts: [], tailwinds: [], gusts: [], devils: [], blocks: null, edgeWalls: null,
+  arches: [], rings: [], updrafts: [], tailwinds: [], gusts: [], devils: [], asteroidSets: [], asteroids: [], blocks: null, edgeWalls: null,
   caveTrails: true, modifiers: {}, unlock: null,
 };
 
@@ -329,6 +329,54 @@ export const STAGES = {
     ],
     patterns: patterns(['waterSkim', 'islandHop']),
   },
+};
+
+// ───────────────────────── S7 SPACE — THE FINALE ─────────────────────────
+STAGES.space = {
+  ...base,
+  id: 'space', name: 'Space',
+  unlock: { after: 'ocean', best: 2800 },
+  plane: { name: 'Comet', body: 0xf4f4f4, wing: 0xff7a1a, accent: 0xff9a3c, wingScale: 0.85, floats: false, exhaust: true,
+    caps: [66, 76, 87, 98, 110], decayMul: 2.4, glideMul: 0.02 },
+  theme: { sky: 0x0b1030, fogNear: 140, fogFar: 460, hemiGround: 0x3a3f52, sun: 0xf2f4ff,
+    ground: { low: [0.33, 0.34, 0.38], grass: [0.55, 0.56, 0.6], high: [0.72, 0.72, 0.76], water: null },
+    base: 0x5c5f68, rock: 0x8a8d96, scenery: 'none', treesPerChunk: 0, rocksPerChunk: 6, space: true },
+  ground: { style: 'rolling', center: 3, side: 12 },          // the moon's grey surface
+  ditches: [{ d: 520, depth: 4, halfLength: 8 }, { d: 1420, depth: 3, halfLength: 7 }], // rilles
+  // Craters ARE this stage's holes (a raised rim + a bowl).
+  pits: [
+    { x: -3, d: 300, depth: 6, radius: 9, rim: 2, crater: true }, { x: 8, d: 650, depth: 7, radius: 10, rim: 2.5, crater: true },
+    { x: -6, d: 1150, depth: 6, radius: 9, rim: 2, crater: true }, { x: 5, d: 1650, depth: 7, radius: 10, rim: 2.5, crater: true },
+  ],
+  zones: [
+    { side: 'left', kind: 'starRings', from: 200, to: 900 },
+    { side: 'right', kind: 'asteroidField', from: 450, to: 900 },
+    { side: 'left', kind: 'moonMountain', from: 964, to: 1036 },
+    { side: 'left', kind: 'spaceStation', from: 1250, to: 1330 },
+    { side: 'right', kind: 'starRings', from: 1450, to: 1850 },
+    { side: 'left', kind: 'asteroidField', from: 1450, to: 1700 },
+  ],
+  // The space station: the cavern tech as a block with a lit fly-through tunnel + an alcove.
+  caverns: [{ shape: 'block', start: 1250, mouth: 1255, exit: 1325, end: 1330, height: 30, laneMin: -26, laneMax: -14, edge: -9, roof: 10,
+    alcove: { from: 1285, to: 1297, laneMax: -10 }, lit: true, station: true }],
+  bigHills: [{ shape: 'dome', x: -22, d: 1000, rx: 18, rd: 36, height: 34 }], // the moon mountain
+  // Asteroids float (y = height of the centre above the ground) and Bonk on a hit.
+  asteroidSets: [
+    { from: 470, to: 880, step: 26, xs: [12, 21], ys: [7, 11], r: 2.6 },
+    { from: 1460, to: 1700, step: 26, xs: [-12, -21], ys: [7, 11], r: 2.6, hero: { d: 1500, x: -18, y: 12, r: 7 } },
+  ],
+  rings: [
+    ...range(240, 880, 80).map((d, i) => ({ x: -17, y: 14 + (i % 3) * 3, d, r: 3 })),
+    ...range(1460, 1840, 80).map((d, i) => ({ x: 17, y: 14 + (i % 3) * 3, d, r: 3 })),
+  ],
+  ringBonus: 10, ringName: 'STAR RING',
+  modifiers: { lowGravity: { gravityScale: 0.55, sinkBonus: 1.5 } },
+  secrets: [
+    { id: 'space-station', name: 'Inside the space station', x: -12, y: 3, d: 1291, coins: 14, radius: 5 },
+    { id: 'space-asteroid', name: 'Behind the biggest asteroid', x: -18, y: 12, d: 1518, coins: 13, radius: 6 },
+    { id: 'space-mountain', name: 'On top of the moon mountain', x: -22, y: 3, d: 1000, coins: 12, radius: 7 },
+  ],
+  patterns: patterns(['starRingLine', 'craterDip']),
 };
 
 export function stageData(id) {

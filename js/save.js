@@ -1,7 +1,8 @@
 // localStorage save, per stage. A bad save never crashes and is never wiped:
 // every field is validated on its own and falls back to its default.
 //
-// Shape (v2): { v: 2, currentStage, unlocked: [stageIds], stages: { <stageId>: record } }
+// Shape (v2): { v: 2, currentStage, unlocked: [stageIds], planeChoice: { world: plane }, prefs: { music },
+//              stages: { <stageId>: record } }
 // record = { coins, band, engine, tank, ramp, magnet, wheels, eject,
 //            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[] }
 //
@@ -29,9 +30,20 @@ export function freshRecord() {
   };
 }
 
+export const freshPrefs = () => ({ music: true });
+
 export function freshSave() {
-  return { v: 2, currentStage: DEFAULT_STAGE, unlocked: [DEFAULT_STAGE], stages: { [DEFAULT_STAGE]: freshRecord() } };
+  return { v: 2, currentStage: DEFAULT_STAGE, unlocked: [DEFAULT_STAGE], planeChoice: {}, prefs: freshPrefs(), stages: { [DEFAULT_STAGE]: freshRecord() } };
 }
+
+// Which plane flies each world: only unlocked worlds → unlocked other planes (the default is implicit).
+function cleanPlaneChoice(raw, unlocked) {
+  const out = {};
+  if (!isObj(raw)) return out;
+  for (const [w, p] of Object.entries(raw)) if (w !== p && unlocked.includes(w) && unlocked.includes(p)) out[w] = p;
+  return out;
+}
+const cleanPrefs = (raw) => ({ music: !(isObj(raw) && raw.music === false) });
 
 // Unlock chain: a stage is unlocked if it was unlocked before (stored, never re-locks),
 // if its own record exists, or if the previous stage's best meets its bar.
@@ -114,7 +126,7 @@ export function validateSave(data) {
   if (!isObj(data.stages)) {
     // Old flat save (v0 / v0.2).
     const stages = { [DEFAULT_STAGE]: migrateFlat(data) };
-    return { v: 2, currentStage: DEFAULT_STAGE, unlocked: deriveUnlocked(stages), stages };
+    return { v: 2, currentStage: DEFAULT_STAGE, unlocked: deriveUnlocked(stages), planeChoice: {}, prefs: freshPrefs(), stages };
   }
   const stages = {};
   for (const id of Object.keys(data.stages).slice(0, MAX_STAGES)) {
@@ -125,7 +137,7 @@ export function validateSave(data) {
   const unlocked = deriveUnlocked(stages, stored);
   const currentStage = typeof data.currentStage === 'string' && STAGES[data.currentStage] && unlocked.includes(data.currentStage)
     ? data.currentStage : DEFAULT_STAGE;
-  return { v: 2, currentStage, unlocked, stages };
+  return { v: 2, currentStage, unlocked, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked), prefs: cleanPrefs(data.prefs), stages };
 }
 
 // The ONLY way game code reads progression: a validated copy of one stage's record.
@@ -166,4 +178,8 @@ export function writeSave(save, storage = defaultStorage()) {
 // Switch stages (only to an unlocked one).
 export function selectStage(save, id) {
   return isUnlocked(save, id) ? { ...save, currentStage: id } : save;
+}
+
+export function setPrefs(save, prefs) {
+  return { ...save, prefs: cleanPrefs({ ...save.prefs, ...prefs }) };
 }

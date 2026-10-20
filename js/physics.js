@@ -28,20 +28,24 @@ const STOCK_PLANE = { decayMul: 1, glideMul: 1 };
 export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null, plane = STOCK_PLANE, modifiers = {} } = {}) {
   const e = effects ?? { sinkMul: 1, climbCostMul: 1, driftSpeed: 0, stallSpeed: null, stallSinkMul: 1, responseMul: 1 };
   const snow = modifiers.softSnow;
+  const lowG = modifiers.lowGravity;
+  const g = lowG ? lowG.gravityScale : 1;
   return {
     ...flight,
+    gravity: flight.gravity * g,              // low gravity: climbing costs and diving gains soften
+    gravityScale: g,
     decay: engine.decay * plane.decayMul,
     drag: flight.drag * plane.glideMul,
     sinkMul: e.sinkMul,
     climbCostMul: e.climbCostMul,
     driftSpeed: e.driftSpeed,
     stallSpeed: e.stallSpeed ?? flight.stallSpeed,
-    stallSink: flight.stallSink * e.stallSinkMul,
+    stallSink: flight.stallSink * e.stallSinkMul * g, // …and you sink slower
     pitchRateDeg: flight.pitchRateDeg * e.responseMul,
     lateralResponse: flight.lateralResponse * e.responseMul,
     bounceKeep: snow ? Math.min(0.97, wheels.keep + snow.keepBonus) : wheels.keep,
     bouncePop: wheels.pop,
-    landingSinkBonus: snow ? snow.sinkBonus : 0,
+    landingSinkBonus: (snow ? snow.sinkBonus : 0) + (lowG ? lowG.sinkBonus : 0),
     water: modifiers.water ?? null,
     boostThrust: BOOST.thrust,
     boostCap: (band ? band.launchMax : 30) + BOOST.capOverBand,

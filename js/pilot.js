@@ -4,6 +4,12 @@
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
+// The parachute in a world: low gravity makes the canopy sink slower (long, dreamy glides).
+export function pilotParams(PILOT, modifiers = {}) {
+  const g = modifiers.lowGravity ? modifiers.lowGravity.gravityScale : 1;
+  return g === 1 ? PILOT : { ...PILOT, canopySink: PILOT.canopySink * g };
+}
+
 export function createPilot(flight, PILOT) {
   const forward = flight.speed * Math.cos(flight.pitch);
   return {

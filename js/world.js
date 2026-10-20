@@ -49,6 +49,26 @@ export function createWorld(scene) {
   scene.background = new THREE.Color(0x9fdcff);
   scene.fog = new THREE.Fog(0x9fdcff, WORLD.fogNear, WORLD.fogFar);
 
+  // Space dressing: a starfield and a distant Earth that ride along with the camera.
+  const spaceSky = new THREE.Group();
+  const starPos = new Float32Array(900 * 3);
+  const sr = rng(4242);
+  for (let i = 0; i < 900; i++) {
+    const a = sr() * Math.PI * 2, e = Math.asin(sr() * 1.1 - 0.1), R = 420;
+    starPos.set([Math.cos(a) * Math.cos(e) * R, Math.sin(e) * R, Math.sin(a) * Math.cos(e) * R], i * 3);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  spaceSky.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false })));
+  const earth = new THREE.Mesh(new THREE.IcosahedronGeometry(38, 2), new THREE.MeshBasicMaterial({ color: 0x3f86e8, fog: false }));
+  earth.position.set(-160, 170, -330);
+  const land = new THREE.Mesh(new THREE.IcosahedronGeometry(38.5, 1), new THREE.MeshBasicMaterial({ color: 0x4fb35a, fog: false, wireframe: false, transparent: true, opacity: 0.55 }));
+  land.scale.set(1, 0.6, 1);
+  earth.add(land);
+  spaceSky.add(earth);
+  spaceSky.visible = false;
+  scene.add(spaceSky);
+
   const L = WORLD.chunkLength;
   const N = WORLD.chunkCount;
   const HALF = WORLD.chunkHalfWidth;
@@ -113,7 +133,8 @@ export function createWorld(scene) {
   const balls = inst(ballGeo, ballMat, N * TP);
   const rockMatSmall = lam(0x9a9aa5);
   const rocks = inst(new THREE.DodecahedronGeometry(1, 0), rockMatSmall, N * RP);
-  const clouds = inst(new THREE.IcosahedronGeometry(1, 0), lam(0xffffff, { emissive: 0x777777 }), N * CP);
+  const cloudMat = lam(0xffffff, { emissive: 0x777777 });
+  const clouds = inst(new THREE.IcosahedronGeometry(1, 0), cloudMat, N * CP);
   const coinGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.18, 14).rotateX(Math.PI / 2);
   const coinMesh = inst(coinGeo, lam(0xffc61a, { emissive: 0x5a3c00 }), WORLD.coinSlots);
 
@@ -127,6 +148,7 @@ export function createWorld(scene) {
   const colBody = inst(new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0), lam(0xffffff), 64, lapGroup);
   const colCap = inst(new THREE.IcosahedronGeometry(1, 0), lam(0xffffff), 64, lapGroup);
   const ringMesh = inst(new THREE.TorusGeometry(1, 0.12, 6, 18), lam(0xffd23f, { emissive: 0x8a6a00 }), 32, lapGroup);
+  const asteroidMesh = inst(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8d96), 40, lapGroup);
   const updraftRings = inst(new THREE.TorusGeometry(1, 0.05, 4, 16).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), 30, lapGroup);
   const updraftCols = [];
   const devilCones = [];
@@ -179,7 +201,7 @@ export function createWorld(scene) {
     for (const c of stage.caverns) {
       const g = new THREE.Group();
       const left = c.laneMax < 0;
-      const mat = c.ice ? lam(0xbfe6ff, { emissive: 0x2a5a7a }) : c.shape === 'block' ? lam(0xb8a890) : c.shape === 'pyramid' ? lam(0xd9b46a) : rockMat;
+      const mat = c.ice ? lam(0xbfe6ff, { emissive: 0x2a5a7a }) : c.station ? lam(0xdfe6ee, { emissive: 0x1a2230 }) : c.shape === 'block' ? lam(0xb8a890) : c.shape === 'pyramid' ? lam(0xd9b46a) : rockMat;
       const mid = (c.start + c.end) / 2, half = (c.end - c.start) / 2;
       const topAt = (d) => (c.shape === 'pyramid' ? c.height * Math.max(0, 1 - Math.abs(d - mid) / half) : c.height);
       const top = Math.min(topAt(c.mouth), topAt(c.exit));
@@ -227,6 +249,14 @@ export function createWorld(scene) {
       if (a.y0abs > a.base + 0.5) piece(ox0, ox1, a.base - 4, a.y0abs);
       keep(g);
     }
+
+    // Floating asteroids.
+    for (let i = 0; i < 40; i++) asteroidMesh.setMatrixAt(i, ZERO);
+    terrain.asteroids.slice(0, 40).forEach((a, i) => {
+      const g = terrain.surfaceAt(a.x, a.d, -Infinity);
+      setInst(asteroidMesh, i, a.x, g + a.y, a.d, a.r * 1.1, a.r * 0.9, a.r, i * 1.7, i * 0.9);
+    });
+    asteroidMesh.instanceMatrix.needsUpdate = true;
 
     // Rings.
     for (let i = 0; i < 32; i++) ringMesh.setMatrixAt(i, ZERO);
@@ -607,7 +637,8 @@ export function createWorld(scene) {
     streakMesh.instanceMatrix.needsUpdate = true;
   }
 
-  function update(planeD, planeX, dt) {
+  function update(planeD, planeX, dt, camPos = null) {
+    if (spaceSky.visible && camPos) spaceSky.position.copy(camPos);
     const first = Math.floor(planeD / L) - 1;
     for (let k = first; k < first + N; k++) {
       const slot = ((k % N) + N) % N;
@@ -671,6 +702,9 @@ export function createWorld(scene) {
     coneMat.color.setHex(sc === 'snowpine' ? 0x2f6b4f : sc === 'pine' ? 0x3f7a3a : 0x2f9e44);
     ballMat.color.setHex(sc === 'cactus' ? 0x4fb35a : sc === 'palm' ? 0x3fae4a : 0x51b848);
     trunkMat.color.setHex(sc === 'cactus' ? 0x3f9a4a : sc === 'palm' ? 0x9a7046 : 0x8a5a35);
+    spaceSky.visible = !!theme.space;
+    cloudMat.color.setHex(theme.space ? 0x7a7d86 : 0xffffff);   // space: floating rock islets
+    cloudMat.emissive.setHex(theme.space ? 0x15161c : 0x777777);
     buildStageMeshes();
     for (const ch of chunks) ch.index = -9999;
     lapShown = -1;

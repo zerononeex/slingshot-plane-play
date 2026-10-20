@@ -216,6 +216,13 @@ export function buildPlane(tune) {
   floats.visible = false;
   model.add(floats);
 
+  // Rocket exhaust (the Comet): a glowing cone behind the tail.
+  const exhaustMat = new THREE.MeshBasicMaterial({ color: 0xffa21f, transparent: true, opacity: 0.85 });
+  const exhaust = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 10).rotateX(-Math.PI / 2), exhaustMat);
+  exhaust.position.set(0, 0, 1.55);
+  exhaust.visible = false;
+  model.add(exhaust);
+
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
 
   // Each stage flies its own plane: colours, wing size, floats.
@@ -228,6 +235,7 @@ export function buildPlane(tune) {
     leftWing.scale.x = rightWing.scale.x = ws;
     tail.scale.x = ws;
     floats.visible = !!def.floats;
+    exhaust.visible = !!def.exhaust;
   }
 
   function setParts(parts) {
@@ -268,6 +276,7 @@ export function buildPlane(tune) {
   // Per-frame visual life: rainbow paint, wheel squash after a bounce.
   function animate(dt, t, flying) {
     if (rainbow) bodyMat.color.copy(_hsl.setHSL((t * (flying ? 0.12 : 0.08)) % 1, 0.85, 0.55));
+    if (exhaust.visible) { const f = 0.8 + Math.random() * 0.4; exhaust.scale.set(f, f, f * (flying ? 1.6 : 1)); }
     squash = Math.max(0, squash - dt);
     const k = squash > 0 ? 0.55 + 0.45 * (1 - squash / 0.15) : 1;
     for (const w of wheels) {

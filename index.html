@@ -60,24 +60,65 @@
   .big { font-size: clamp(36px, 6vh, 60px); padding: 2.2vh 56px; border-radius: 30px; }
   .alt { background: #4fa8ff; box-shadow: 0 7px 0 #2f7fd1; }
   .alt:active { box-shadow: 0 2px 0 #2f7fd1; }
-  /* Title: stage picker + quick cards */
-  #title { gap: 1.6vh; }
-  #title h1 { font-size: clamp(34px, 5.6vh, 60px); }
-  .stage-row {
-    width: min(96vw, 760px); display: flex; gap: 10px; overflow-x: auto; padding: 4px 4px 10px;
-    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; touch-action: pan-x;
+  /* Home: the hangar */
+  #title.home { justify-content: flex-start; gap: 1.2vh; padding-top: max(10px, env(safe-area-inset-top)); }
+  .carousel-wrap { width: min(100vw, 760px); display: flex; align-items: center; gap: 4px; }
+  .car-arrow { min-height: 0; width: 44px; height: 64px; padding: 0; border-radius: 16px; font-size: 22px; background: var(--panel); color: var(--ink); box-shadow: 0 4px 0 rgba(0,0,0,0.15); flex: 0 0 auto; }
+  .carousel {
+    flex: 1; position: relative; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    padding: 4px 0 10px; scrollbar-width: none; touch-action: pan-x;
   }
+  .carousel::-webkit-scrollbar { display: none; }
+  .carousel::before, .carousel::after { content: ""; flex: 0 0 calc(50% - min(31vw, 135px)); }
   .stage-card {
-    flex: 0 0 auto; width: 150px; min-height: 0; padding: 10px; border-radius: 18px; scroll-snap-align: center;
-    display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left;
-    background: #fff; color: var(--ink); box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: 14px; font-weight: 700;
+    flex: 0 0 min(62vw, 270px); scroll-snap-align: center; min-height: 0; padding: 0 0 10px; border-radius: 22px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 2px; align-items: center; text-align: center;
+    background: #fff; color: var(--ink); box-shadow: 0 6px 0 #c3ccd4; border: 4px solid #dfe5ea; font-size: 14px; font-weight: 700;
   }
-  .stage-card .st-name { font-weight: 900; font-size: 17px; }
+  .stage-card .st-art { width: 100%; height: clamp(54px, 9vh, 96px); display: grid; place-items: center; margin-bottom: 4px; }
+  .stage-card .st-motif { font-size: clamp(30px, 5vh, 52px); filter: drop-shadow(0 3px 0 rgba(0,0,0,0.2)); }
+  .stage-card .st-name { font-weight: 900; font-size: clamp(17px, 2.4vh, 24px); }
   .stage-card .st-plane, .stage-card .st-secrets { opacity: 0.7; font-size: 13px; }
-  .stage-card .st-lock { font-size: 12px; opacity: 0.8; line-height: 1.2; }
-  .stage-card.selected { border-color: var(--go); background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
-  .stage-card.locked, .stage-card:disabled { background: #eef1f4; color: #7b8794; box-shadow: 0 5px 0 #c3ccd4; cursor: default; transform: none; }
-  .quick-cards { width: min(96vw, 620px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stage-card .st-lock { font-size: 13px; padding: 0 10px; line-height: 1.25; }
+  .stage-card .st-lock:empty, .stage-card .st-plane:empty, .stage-card .st-best:empty, .stage-card .st-secrets:empty { display: none; }
+  .stage-card.selected { border-color: var(--go); box-shadow: 0 6px 0 var(--go-dark); }
+  .stage-card.locked, .stage-card:disabled { background: #eef1f4; color: #7b8794; cursor: default; transform: none; }
+  .stage-card.locked .st-art { filter: grayscale(0.9) brightness(0.8); }
+  .preview-gap { flex: 1 1 auto; min-height: 16vh; }  /* the 3D plane shows here */
+  .preview-bar { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .preview-bar .wallet { font-size: clamp(22px, 3.2vh, 32px); display: flex; align-items: center; gap: 6px; }
+  .preview-bar .wallet small { font-size: 0.45em; opacity: 0.6; font-weight: 800; }
+  .change-plane { min-height: 0; padding: 10px 16px; font-size: clamp(15px, 2vh, 20px); }
+  .hangar { width: min(96vw, 640px); background: var(--panel); border-radius: 22px; padding: 8px; box-shadow: 0 6px 0 rgba(0,0,0,0.12); }
+  .hangar-label { font-weight: 900; font-size: clamp(13px, 1.7vh, 16px); margin-bottom: 6px; }
+  .hangar-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .chip-btn {
+    min-height: 0; padding: 6px 2px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: #fff; color: var(--ink); box-shadow: 0 4px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: clamp(10px, 1.4vh, 13px);
+  }
+  .chip-btn .chip-icon { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; background: #f1f4f7; }
+  .chip-btn .chip-name { font-weight: 900; line-height: 1; }
+  .chip-btn .chip-price { font-weight: 900; }
+  .chip-btn .pips { gap: 2px; }
+  .chip-btn .pip { width: 8px; height: 8px; border-width: 2px; }
+  .chip-btn.buyable { border-color: #ffc61a; animation: glow 1.2s ease-in-out infinite; }
+  .chip-btn.maxed { background: #e6f9ea; border-color: var(--go); }
+  .chip-btn.locked { opacity: 0.45; filter: grayscale(1); }
+  .chip-btn:disabled { cursor: default; transform: none; color: var(--ink); box-shadow: 0 4px 0 #c3ccd4; }
+  .chip-btn.maxed:disabled { background: #e6f9ea; }
+  .chip-btn.poor:disabled, .chip-btn.buyable:disabled { background: #fff; }
+  .home-buttons { display: flex; flex-direction: column; align-items: center; gap: 1vh; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .home-buttons .big { padding: 1.4vh 64px; }
+  .home-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .home-row button { min-height: 0; padding: 10px 14px; font-size: clamp(15px, 2vh, 20px); }
+  .planes-panel { max-height: 90vh; }
+  .plane-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; overflow-y: auto; }
+  .plane-card { min-height: 0; padding: 10px; border-radius: 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
+    background: #fff; color: var(--ink); box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: 13px; font-weight: 700; }
+  .plane-card .pc-swatch { width: 100%; height: 22px; border-radius: 10px; }
+  .plane-card .pc-name { font-weight: 900; font-size: 17px; }
+  .plane-card.selected { border-color: var(--go); background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
+  .shop-for { font-weight: 900; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.3); font-size: clamp(14px, 2vh, 20px); }
   .updraft { color: #ffe14d; margin-left: 6px; }
   .unlock { background: #3ccf5a; color: #fff; border-radius: 16px; padding: 6px 14px; font-weight: 900; font-size: clamp(18px, 2.6vh, 26px); }
 
@@ -189,6 +230,18 @@
   #stick::before { content: ""; position: absolute; width: 150px; height: 150px; left: -75px; top: -75px; border-radius: 50%; border: 5px solid rgba(255,255,255,0.6); }
   #stick-knob { position: absolute; left: 0; top: 0; width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.75); transform: translate(-50%, -50%); }
   #pause { background: rgba(36, 50, 74, 0.35); }
+  .pause-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  button.small { font-size: 17px; padding: 10px 18px; min-height: 48px; }
+  .codes-panel { max-height: 94vh; overflow-y: auto; gap: 8px; }
+  .code-box { font-family: ui-monospace, Menlo, monospace; font-size: 15px; line-height: 1.5; word-spacing: 4px; background: #f1f5fb; color: #24324a;
+    border-radius: 12px; padding: 8px 10px; max-height: 22vh; overflow-y: auto; word-break: break-all; user-select: all; -webkit-user-select: all; width: 100%; box-sizing: border-box; }
+  #code-in { width: 100%; box-sizing: border-box; font-family: ui-monospace, Menlo, monospace; font-size: 15px; border-radius: 12px; border: 2px solid #c9d4e6; padding: 8px; resize: none; }
+  .code-error { color: #d23b3b; font-weight: 800; }
+  .code-confirm { width: 100%; background: #fff6e0; border-radius: 14px; padding: 8px; box-sizing: border-box; text-align: center; }
+  .code-confirm ul { margin: 4px 0; padding-left: 18px; text-align: left; }
+  button.danger { background: #e2483d; color: #fff; }
+  button.danger { box-shadow: 0 7px 0 #9c241b; }
+  button.danger.armed { background: #a8170e; animation: tremble 0.25s ease-in-out infinite; }
   .newbest { background: var(--pink); color: #fff; border-radius: 16px; padding: 6px 16px; font-weight: 900; font-size: clamp(20px, 3vh, 30px); transform: rotate(-4deg); }
   .msg { font-size: clamp(18px, 2.6vh, 26px); font-weight: 800; margin: 0; }
   .btn-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
@@ -206,22 +259,44 @@
 <body>
 <canvas id="game"></canvas>
 
-<section id="title" class="screen">
-  <h1>Slingshot Plane</h1>
-  <div class="stage-row" id="stage-row"></div>
-  <div class="stat-row">
-    <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="title-coins">0</span></div>
-    <div class="stat"><small>BEST</small><span id="title-best">0</span> m</div>
-    <div class="stat"><small>SECRETS</small><span id="title-secrets">0/3</span></div>
+<section id="title" class="screen home">
+  <div class="carousel-wrap">
+    <button class="car-arrow" id="car-prev" aria-label="Previous world">◀</button>
+    <div class="carousel" id="carousel"></div>
+    <button class="car-arrow" id="car-next" aria-label="Next world">▶</button>
   </div>
-  <div class="quick-cards" id="quick-cards"></div>
-  <button id="btn-fly" class="big">FLY!</button>
-  <button id="btn-shop" class="shop-btn">🛠 SHOP</button>
+  <div class="preview-gap"></div>
+  <div class="preview-bar">
+    <div class="chip wallet"><span class="coin-dot"></span><span id="title-coins">0</span><small id="title-world"></small></div>
+    <button id="btn-change-plane" class="alt change-plane">✈ CHANGE PLANE</button>
+  </div>
+  <div class="hangar">
+    <div class="hangar-label" id="hangar-label">Hangar</div>
+    <div class="hangar-chips" id="hangar-chips"></div>
+  </div>
+  <div class="home-buttons">
+    <button id="btn-fly" class="big"><span id="fly-label">FLY!</span></button>
+    <div class="home-row">
+      <button id="btn-shop" class="shop-btn">🛠 SHOP</button>
+      <button id="btn-codes" class="alt">🔑 SAVE CODES</button>
+      <button id="btn-music" class="alt music-btn">🎵 ON</button>
+    </div>
+  </div>
+</section>
+
+<section id="planes" class="screen" hidden>
+  <div class="panel planes-panel">
+    <h2>Change plane</h2>
+    <p class="msg">Every plane brings its own upgrades. Coins and bests go to the world you fly in.</p>
+    <div class="plane-list" id="plane-list"></div>
+    <button id="btn-planes-back" class="alt">◀ BACK</button>
+  </div>
 </section>
 
 <section id="shop" class="screen" hidden>
   <div class="shop-top">
     <button id="btn-shop-back" class="alt back-btn">◀ BACK</button>
+    <div class="shop-for" id="shop-for"></div>
     <div class="chip wallet"><span class="coin-dot"></span><span id="shop-coins">0</span></div>
   </div>
   <div class="shop-stage"></div>
@@ -275,6 +350,32 @@
     <h2>Paused</h2>
     <button id="btn-resume" class="big">PLAY</button>
     <button id="btn-pause-home" class="alt">HOME</button>
+    <div class="pause-row">
+      <button id="btn-pause-codes" class="alt small">🔑 SAVE CODES</button>
+      <button id="btn-pause-music" class="alt small music-btn">🎵 MUSIC ON</button>
+    </div>
+  </div>
+</section>
+
+<section id="codes" class="screen" hidden>
+  <div class="panel codes-panel">
+    <h2>Save codes</h2>
+    <p class="msg">Write this code down (or copy it) to move your progress to another iPad.</p>
+    <div class="code-box" id="code-out"></div>
+    <button id="btn-code-copy" class="alt small">📋 COPY</button>
+    <p class="msg">Got a code? Paste it here:</p>
+    <textarea id="code-in" rows="3" spellcheck="false" autocapitalize="characters" autocomplete="off" placeholder="SP1-…"></textarea>
+    <button id="btn-code-import" class="alt">IMPORT</button>
+    <p class="msg code-error" id="code-error" hidden></p>
+    <div id="code-confirm" class="code-confirm" hidden>
+      <div id="code-summary"></div>
+      <p class="msg"><b>Replace my progress with this save?</b></p>
+      <div class="pause-row">
+        <button id="btn-code-replace" class="danger">REPLACE</button>
+        <button id="btn-code-cancel" class="alt">CANCEL</button>
+      </div>
+    </div>
+    <button id="btn-codes-back" class="alt">◀ BACK</button>
   </div>
 </section>
 
