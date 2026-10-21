@@ -103,12 +103,14 @@ stars.visible = false;
 scene.add(stars);
 
 let baseFov = 55;
+let viewShift = 0; // Home projection offset (px), see frameView()
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.fov = baseFov = camera.aspect < 1 ? 68 : 55; // portrait needs a taller view
   camera.updateProjectionMatrix();
+  viewShift = NaN; // re-frame the Home scene for the new size
 }
 window.addEventListener('resize', resize);
 resize();
@@ -125,6 +127,7 @@ function applyLooks() {
 function showScreen(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
   $('hud').hidden = !(id === 'hud');
+  if (id !== 'title') setPanel(null); // coming back to Home always lands on the FLY view
   if (id === 'title') requestAnimationFrame(() => scrollToCard(carouselIndex, 'auto')); // re-centre after being hidden
 }
 
@@ -140,7 +143,6 @@ function refreshTitle() {
   renderHangar();
   $('fly-label').textContent = lockedView ? '🔒 LOCKED' : 'FLY!';
   $('btn-fly').disabled = lockedView;
-  $('btn-change-plane').textContent = `✈ ${pstage.plane.name.toUpperCase()} · CHANGE`;
   applyLooks();
 }
 
@@ -155,18 +157,27 @@ function buildCarousel() {
     b.dataset.stage = id;
     const sky = hex(st.theme.sky), base = hex(st.theme.base);
     b.innerHTML = `<span class="st-art" style="background:linear-gradient(180deg, ${sky} 0%, ${sky} 55%, ${base} 56%, ${hex(st.theme.rock)} 100%)"><span class="st-motif">${MOTIF[id] ?? '✈️'}</span></span>
-      <span class="st-name"></span><span class="st-plane"></span><span class="st-best"></span><span class="st-secrets"></span><span class="st-lock"></span>`;
+      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span></span><span class="st-lock"></span></span>`;
     b.addEventListener('click', () => scrollToCard(STAGE_ORDER.indexOf(id)));
     row.appendChild(b);
   }
   carouselIndex = STAGE_ORDER.indexOf(stageId);
   requestAnimationFrame(() => scrollToCard(carouselIndex, 'auto'));
+  // Dots along the scene's bottom edge: one per world, tap = the same scroll as a swipe.
+  const dots = $('car-dots');
+  dots.textContent = '';
+  STAGE_ORDER.forEach((id, i) => {
+    const d = document.createElement('button');
+    d.className = 'car-dot';
+    d.setAttribute('aria-label', STAGES[id].name);
+    d.addEventListener('click', () => scrollToCard(i));
+    dots.appendChild(d);
+  });
 }
 
 function updateCarousel() {
   for (const b of $('carousel').children) {
     const id = b.dataset.stage, st = STAGES[id], r = getStage(save, id), open = isUnlocked(save, id);
-    const prev = st.unlock ? STAGES[st.unlock.after] : null;
     b.classList.toggle('selected', id === stageId);
     b.classList.toggle('locked', !open);
     b.disabled = !open;
@@ -174,7 +185,50 @@ function updateCarousel() {
     b.querySelector('.st-plane').textContent = open ? st.plane.name : '';
     b.querySelector('.st-best').textContent = open ? `Best ${r.best} m` : '';
     b.querySelector('.st-secrets').textContent = open ? `Secrets ${r.secrets.length}/${st.secrets.length}` : '';
-    b.querySelector('.st-lock').textContent = open ? '' : `Fly ${st.unlock.best} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)`;
+    b.querySelector('.st-lock').textContent = open ? '' : lockLine(id);
+  }
+  [...$('car-dots').children].forEach((d, i) => { d.classList.toggle('on', i === carouselIndex); d.classList.toggle('locked', !isUnlocked(save, STAGE_ORDER[i])); });
+}
+
+// The unlock requirement line a locked world shows (scene banner and WORLDS panel).
+function lockLine(id) {
+  const st = STAGES[id], prev = STAGES[st.unlock.after];
+  return `Fly ${st.unlock.best} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)`;
+}
+
+// v0.8 Home panels: WORLDS / MORE slide up over the scene; the tab bar shows which is open.
+let homePanel = null; // null (the FLY view) | 'worlds' | 'more'
+function setPanel(name) {
+  homePanel = name;
+  $('worlds-wrap').hidden = name !== 'worlds';
+  $('more-wrap').hidden = name !== 'more';
+  for (const t of $('tabbar').children) t.classList.toggle('on', t.dataset.tab === (name ?? 'fly'));
+  if (name === 'worlds') renderWorlds();
+}
+
+// WORLDS: all eight at a glance; tapping an open one selects it (the same selection the swipe makes).
+function renderWorlds() {
+  const grid = $('worlds-grid');
+  grid.textContent = '';
+  for (const id of STAGE_ORDER) {
+    const st = STAGES[id], r = getStage(save, id), open = isUnlocked(save, id);
+    const b = document.createElement('button');
+    b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}`;
+    b.dataset.world = id;
+    b.style.setProperty('--wt', hex(st.theme.sky));
+    b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span>';
+    b.querySelector('.wt-name').textContent = open ? st.name : `🔒 ${st.name}`;
+    b.querySelector('.wt-sub').textContent = st.plane.name;
+    b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length}` : lockLine(id);
+    b.addEventListener('click', () => {
+      if (!open) { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); return; }
+      const i = STAGE_ORDER.indexOf(id);
+      carouselIndex = i;
+      if (id === stageId) { lockedView = false; refreshTitle(); } else switchStage(id);
+      setPanel(null);
+      scrollToCard(i, 'auto');
+    });
+    grid.appendChild(b);
   }
 }
 
@@ -812,6 +866,12 @@ $('btn-fly').addEventListener('click', () => { unlockAudio(); startRun(); });
 $('btn-shop').addEventListener('click', () => { unlockAudio(); openShop(); });
 $('btn-shop-back').addEventListener('click', closeShop);
 $('btn-change-plane').addEventListener('click', () => { unlockAudio(); openPlanes(); });
+$('tab-fly').addEventListener('click', () => { unlockAudio(); setPanel(null); }); // the Home view; dismisses an open panel
+$('tab-worlds').addEventListener('click', () => { unlockAudio(); setPanel(homePanel === 'worlds' ? null : 'worlds'); });
+$('tab-more').addEventListener('click', () => { unlockAudio(); setPanel(homePanel === 'more' ? null : 'more'); });
+for (const w of document.querySelectorAll('.sheet-wrap')) {
+  w.addEventListener('click', (e) => { if (e.target === w || e.target.closest('[data-close]')) setPanel(null); }); // ✕, or a tap on the scene above
+}
 $('btn-planes-back').addEventListener('click', () => { mode = 'title'; showScreen('title'); refreshTitle(); });
 $('car-prev').addEventListener('click', () => scrollToCard(carouselIndex - 1));
 $('car-next').addEventListener('click', () => scrollToCard(carouselIndex + 1));
@@ -839,7 +899,8 @@ function syncMusic() {
 }
 function renderMusicButtons() {
   const on = save.prefs.music;
-  $('btn-music').textContent = on ? '🎵 ON' : '🔇 OFF';
+  $('btn-music').textContent = on ? '🎵 MUSIC: ON' : '🔇 MUSIC: OFF';
+  $('btn-music').classList.toggle('off', !on);
   $('btn-pause-music').textContent = on ? '🎵 MUSIC ON' : '🔇 MUSIC OFF';
 }
 function toggleMusic() {
@@ -1162,13 +1223,26 @@ function cameraTarget(out, look) {
   if (out.y > roof - 1) out.y = roof - 1;
 }
 
+// v0.8 Home: frame the plane in the middle of the SCENE area (between the HUD strip and the chips),
+// not the whole screen. A projection offset only: the camera itself does not move.
+function frameView() {
+  let want = 0;
+  if (mode === 'title') { const r = $('home-scene').getBoundingClientRect(); if (r.height > 0) want = Math.round(window.innerHeight / 2 - (r.top + r.height / 2)); }
+  if (want === viewShift) return;
+  viewShift = want;
+  if (want) camera.setViewOffset(window.innerWidth, window.innerHeight, 0, want, window.innerWidth, window.innerHeight);
+  else camera.clearViewOffset();
+}
+
 function snapCamera() {
+  frameView();
   cameraTarget(camPos, camLook);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
 }
 
 function updateCamera(dt) {
+  frameView();
   cameraTarget(_want, _look);
   const k = 1 - Math.exp(-6 * dt);
   camPos.lerp(_want, k);

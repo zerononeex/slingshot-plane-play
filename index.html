@@ -62,7 +62,6 @@
   .alt:active { box-shadow: 0 2px 0 #2f7fd1; }
   /* Home: the hangar */
   #title.home { justify-content: flex-start; gap: 1.2vh; padding-top: max(10px, env(safe-area-inset-top)); }
-  .carousel-wrap { width: min(100vw, 760px); display: flex; align-items: center; gap: 4px; }
   .car-arrow { min-height: 0; width: 44px; height: 64px; padding: 0; border-radius: 16px; font-size: 22px; background: var(--panel); color: var(--ink); box-shadow: 0 4px 0 rgba(0,0,0,0.15); flex: 0 0 auto; }
   .carousel {
     flex: 1; position: relative; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
@@ -84,11 +83,6 @@
   .stage-card.selected { border-color: var(--go); box-shadow: 0 6px 0 var(--go-dark); }
   .stage-card.locked, .stage-card:disabled { background: #eef1f4; color: #7b8794; cursor: default; transform: none; }
   .stage-card.locked .st-art { filter: grayscale(0.9) brightness(0.8); }
-  .preview-gap { flex: 1 1 auto; min-height: 16vh; }  /* the 3D plane shows here */
-  .preview-bar { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
-  .preview-bar .wallet { font-size: clamp(22px, 3.2vh, 32px); display: flex; align-items: center; gap: 6px; }
-  .preview-bar .wallet small { font-size: 0.45em; opacity: 0.6; font-weight: 800; }
-  .change-plane { min-height: 0; padding: 10px 16px; font-size: clamp(15px, 2vh, 20px); }
   .hangar { width: min(96vw, 640px); background: var(--panel); border-radius: 22px; padding: 8px; box-shadow: 0 6px 0 rgba(0,0,0,0.12); }
   .hangar-label { font-weight: 900; font-size: clamp(13px, 1.7vh, 16px); margin-bottom: 6px; }
   .hangar-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
@@ -107,10 +101,6 @@
   .chip-btn:disabled { cursor: default; transform: none; color: var(--ink); box-shadow: 0 4px 0 #c3ccd4; }
   .chip-btn.maxed:disabled { background: #e6f9ea; }
   .chip-btn.poor:disabled, .chip-btn.buyable:disabled { background: #fff; }
-  .home-buttons { display: flex; flex-direction: column; align-items: center; gap: 1vh; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
-  .home-buttons .big { padding: 1.4vh 64px; }
-  .home-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-  .home-row button { min-height: 0; padding: 10px 14px; font-size: clamp(15px, 2vh, 20px); }
   .planes-panel { max-height: 90vh; }
   .plane-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; overflow-y: auto; }
   .plane-card { min-height: 0; padding: 10px; border-radius: 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
@@ -347,29 +337,29 @@
   h1, h2, .banner, .shop-title b, .shop-section, .hangar-label, .st-name, .speedo-read, .verdict, .newbest, .unlock, .puff-text, .bump-plus,
   .speed-label, .hud-top .chip, .xfer-label, .xfer-amount,
   button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn),
-  .panel > button, .btn-row > button, .pause-row > button, .home-row > button {
+  .panel > button, .btn-row > button, .pause-row > button, .home-sheet .sheet-row {
     font-family: var(--display); font-style: italic; text-transform: uppercase; letter-spacing: -0.02em;
   }
   h1, .puff-text, .speed-label, #hud .chip,
   button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn),
-  .panel > button, .btn-row > button, .pause-row > button, .home-row > button { text-shadow: var(--outline); }
+  .panel > button, .btn-row > button, .pause-row > button, .home-sheet .sheet-row { text-shadow: var(--outline); }
   h1 { letter-spacing: -0.03em; }
   .skill-btn small { text-transform: none; font-style: normal; letter-spacing: 0; }
   /* Word buttons: angled ends (the cut reaches down over the 3D lip), a thin gold top edge, a faint diagonal sheen. */
   button { transition: transform 60ms ease-out, filter 60ms; }
   button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane):not(.car-arrow),
-  .panel > button, .btn-row > button, .pause-row > button, .home-row > button {
+  .panel > button, .btn-row > button, .pause-row > button, .home-sheet .sheet-row {
     position: relative; border-radius: 6px;
     clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% + 10px - var(--cut)), calc(100% - var(--cut)) calc(100% + 10px), 0 calc(100% + 10px), 0 var(--cut));
   }
   .big { --cut: 18px; }
   button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn):not(.car-arrow)::before,
-  .panel > button::before, .btn-row > button::before, .pause-row > button::before, .home-row > button::before {
+  .panel > button::before, .btn-row > button::before, .pause-row > button::before, .home-sheet .sheet-row::before {
     content: ""; position: absolute; left: var(--cut, 0); right: 0; top: 0; height: 2px; pointer-events: none;
     background: linear-gradient(90deg, rgba(255, 230, 140, 0.95), rgba(255, 255, 255, 0.5) 60%, rgba(255, 230, 140, 0));
   }
   button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn):not(.car-arrow)::after,
-  .panel > button::after, .btn-row > button::after, .pause-row > button::after, .home-row > button::after {
+  .panel > button::after, .btn-row > button::after, .pause-row > button::after, .home-sheet .sheet-row::after {
     content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
     background: linear-gradient(115deg, rgba(255, 255, 255, 0.22) 0 28%, rgba(255, 255, 255, 0) 28% 46%, rgba(255, 255, 255, 0.1) 46% 52%, rgba(255, 255, 255, 0) 52%);
   }
@@ -378,7 +368,7 @@
   .boost-btn::before, .eject-btn::before { display: none; }
   /* Press: a 60 ms squash (the existing 5 px press stays). */
   button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane):active,
-  .panel > button:active, .btn-row > button:active, .pause-row > button:active, .home-row > button:active { transform: translateY(5px) scale(1.02, 0.94); }
+  .panel > button:active, .btn-row > button:active, .pause-row > button:active, .home-sheet .sheet-row:active { transform: translateY(5px) scale(1.02, 0.94); }
   button:disabled::after { opacity: 0.4; }
   /* Cards (carousel, Upgrades, hangar, planes): sharper corners, a gold top edge and a sheen. */
   .stage-card, .card, .plane-card { position: relative; overflow: hidden; border-radius: 6px 22px 6px 22px; }
@@ -396,19 +386,16 @@
     background: linear-gradient(180deg, #ffe680, var(--gold) 55%, #ffb800);
     clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 50%, 100% 100%, 100% calc(100% + 8px), 0 calc(100% + 8px), 0 100%, 14px 50%);
   }
-  /* Home logo: an overlay in the 3D preview gap (takes no layout space, so nothing on Home moves). */
-  .preview-gap { position: relative; }
   .logo {
-    position: absolute; left: 50%; top: 0.6vh; transform: translateX(-50%); white-space: nowrap; pointer-events: none; margin: 0; font-size: clamp(22px, min(4.4vh, 8.4vw), 56px); font-weight: 900; line-height: 1; letter-spacing: -0.04em;
+    position: relative; white-space: nowrap; pointer-events: none; margin: 0; font-size: clamp(18px, min(3vh, 5.6vw), 34px); font-weight: 900; line-height: 1; letter-spacing: -0.04em;
     background: linear-gradient(180deg, #ffffff 0%, #fff6cf 38%, var(--gold) 62%, #ffaa00 100%); -webkit-background-clip: text; background-clip: text;
-    color: transparent; text-shadow: none; filter: drop-shadow(0 3px 0 #1b2a4a) drop-shadow(0 0 1px #1b2a4a); padding: 0 10px 8px;
+    color: transparent; text-shadow: none; filter: drop-shadow(0 3px 0 #1b2a4a) drop-shadow(0 0 1px #1b2a4a); padding: 0 8px 6px;
   }
   .logo::after {
     content: ""; position: absolute; left: 4%; right: -2%; bottom: 0; height: 5px; transform: skewX(-24deg); border-radius: 3px;
     background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 25%, var(--gold) 70%, rgba(255, 170, 0, 0));
     box-shadow: 18px 6px 0 -1px rgba(255, 255, 255, 0.7);
   }
-  @media (orientation: landscape) and (max-height: 520px) { .logo { font-size: 8vh; padding-bottom: 5px; top: 0; } }
   /* Speedometer: a dark dial with glowing ticks, needle tip and gold zone. */
   .speedo-rim { fill: rgba(14, 21, 36, 0.86); }
   #speedo-ticks line { stroke: #dff3ff; stroke-width: 2.5; }
@@ -432,6 +419,87 @@
   .screen:not([hidden]) { animation: screenIn 150ms cubic-bezier(.2, .7, .3, 1); }
   @keyframes screenIn { from { transform: translateY(12px) scale(0.98); } }
   @media (prefers-reduced-motion: reduce) { .screen:not([hidden]) { animation: none; } }
+  /* ---------- v0.8 Home: "App Tabs" (top → bottom: HUD strip · scene · chips · FLY · tab bar) ---------- */
+  #title.home { justify-content: flex-start; align-items: stretch; gap: 0; padding: 0; }
+  .home-hud { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 12px 4px; position: relative; z-index: 2; }
+  .home-hud .wallet { justify-self: start; display: flex; align-items: center; gap: 5px; font-size: clamp(18px, 2.6vh, 24px); padding: 4px 12px; border-radius: 4px 16px 4px 16px; }
+  .home-hud .wallet small { font-size: 0.5em; opacity: 0.6; font-weight: 800; }
+  /* The SCENE: flexible height (it shrinks first on small screens), full-bleed; the 3D world shows through. */
+  .home-scene { position: relative; flex: 1 1 auto; min-height: 120px; }
+  .home-scene .carousel { position: absolute; inset: 0; padding: 0; gap: 0; }
+  .home-scene .carousel::before, .home-scene .carousel::after { content: none; }
+  .home-scene .stage-card {
+    flex: 0 0 100%; height: 100%; padding: 10px 12px; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible;
+    align-items: flex-start; justify-content: flex-start; text-align: left; color: var(--ink);
+  }
+  .home-scene .stage-card::after, .home-scene .stage-card .st-art { display: none; }
+  .home-scene .stage-card.locked, .home-scene .stage-card:disabled { background: none; }
+  /* World banner (top-left): name in display type, then "Best N m · Secrets x/3". */
+  .st-banner { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; max-width: min(78%, 360px); padding: 6px 16px 7px 12px;
+    background: rgba(255, 255, 255, 0.9); border-radius: 4px 18px 4px 18px; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12); overflow: hidden; }
+  .st-banner::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--gold), rgba(255, 198, 26, 0) 75%); }
+  .home-scene .stage-card .st-name { font-family: var(--display); font-style: italic; text-transform: uppercase; letter-spacing: -0.02em; font-size: clamp(20px, 3vh, 30px); line-height: 1.05; }
+  .st-meta { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: 13px; font-weight: 800; }
+  .home-scene .stage-card .st-plane, .home-scene .stage-card .st-secrets { opacity: 0.75; }
+  .home-scene .stage-card .st-secrets::before { content: "· "; }
+  .home-scene .stage-card .st-lock { padding: 0; font-size: 13px; color: #6d4a00; font-weight: 800; }
+  .home-scene .stage-card.locked .st-banner { background: rgba(238, 241, 244, 0.94); color: #5d6977; }
+  .home-scene .car-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 56px; background: rgba(14, 22, 40, 0.35); color: #fff; box-shadow: none; z-index: 1; }
+  .home-scene #car-prev { left: 6px; } .home-scene #car-next { right: 6px; }
+  .car-dots { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 6px; z-index: 1; }
+  .car-dot { width: 9px; height: 9px; min-height: 0; padding: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.55); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
+  .car-dot.on { background: var(--gold); transform: scale(1.35); }
+  .car-dot.locked { background: rgba(36, 50, 74, 0.35); }
+  .change-pill { position: absolute; right: 10px; bottom: 8px; z-index: 1; min-height: 46px; padding: 0 16px; font-size: 16px; border-radius: 6px;
+    background: rgba(14, 22, 40, 0.72); box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.6), 0 3px 0 rgba(0, 0, 0, 0.2);
+    font-family: var(--display); font-style: italic; letter-spacing: -0.02em; clip-path: polygon(10px 0, 100% 0, 100% calc(100% + 6px), 0 calc(100% + 6px), 0 10px); }
+  .change-pill:active { transform: scale(0.96); box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.6); }
+  /* Chips + FLY sit on one light dock; the tab bar is the dark floor. */
+  #title.home .hangar-label { font-size: clamp(11px, 1.5vh, 14px); margin-bottom: 5px; }
+  #title.home .hangar { width: 100%; border-radius: 22px 22px 0 0; padding: 8px 10px 6px; box-shadow: 0 -3px 0 rgba(0, 0, 0, 0.08); flex: none; }
+  .fly-bar { flex: none; background: var(--panel); padding: 2px 10px 10px; }
+  .fly-bar #btn-fly { width: 100%; padding: 1.2vh 20px; font-size: clamp(32px, 5vh, 52px); color: #1b2438; text-shadow: 0 2px 0 rgba(255, 255, 255, 0.45);
+    background: linear-gradient(180deg, #ffe680, var(--gold) 55%, #ffb000); box-shadow: 0 7px 0 #d98e00; }
+  .fly-bar #btn-fly:active { box-shadow: 0 2px 0 #d98e00; }
+  .fly-bar #btn-fly:disabled { background: #b9c2cc; box-shadow: 0 7px 0 #8f99a3; color: #eef1f4; text-shadow: none; }
+  .tabbar { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px 6px max(6px, env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, #1b2438, #10172a); box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.5); position: relative; z-index: 3; }
+  .tab { position: relative; min-height: 54px; padding: 4px 0 2px; border-radius: 6px; background: none; box-shadow: none; color: #8a9bb8; text-shadow: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1; }
+  .tab b { font-size: 21px; font-style: normal; filter: grayscale(0.6) brightness(1.1); }
+  .tab span { font-family: var(--display); font-style: italic; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; font-size: clamp(11px, 1.6vh, 14px); }
+  .tab.on { color: var(--gold); background: rgba(255, 198, 26, 0.1); }
+  .tab.on b { filter: none; }
+  .tab.on::before { content: ""; position: absolute; left: 22%; right: 22%; top: -4px; height: 3px; background: var(--gold); transform: skewX(-24deg); border-radius: 2px; box-shadow: 0 0 8px rgba(255, 198, 26, 0.8); }
+  .tab:active { transform: scale(0.95); box-shadow: none; }
+  /* v0.8 Home panels (WORLDS, MORE): slide up over the scene only; chips, FLY and the tab bar stay put. */
+  .sheet-wrap { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: flex-end; background: rgba(14, 22, 40, 0.28); }
+  .sheet-wrap .home-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; margin: 0 8px; padding: 8px 10px 12px; background: rgba(250, 252, 255, 0.97);
+    border-radius: 6px 24px 0 0; box-shadow: 0 -4px 0 rgba(0, 0, 0, 0.1), inset 0 3px 0 var(--gold); animation: sheetUp 150ms cubic-bezier(.2, .7, .3, 1); }
+  @keyframes sheetUp { from { transform: translateY(40px); } }
+  @media (prefers-reduced-motion: reduce) { .sheet-wrap .home-sheet { animation: none; } }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .sheet-head b { font-family: var(--display); font-style: italic; font-weight: 900; letter-spacing: -0.02em; font-size: clamp(20px, 2.8vh, 28px); }
+  .sheet-x { min-height: 0; width: 48px; height: 48px; padding: 0; border-radius: 6px 16px 6px 16px; font-size: 20px; background: #e9eef4; color: var(--ink); box-shadow: 0 3px 0 #c3ccd4; }
+  .worlds-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  @media (min-width: 640px) { .worlds-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .world-tile { position: relative; overflow: hidden; min-height: 64px; padding: 7px 10px 7px 12px; border-radius: 4px 16px 4px 16px; text-align: left;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; font-size: 12px; font-weight: 800; line-height: 1.2;
+    background: #fff; color: var(--ink); border: 3px solid #dfe5ea; box-shadow: 0 4px 0 #c3ccd4; }
+  .world-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--wt, #9fdcff); }
+  .world-tile .wt-name { font-family: var(--display); font-style: italic; font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; font-size: 15px; }
+  .world-tile .wt-sub { opacity: 0.7; }
+  .world-tile.selected { border-color: var(--gold); background: #fff8dc; box-shadow: 0 4px 0 #e59f00; }
+  .world-tile.locked { background: #eef1f4; color: #7b8794; }
+  .world-tile.locked .wt-name { opacity: 0.8; }
+  .world-tile.wiggle { animation: wiggle 0.32s ease-in-out; }
+  @keyframes wiggle { 20% { transform: translateX(-5px) rotate(-1.5deg); } 50% { transform: translateX(5px) rotate(1.5deg); } 80% { transform: translateX(-3px); } }
+  .sheet-rows { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 4px; }
+  .sheet-row { width: 100%; min-height: 56px; padding: 10px 18px; text-align: left; font-size: clamp(18px, 2.6vh, 24px); background: #4fa8ff; box-shadow: 0 6px 0 #2f7fd1; }
+  .sheet-row:active { box-shadow: 0 2px 0 #2f7fd1; }
+  #btn-transfer { background: #ff8a3d; box-shadow: 0 6px 0 #d9661b; }
+  #btn-music.off { background: #8f99a3; box-shadow: 0 6px 0 #6b7480; }
+  @media (orientation: landscape) and (max-height: 520px) { .home-scene { min-height: 56px; } .home-hud { padding-top: 4px; } .tab { min-height: 48px; } .fly-bar #btn-fly { padding: 0.6vh 20px; font-size: 7vh; } }
   @media (orientation: landscape) and (max-height: 520px) {
     .screen { gap: 1.4vh; }
     .panel { padding: 2vh 20px; gap: 1.4vh; }
@@ -447,29 +515,47 @@
 <canvas id="game"></canvas>
 
 <section id="title" class="screen home">
-  <div class="carousel-wrap">
-    <button class="car-arrow" id="car-prev" aria-label="Previous world">◀</button>
-    <div class="carousel" id="carousel"></div>
-    <button class="car-arrow" id="car-next" aria-label="Next world">▶</button>
-  </div>
-  <div class="preview-gap"><h1 class="logo">SLINGSHOT PLANE</h1></div>
-  <div class="preview-bar">
+  <div class="home-hud">
     <div class="chip wallet"><span class="coin-dot"></span><span id="title-coins">0</span><small id="title-world"></small></div>
-    <button id="btn-change-plane" class="alt change-plane">✈ CHANGE PLANE</button>
+    <div class="logo">SLINGSHOT PLANE</div>
+  </div>
+  <div class="home-scene" id="home-scene">
+    <!-- Swipe surface: one full-width slide per world; its banner sits top-left of the scene. -->
+    <div class="carousel" id="carousel"></div>
+    <button class="car-arrow" id="car-prev" aria-label="Previous world">◀</button>
+    <button class="car-arrow" id="car-next" aria-label="Next world">▶</button>
+    <div class="car-dots" id="car-dots"></div>
+    <button id="btn-change-plane" class="change-pill">✈ CHANGE</button>
+    <div class="sheet-wrap" id="worlds-wrap" hidden>
+      <div class="home-sheet">
+        <div class="sheet-head"><b>WORLDS</b><button class="sheet-x" data-close aria-label="Close">✕</button></div>
+        <div class="worlds-grid" id="worlds-grid"></div>
+      </div>
+    </div>
+    <div class="sheet-wrap" id="more-wrap" hidden>
+      <div class="home-sheet" id="more-sheet">
+        <div class="sheet-head"><b>MORE</b><button class="sheet-x" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-rows">
+          <button id="btn-transfer" class="sheet-row">🏦 TRANSFER COINS</button>
+          <button id="btn-codes" class="sheet-row">💾 SAVE CODES</button>
+          <button id="btn-music" class="sheet-row music-btn">🎵 MUSIC: ON</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="hangar">
     <div class="hangar-label" id="hangar-label">Hangar</div>
     <div class="hangar-chips" id="hangar-chips"></div>
   </div>
-  <div class="home-buttons">
+  <div class="fly-bar">
     <button id="btn-fly" class="big"><span id="fly-label">FLY!</span></button>
-    <div class="home-row">
-      <button id="btn-shop" class="shop-btn">🛠 UPGRADES</button>
-      <button id="btn-codes" class="alt">🔑 SAVE CODES</button>
-      <button id="btn-transfer" class="alt">💰 TRANSFER</button>
-      <button id="btn-music" class="alt music-btn">🎵 ON</button>
-    </div>
   </div>
+  <nav class="tabbar" id="tabbar">
+    <button class="tab on" id="tab-fly" data-tab="fly"><b>▶</b><span>FLY</span></button>
+    <button class="tab" id="tab-worlds" data-tab="worlds"><b>🌍</b><span>WORLDS</span></button>
+    <button class="tab" id="btn-shop" data-tab="upgrades"><b>⬆</b><span>UPGRADES</span></button>
+    <button class="tab" id="tab-more" data-tab="more"><b>⋯</b><span>MORE</span></button>
+  </nav>
 </section>
 
 <section id="planes" class="screen" hidden>
