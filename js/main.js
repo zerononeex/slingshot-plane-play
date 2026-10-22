@@ -658,6 +658,7 @@ function finishRun() {
   $('res-landing').textContent = pay.landing;
   $('res-total').textContent = pay.total;
   $('res-best').textContent = wrec.best;
+  $('res-wallet').querySelector('b').textContent = wrec.coins; // the flown world's balance, after this flight's credit
   $('res-top').textContent = Math.round(flight.peakSpeed * KMH);
   $('res-newbest').hidden = !(dist > prevBest && dist > 0);
   $('res-glide-box').hidden = !ejected;

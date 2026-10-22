@@ -500,6 +500,29 @@
   #btn-transfer { background: #ff8a3d; box-shadow: 0 6px 0 #d9661b; }
   #btn-music.off { background: #8f99a3; box-shadow: 0 6px 0 #6b7480; }
   @media (orientation: landscape) and (max-height: 520px) { .home-scene { min-height: 56px; } .home-hud { padding-top: 4px; } .tab { min-height: 48px; } .fly-bar #btn-fly { padding: 0.6vh 20px; font-size: 7vh; } }
+  /* ---------- v0.8.1 RESULTS: compact (one-line headline, one money row, TOTAL wallet, normal buttons) ---------- */
+  #results .panel { gap: 8px; padding: 14px 12px; width: min(94vw, 440px); }
+  #results p:empty { display: none; } /* the conditional lines only take space when they have something to say */
+  #results h2 { white-space: nowrap; font-size: clamp(18px, min(7vw, 3.8vh), 32px); line-height: 1.1; }
+  #results .newbest { font-size: clamp(14px, 2vh, 18px); padding: 3px 12px; border-radius: 10px; }
+  #results .unlock { font-size: clamp(13px, 1.8vh, 16px); padding: 4px 10px; border-radius: 10px; line-height: 1.25; }
+  #results .verdict { font-size: clamp(15px, 2.1vh, 19px); line-height: 1.2; }
+  #results .msg { font-size: clamp(13px, 1.8vh, 16px); line-height: 1.25; }
+  #results .stat-row { flex-wrap: nowrap; gap: 5px; width: 100%; }
+  #results .stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 3px; border-radius: 4px 12px 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1); line-height: 1.15; }
+  #results .stat small { font-size: 9.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; }
+  #results .res-money .stat { font-size: clamp(15px, min(4.4vw, 2.4vh), 20px); }
+  #results .res-money .coin-dot { border-width: 2px; }
+  #results .res-earned { background: linear-gradient(160deg, #fff4c2, #ffd75a); box-shadow: 0 3px 0 #e59f00; }
+  #results .res-more .stat { font-size: clamp(13px, min(3.8vw, 2vh), 17px); padding: 3px 3px; }
+  .res-wallet { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 14px; border-radius: 4px 16px 4px 16px; background: rgba(14, 22, 40, 0.86); color: #dfe8f5;
+    font-family: var(--display); font-style: italic; font-weight: 900; font-size: clamp(13px, 1.9vh, 16px); letter-spacing: 0.02em; box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.55); }
+  .res-wallet b { color: var(--gold); font-size: clamp(17px, min(4.6vw, 2.5vh), 21px); text-shadow: 0 0 6px rgba(255, 198, 26, 0.45); }
+  #results .btn-row { flex-wrap: nowrap; gap: 8px; width: 100%; }
+  #results .btn-row > button { min-height: 56px; padding: 6px 12px; font-size: clamp(18px, 2.6vh, 22px); }
+  #btn-again { flex: 2 1 0; }
+  #btn-home { flex: 1 1 0; }
+  @media (orientation: landscape) and (max-height: 520px) { #results .panel { gap: 5px; padding: 8px 12px; } #results .btn-row > button { min-height: 50px; } }
   @media (orientation: landscape) and (max-height: 520px) {
     .screen { gap: 1.4vh; }
     .panel { padding: 2vh 20px; gap: 1.4vh; }
@@ -706,19 +729,20 @@
     <p class="verdict" id="res-verdict"></p>
     <p class="msg" id="res-msg"></p>
     <p class="msg res-bumps" id="res-bumps" hidden></p>
-    <div class="stat-row">
+    <div class="stat-row res-money">
       <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
-      <div class="stat"><small>DISTANCE BONUS</small>+<span id="res-bonus">0</span></div>
-      <div class="stat" id="res-landing-box"><small>LANDING BONUS</small>+<span id="res-landing">0</span></div>
-      <div class="stat"><small>EARNED</small><span class="coin-dot"></span><span id="res-total">0</span></div>
+      <div class="stat"><small>DIST BONUS</small>+<span id="res-bonus">0</span></div>
+      <div class="stat" id="res-landing-box"><small>LANDING</small>+<span id="res-landing">0</span></div>
+      <div class="stat res-earned"><small>EARNED</small><span class="coin-dot"></span><span id="res-total">0</span></div>
     </div>
-    <div class="stat-row">
+    <div class="res-wallet" id="res-wallet">🪙 TOTAL <b>0</b></div>
+    <div class="stat-row res-more">
       <div class="stat"><small>TOP SPEED</small><span id="res-top">0</span> km/h</div>
       <div class="stat" id="res-glide-box" hidden><small>EJECT GLIDE</small><span id="res-glide">0</span> m</div>
       <div class="stat"><small>BEST</small><span id="res-best">0</span> m</div>
     </div>
     <div class="btn-row">
-      <button id="btn-again" class="big">FLY AGAIN</button>
+      <button id="btn-again">FLY AGAIN</button>
       <button id="btn-home" class="alt">HOME</button>
     </div>
   </div>
