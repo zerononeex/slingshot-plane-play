@@ -151,6 +151,25 @@ SHAPE_SPOTS.jetstream = [
   S(14875, 0, 28, 'circle', 'goal approach'),
   S(14955, 0, 28, 'square', 'goal approach'),
 ];
+// v1.3 new worlds: one in each pocket + two on the goal approach; their long-run frames come from the set pieces.
+SHAPE_SPOTS.volcano = [
+  S(205, -72, 6.6, 'triangle', 'inside LAVA TUBE'),
+  S(1065, 72, 7.4, 'rectangle', 'inside MAGMA VAULT'),
+  S(10410, 0, 22, 'circle', 'goal approach'),
+  S(10485, 0, 22, 'square', 'goal approach'),
+];
+SHAPE_SPOTS.jungle = [
+  S(225, -72, 6.6, 'triangle', 'inside TEMPLE RUINS'),
+  S(1235, 72, 7.4, 'rectangle', 'inside PARROT HOLLOW'),
+  S(12170, 0, 22, 'circle', 'goal approach'),
+  S(12245, 0, 22, 'square', 'goal approach'),
+];
+SHAPE_SPOTS.skyislands = [
+  S(265, 72, 6.6, 'triangle', 'inside WATERFALL GROTTO'),
+  S(1485, -72, 7.4, 'rectangle', 'inside RAINBOW ROOF'),
+  S(13940, 0, 22, 'circle', 'goal approach'),
+  S(14005, 0, 22, 'square', 'goal approach'),
+];
 // v1.2 Neon Void: one in each pocket and two on the goal approach; its ten long-run frames (mostly
 // triangles + rectangles, on the fast lines) come from the long-run set pieces below.
 SHAPE_SPOTS.neonvoid = [

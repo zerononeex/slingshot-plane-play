@@ -19,19 +19,24 @@ export const VOID_NAMES = {
   band: 'LIGHT RIBBON', engine: 'PHOTON DRIVE', tank: 'OVERCHARGE CELLS', magnet: 'TRACTOR GLOW', ramp: 'LAUNCH RAIL', wheels: 'GYRO WHEELS',
   radar: 'VOID SENSE', balloons: 'GLOW ORBS',
 };
+// v1.3 the new worlds' own names (same precedent; the lines not listed keep their stock names).
+export const VOLCANO_NAMES = { ...STOCK_NAMES, ramp: 'ERUPTION RAMP', magnet: 'ORE MAGNET', wheels: 'OBSIDIAN WHEELS', balloons: 'THERMAL BALLOONS', tank: 'MAGMA TANK' };
+export const JUNGLE_NAMES = { ...STOCK_NAMES, ramp: 'VINE RAMP', engine: 'CANOPY ENGINE', wheels: 'MUD WHEELS', band: 'JUNGLE VINE', balloons: 'SEED PODS' };
+export const SKY_NAMES = { ...STOCK_NAMES, ramp: 'CLOUD RAMP', tank: 'MIST TANK', balloons: 'CLOUD BALLOONS', engine: 'BREEZE ENGINE', wheels: 'PUFF WHEELS' };
 // The short labels on the Home hangar strip.
 const STOCK_CHIPS = { band: 'ELASTIC', engine: 'PROPELLER', leftWing: 'LEFT WING', rightWing: 'RIGHT WING', tail: 'TAIL' };
 const SPACE_CHIPS = { band: 'RAIL', engine: 'ION ENGINE', leftWing: 'LEFT FIN', rightWing: 'RIGHT FIN', tail: 'STABILIZER' };
 const VOID_CHIPS = { ...STOCK_CHIPS, band: 'LIGHT RIBBON', engine: 'PHOTON DRIVE' };
+const JUNGLE_CHIPS = { ...STOCK_CHIPS, band: 'JUNGLE VINE', engine: 'CANOPY ENGINE' };
+const SKY_CHIPS = { ...STOCK_CHIPS, engine: 'BREEZE ENGINE' };
 
-// Which name set: the plane's own first (the Starship / the Void Runner), else the world's.
-function nameSet(planeId, worldId) {
-  if (planeId === 'space') return 'space';
-  if (planeId === 'neonvoid') return 'void';
-  if (worldId === 'space') return 'space';
-  if (worldId === 'neonvoid') return 'void';
-  return 'stock';
-}
-export const spaceNamed = (planeId, worldId) => nameSet(planeId, worldId) === 'space';
-export const upgradeNames = (planeId, worldId) => ({ space: SPACE_NAMES, void: VOID_NAMES, stock: STOCK_NAMES })[nameSet(planeId, worldId)];
-export const chipNames = (planeId, worldId) => ({ space: SPACE_CHIPS, void: VOID_CHIPS, stock: STOCK_CHIPS })[nameSet(planeId, worldId)];
+// The worlds with their own names: [upgrade names, hangar chips]. A plane's own set wins (the Starship
+// borrowed elsewhere keeps its names), else the world's, else the stock names.
+const OWN = {
+  space: [SPACE_NAMES, SPACE_CHIPS], neonvoid: [VOID_NAMES, VOID_CHIPS],
+  volcano: [VOLCANO_NAMES, STOCK_CHIPS], jungle: [JUNGLE_NAMES, JUNGLE_CHIPS], skyislands: [SKY_NAMES, SKY_CHIPS],
+};
+const nameSet = (planeId, worldId) => OWN[planeId] ?? OWN[worldId] ?? [STOCK_NAMES, STOCK_CHIPS];
+export const spaceNamed = (planeId, worldId) => nameSet(planeId, worldId)[0] === SPACE_NAMES;
+export const upgradeNames = (planeId, worldId) => nameSet(planeId, worldId)[0];
+export const chipNames = (planeId, worldId) => nameSet(planeId, worldId)[1];

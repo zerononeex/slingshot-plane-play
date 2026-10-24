@@ -44,6 +44,7 @@ const COLUMN_LOOK = {
   pylon: { body: 0xff5d2e, cap: 0xffe14d, glow: true },
   flag: { body: 0xffffff, cap: 0xff4fa3 },
   aqueductLeg: { body: 0xd9b46a, cap: 0xd9b46a },
+  basalt: { body: 0x2a2628, cap: 0x3a3436 }, // v1.3 Volcano
 };
 
 export function createWorld(scene) {
@@ -74,6 +75,25 @@ export function createWorld(scene) {
   spaceSky.add(earth);
   spaceSky.visible = false;
   scene.add(spaceSky);
+
+  // v1.3 VOLCANO: drifting embers — a small cloud of points riding with the camera, rising and wrapping.
+  const EMBERS = 140, emberPos = new Float32Array(EMBERS * 3), er = rng(777);
+  for (let i = 0; i < EMBERS; i++) emberPos.set([(er() - 0.5) * 120, er() * 50 - 10, -er() * 160], i * 3);
+  const emberGeo = new THREE.BufferGeometry();
+  emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3).setUsage(THREE.DynamicDrawUsage));
+  const embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({ color: 0xffa040, size: 0.6, transparent: true, opacity: 0.85 }));
+  embers.frustumCulled = false;
+  embers.visible = false;
+  scene.add(embers);
+  let emberDir = 1; // +1 embers rise (Volcano), −1 leaves fall (Jungle)
+  function driftEmbers(dt, camPos) {
+    embers.position.set(camPos.x, 0, camPos.z);
+    for (let i = 0; i < EMBERS; i++) {
+      let y = emberPos[i * 3 + 1] + emberDir * dt * (2 + (i % 5)); if (y > 45) y -= 55; else if (y < -10) y += 55;
+      emberPos[i * 3 + 1] = y; emberPos[i * 3] += Math.sin(y * 0.2 + i) * dt * 0.8;
+    }
+    emberGeo.attributes.position.needsUpdate = true;
+  }
 
   // ---------- v0.7 sky: a 3-stop gradient dome (zenith → horizon → warm near-ground haze) ----------
   // Rides with the camera; fog uses the horizon stop. Bright skies stay bright (richness, not dusk).
@@ -115,7 +135,7 @@ export function createWorld(scene) {
   farLayer.renderOrder = -1;
   farLayer.frustumCulled = false;
   scene.add(farLayer);
-  const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks' };
+  const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks', volcano: 'peaks', skyislands: 'islands' };
   function profile(style, a) {
     const s1 = Math.sin(a * 3 + 1.3), s2 = Math.sin(a * 7 + 0.4), s3 = Math.sin(a * 17 + 2.2);
     switch (style) {
@@ -300,7 +320,7 @@ export function createWorld(scene) {
     for (const c of stage.caverns) {
       const g = new THREE.Group();
       const left = c.laneMax < 0;
-      const mat = c.cloud ? lam(0xf4f7fc, { emissive: 0x8a96a8 }) : c.ice ? lam(0xbfe6ff, { emissive: 0x2a5a7a }) : c.station ? lam(0xdfe6ee, { emissive: 0x1a2230 }) : c.shape === 'block' ? lam(0xb8a890) : c.shape === 'pyramid' ? lam(0xd9b46a) : rockMat;
+      const mat = c.canopy ? lam(0x2f7a3a) : c.cloud ? lam(0xf4f7fc, { emissive: 0x8a96a8 }) : c.ice ? lam(0xbfe6ff, { emissive: 0x2a5a7a }) : c.station ? lam(0xdfe6ee, { emissive: 0x1a2230 }) : c.shape === 'block' ? lam(0xb8a890) : c.shape === 'pyramid' ? lam(0xd9b46a) : rockMat;
       const mid = (c.start + c.end) / 2, half = (c.end - c.start) / 2;
       const topAt = (d) => (c.shape === 'pyramid' ? c.height * Math.max(0, 1 - Math.abs(d - mid) / half) : c.height);
       const top = Math.min(topAt(c.mouth), topAt(c.exit));
@@ -443,7 +463,8 @@ export function createWorld(scene) {
     // the pocket's own decor along its sides (looks only), and the BONUS STASH sign.
     const PORTAL = { mushrooms: 0xffd23f, slotCanyon: 0xff9a3c, garden: 0x7fff9a, aurora: 0x9fe6ff, oasis: 0x5fffd0, coral: 0xff7ab8, nebula: 0xc08aff, stormEye: 0xffd23f,
       sunflowers: 0xffe14d, goldMine: 0xffb020, neon: 0xff3fd0, glacier: 0xbff4ff, temple: 0xffc070, shipwreck: 0x5fd0ff, comet: 0x9fd8ff, rainbow: 0xff6ad5, // v1.0 second pockets
-      gridCore: 0x00e5ff, prism: 0xff2bd6 }; // v1.2 Neon Void
+      gridCore: 0x00e5ff, prism: 0xff2bd6, // v1.2 Neon Void
+      lavaTube: 0xff6a1a, magmaVault: 0xffb020, templeRuins: 0xffd27a, parrotHollow: 0x5fe06a, grotto: 0x9fe0ff, rainbowRoof: 0xff6ad5 }; // v1.3
     for (const p of terrain.pockets ?? []) {
       const glow = new THREE.MeshBasicMaterial({ color: PORTAL[p.look] ?? 0xffd23f });
       const ringAt = (x, d, base) => {
@@ -477,6 +498,12 @@ export function createWorld(scene) {
         else if (p.look === 'shipwreck') { if (i % 3 === 0) { const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 9), lam(0x6b4423)); hull.rotation.z = side * 0.4; hull.position.y = 1; y.add(hull); const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 9, 6), lam(0x8a5a35)); mast.rotation.z = side * 0.5; mast.position.y = 4.5; y.add(mast); } else { const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8), lam(0x9a6b3a)); barrel.position.y = 0.6; y.add(barrel); } }
         else if (p.look === 'comet') { const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4 + (i % 2), 0), lam(0xcfe6ff, { emissive: 0x1a3a6a })); ice.position.y = 7 + (i % 3) * 2; y.add(ice); const tail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 6), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.set(0, 7 + (i % 3) * 2, -3.5); y.add(tail); }
         else if (p.look === 'rainbow') { const arc = new THREE.Mesh(new THREE.TorusGeometry(3, 0.35, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 9; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), lam(0xffffff)); puff.position.y = 8; y.add(puff); }
+        else if (p.look === 'lavaTube') { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6 + (i % 2), 0), lam(0x3a2a28)); r.position.y = 1.2; y.add(r); if (i % 2 === 0) { const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff6a1a })); glow.position.set(-side * 1.4, 0.5, 0); y.add(glow); } }
+        else if (p.look === 'magmaVault') { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.4, 0), new THREE.MeshBasicMaterial({ color: [0xff8a1a, 0xffc61a, 0xff4a1a][i % 3] })); crystal.scale.set(1, 2, 1); crystal.position.y = 2.6 + (i % 2); y.add(crystal); const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, 2.2), lam(0x2a2628)); base.position.y = 0.5; y.add(base); }
+        else if (p.look === 'templeRuins') { const col = new THREE.Mesh(new THREE.BoxGeometry(1.6, 5 + (i % 3) * 2, 1.6), lam(0x9a9070)); col.position.y = 2.5 + (i % 3); y.add(col); const vine = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.2, 1.7), lam(0x3f9a3a)); vine.position.y = 5 + (i % 3) * 2; y.add(vine); }
+        else if (p.look === 'parrotHollow') { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 9, 6), lam(0x6b4423)); tr.position.y = 4.5; y.add(tr); const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 0), lam(0x2f8a3a)); crown.position.y = 9.5; y.add(crown); const bird = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({ color: [0xff3030, 0x2fa8ff, 0xffd23f][i % 3] })); bird.position.set(-side * 1.2, 7, 0); y.add(bird); }
+        else if (p.look === 'grotto') { const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.8, 0), lam(0x8a7a6a)); rock.position.y = 1.4; y.add(rock); if (i % 2 === 0) { const fall = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 10), new THREE.MeshBasicMaterial({ color: 0x9fe0ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide })); fall.position.set(0, 6, 0); y.add(fall); } }
+        else if (p.look === 'rainbowRoof') { const arc = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.3, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 8; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 1), lam(0xffffff)); puff.position.y = 1.2; y.add(puff); }
         else if (p.look === 'gridCore') { const c = new THREE.Mesh(new THREE.BoxGeometry(2.4, 6 + (i % 3) * 2, 2.4), lam(0x0a0a18)); c.position.y = 3 + (i % 3); y.add(c); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 2.6), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); cap.position.y = 6.2 + (i % 3) * 2; y.add(cap); }
         else if (p.look === 'prism') { const pr = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), new THREE.MeshBasicMaterial({ color: [0xff2bd6, 0x00e5ff, 0xffe14d][i % 3], transparent: true, opacity: 0.7 })); pr.scale.set(1, 2.4, 1); pr.position.y = 5 + (i % 2) * 3; y.add(pr); }
         else { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), lam(0xffb070, { emissive: 0x6a3a10 })); crystal.position.y = 1.2; y.add(crystal); }
@@ -540,8 +567,13 @@ export function createWorld(scene) {
     for (const u of stage.updrafts) {
       const g = terrain.surfaceAt(u.x, u.d, -Infinity);
       const col = new THREE.Mesh(new THREE.CylinderGeometry(u.r, u.r, 60, 16, 1, true),
-        new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+        new THREE.MeshBasicMaterial({ color: theme.lava ? 0xffb070 : 0xfff1d0, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
       col.position.set(u.x, g + 30, -u.d);
+      if (theme.lava) { // v1.3 Volcano: a LAVA THERMAL's glowing vent crack on the ground
+        const vent = new THREE.Mesh(new THREE.CircleGeometry(u.r * 0.55, 7).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: theme.lava.vent }));
+        vent.position.set(u.x, g + 0.15, -u.d);
+        keep(vent);
+      }
       updraftCols.push({ u, base: g });
       keep(col);
     }
@@ -595,6 +627,12 @@ export function createWorld(scene) {
         keep(pad);
       }
     }
+    // v1.3 JUNGLE: soft mist bands drifting low across the corridor.
+    if (theme.jungle) for (const d of [150, 900, 1620]) {
+      const mist = new THREE.Mesh(new THREE.PlaneGeometry(110, 26).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: theme.jungle.mist, transparent: true, opacity: 0.22, depthWrite: false }));
+      mist.position.set(0, terrain.surfaceAt(0, d, -Infinity) + 6, -d);
+      keep(mist);
+    }
     // v1.2 NEON VOID: every lap feature drawn as dark faces + neon edges (the theme's colours).
     if (theme.neon) for (const o of stageMeshes) neonify(o, theme.neon);
   }
@@ -608,6 +646,8 @@ export function createWorld(scene) {
 
   function groundColor(h, x, d) {
     if (theme.neon) { _c.setHex(theme.neon.face); return; } // v1.2: black ground (the grid is the light)
+    if (theme.lava && h < -1) { _c.setRGB(...theme.lava.glow); return; } // v1.3 Volcano: lava rivers + pools glow
+    if (theme.jungle && h < -1) { _c.setRGB(...theme.jungle.river); return; } // v1.3 Jungle: the winding river
     const G = theme.ground;
     const shade = 0.5 + 0.5 * Math.sin(x * 0.37 + d * 0.23) * Math.cos(d * 0.11);
     if (G.water && terrain.surfaceKind(x, d) === 'water') { _c.setRGB(G.water[0] + 0.04 * shade, G.water[1] + 0.05 * shade, G.water[2]); return; }
@@ -913,7 +953,7 @@ export function createWorld(scene) {
         s.y = nb.lane ? b.y0 + Math.random() * (b.y1 - b.y0) : terrain.surfaceAt(s.x, s.d, Infinity) + 2 + Math.random() * 24;
       }
       if (nb.fwd) s.d += (nb.lane ? 160 : 40) * dt; else s.x += Math.sign(b.push) * 25 * dt;
-      setInst(streakMesh, i, s.x, s.y, s.d, 1, 1, 1, nb.fwd ? 0 : Math.PI / 2);
+      setInst(streakMesh, i, s.x, s.y, s.d, 1, 1, 1, nb.fwd ? 0 : Math.PI / 2, theme.jungle ? -0.8 : 0); // v1.3 Jungle: slanting monsoon rain
     }
     streakMesh.instanceMatrix.needsUpdate = true;
   }
@@ -936,6 +976,7 @@ export function createWorld(scene) {
     }
     if (spaceSky.visible && camPos) spaceSky.position.copy(camPos);
     if (camPos) { dome.position.copy(camPos); farLayer.position.set(camPos.x, 0, camPos.z); }
+    if (embers.visible && camPos) driftEmbers(dt, camPos);
     const first = Math.floor(planeD / L) - 1;
     for (let k = first; k < first + N; k++) {
       const slot = ((k % N) + N) % N;
@@ -990,7 +1031,7 @@ export function createWorld(scene) {
   }
 
   // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
-  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018 };
+  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
     if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }
@@ -1030,11 +1071,15 @@ export function createWorld(scene) {
     wood.color.setHex(theme.space ? 0x8e96a3 : 0xb07a45);
     darkWood.color.setHex(theme.space ? 0xc9d0da : 0x7d5230);
     bandMat.emissive.setHex(theme.space ? 0x335577 : 0x000000);
-    cloudMat.color.setHex(theme.space ? 0x7a7d86 : 0xffffff);   // space: floating rock islets
+    cloudMat.color.setHex(theme.space ? 0x7a7d86 : theme.lava ? theme.lava.ash : 0xffffff);   // space: floating rock islets; v1.3 volcano: ash
     cloudMat.emissive.setHex(theme.space ? 0x15161c : 0x777777);
     // v1.2 NEON VOID: an empty black void — no far range, no clouds; the ground grid shows.
     farLayer.visible = clouds.visible = !theme.neon;
-    streakMesh.material.color.setHex(theme.neon ? theme.neon.lane : 0x5f8fc8);
+    embers.visible = !!(theme.lava || theme.jungle); // v1.3: drifting embers (Volcano) / falling leaves (Jungle)
+    if (theme.lava) { embers.material.color.setHex(theme.lava.ember); emberDir = 1; }
+    if (theme.jungle) { embers.material.color.setHex(0x5fbf4a); emberDir = -1; }
+    streakMesh.material.color.setHex(theme.neon ? theme.neon.lane : theme.jungle ? theme.jungle.rain : 0x5f8fc8);
+    updraftRings.material.color.setHex(theme.lava ? 0xffa060 : 0xffffff);
     for (const ch of chunks) if (ch.grid) ch.grid.visible = !!theme.neon;
     buildStageMeshes();
     for (const ch of chunks) ch.index = -9999;

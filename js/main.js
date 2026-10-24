@@ -144,7 +144,7 @@ function showScreen(id) {
 }
 
 // ---------- home (the hangar) ----------
-const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', neonvoid: '🌌' };
+const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', volcano: '🌋', jungle: '🌴', skyislands: '🏝️', neonvoid: '🌌' };
 let carouselIndex = 0;
 let lockedView = false;
 
@@ -437,6 +437,7 @@ function trackCard(item) {
 const WORLD_TINT = {
   plains: [0x3ccf5a, 0x24a33f], canyon: [0xc8572a, 0x8f3517], city: [0xe8b100, 0xa87c00], snow: [0x5cb8ff, 0x2f86d1],
   desert: [0xe2b064, 0xb07f2f], ocean: [0x16a89f, 0x0b7470], space: [0x7c5cff, 0x5136d1], jetstream: [0xff9a4d, 0xd9661b],
+  volcano: [0xe8552a, 0xa8331a], jungle: [0x2fae4a, 0x1f7a33], skyislands: [0xff8fb8, 0xd9578a],
   neonvoid: [0x00b8d4, 0x00838f],
 };
 const rgba = (n, a) => `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
@@ -1334,7 +1335,7 @@ $('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are
 
 // ---------- v0.7 speed FX ----------
 // World-tinted dust: snow puffs white, desert tan, moon grey…
-const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, neonvoid: 0x00e5ff };
+const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, volcano: 0x6a5a55, jungle: 0x8a7a5a, skyislands: 0xf4f7fc, neonvoid: 0x00e5ff };
 const trails = createTrails(scene), streaks = createStreaks(scene, camera);
 const _tl = new THREE.Vector3(), _tr = new THREE.Vector3();
 function speedFx(dt) {

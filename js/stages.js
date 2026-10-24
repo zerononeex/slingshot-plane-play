@@ -8,7 +8,7 @@
 // (secrets at their own distance, once: 1–4 in the first lap, v1.0's secret 5 far out).
 
 export const DEFAULT_STAGE = 'plains';
-export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'neonvoid'];
+export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid']; // v1.3: three new worlds before the finale
 
 const range = (from, to, step) => { const a = []; for (let d = from; d <= to; d += step) a.push(d); return a; };
 const SHARED_PATTERNS = ['line', 'highArc', 'slalom', 'dive', 'stairs', 'wave', 'fork', 'ring'];
@@ -656,14 +656,166 @@ for (const [id, p] of Object.entries(SECRET5_V11)) Object.assign(STAGES[id].secr
 // The Hidden Canyon is TILT country: a slot inside it.
 STAGES.canyon.slots = [...STAGES.canyon.slots, { d: 1460, x: 72, gap: 2, wall: 2.5, h: 12, look: 'pillars', inPocket: true }];
 
-// ───────────────────────── S9 NEON VOID — the true finale (v1.2) ─────────────────────────
+// ───────────────────────── v1.3 NEW WORLDS: S9 VOLCANO · S10 JUNGLE · S11 SKY ISLANDS ─────────────────────────
+// Bright worlds between Jetstream and the finale. Each block is filled in by its own section.
+STAGES.volcano = {
+  ...base,
+  id: 'volcano', name: 'Volcano',
+  unlock: { after: 'jetstream', best: 6000 },
+  unlockBanner: 'NEW PLANE: MAGMA HAWK!',
+  plane: { name: 'Magma Hawk', body: 0xc0392b, wing: 0x1d1d22, accent: 0xff8a1a, wingScale: 1.0, floats: false,
+    caps: [88, 102, 118, 135, 152, 156, 160, 164, 168, 172], decayMul: 2.3, glideMul: 0.02, noLiftCarry: 19, stallSpeed: 16, trail: 'ember' }, // grid-tuned (BALANCE.md)
+  theme: { bits: [0xff6a1a, 0x3a2a28], sky: 0xffd2b0, fogNear: 100, fogFar: 440, hemiGround: 0x8a3a2a, sun: 0xfff0d6,
+    ground: { low: [0.16, 0.15, 0.16], grass: [0.46, 0.24, 0.17], high: [0.3, 0.27, 0.28], water: null },
+    base: 0x3a2a28, rock: 0x5a3a30, scenery: 'none', treesPerChunk: 0, rocksPerChunk: 8,
+    // v1.3 theme data: glowing lava in the ditches + pools, drifting embers, ash clouds, glowing vents.
+    lava: { glow: [1, 0.36, 0.08], ember: 0xffa040, ash: 0x8a8480, vent: 0xff6a1a } },
+  ground: { style: 'rolling', center: 3, side: 12 },
+  // LAVA RIVERS (the ditches) and LAVA POOLS (the pits): looks only — a touch bounces like hot rock.
+  ditches: [{ d: 480, depth: 4, halfLength: 9 }, { d: 1120, depth: 4, halfLength: 9 }, { d: 1820, depth: 3, halfLength: 8 }],
+  pits: [{ x: -6, d: 760, depth: 5, radius: 8 }, { x: 7, d: 1560, depth: 5, radius: 8 }],
+  zones: [
+    { side: 'left', kind: 'thermal', from: 250, to: 350 }, { side: 'right', kind: 'thermal', from: 590, to: 690 },
+    { side: 'right', kind: 'basaltSlalom', from: 1180, to: 1340 }, { side: 'left', kind: 'cavern', from: 1600, to: 1780 },
+  ],
+  // LAVA THERMALS: marked vents that push the plane UP while it flies over them (the Canyon updraft).
+  updrafts: [
+    { x: -16, d: 300, r: 10, lift: 3.5 }, { x: 16, d: 640, r: 10, lift: 3.5 }, { x: -16, d: 1000, r: 10, lift: 3.5 },
+    { x: 16, d: 1450, r: 10, lift: 3.5 }, { x: -16, d: 1880, r: 10, lift: 3.5 },
+  ],
+  // The ERUPTION ARCH (the signature fly-through): a freestanding arch of black rock.
+  archways: [{ kind: 'eruptionArch', d: 900, cx: 0, w: 14, h: 14, leg: 3, thick: 3, depth: 4 }],
+  // The BASALT SLALOM: hexagonal columns, right side.
+  columnSets: [{ kind: 'basalt', from: 1180, to: 1340, step: 25, xs: [12, 21], r: 1.8, h: 24 }],
+  // The LAVA TUBE: a lit tunnel through a lava hill (left).
+  caverns: [{ shape: 'hill', start: 1600, mouth: 1650, exit: 1730, end: 1780, height: 26, laneMin: -26, laneMax: -14, edge: -8, roof: 10, lit: true }],
+  diveGates: [{ d: 560, x: 0, w: 10, h: 7 }, { d: 1400, x: -6, w: 10, h: 7 }],
+  slots: [{ d: 1500, x: -14, gap: 2, wall: 3, h: 12, look: 'basalt' }],
+  courses: [{ id: 'volcano-banners', look: 'banners', gates: [gate(1880, -4), gate(1905, 4), gate(1930, -4), gate(1955, 4), gate(1980, -4)] }],
+  bumpables: [['vulture', 220, 8], ['hangGlider', 540, -10], ['vulture', 980, -9], ['hangGlider', 1250, -8], ['caveBats', 1690, -21], ['vulture', 1840, 10]].map(([type, d, x]) => ({ type, d, x })),
+  pockets: [
+    pocket('lava-tube', 'LAVA TUBE', 'lavaTube', -1, 120, 400, 8, [['caveBats', 130, 3], ['vulture', 300, -3]]),
+    pocket('magma-vault', 'MAGMA VAULT', 'magmaVault', 1, 980, 400, 8, [['vulture', 130, -3], ['caveBats', 290, 3]]),
+  ],
+  secrets: [
+    { id: 'volcano-arch', name: 'On top of the eruption arch', x: 0, y: 19, d: 900, coins: 13, radius: 5 },
+    { id: 'volcano-tube', name: 'Deep in the lava tube', x: -20, y: 3, d: 1690, coins: 14, radius: 5 },
+    { id: 'volcano-basalt', name: 'Behind the basalt columns', x: 25, y: 4, d: 1360, coins: 15, radius: 6 },
+    { id: 'volcano-vault', name: 'The Magma Vault\'s glowing hoard', x: 75, y: 4, d: 1250, coins: 14, radius: 5 },
+    { id: 'volcano-sky', name: 'High above the smoking cone', x: -10, y: 40, d: 9360, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['updraftCatch', 'ditchDip']),
+};
+STAGES.jungle = {
+  ...base,
+  id: 'jungle', name: 'Jungle',
+  unlock: { after: 'volcano', best: 7500 },
+  unlockBanner: 'NEW PLANE: CANOPY CRUISER!',
+  plane: { name: 'Canopy Cruiser', body: 0x3fae4a, wing: 0xfff1d6, accent: 0xff8a3d, wingScale: 1.1, floats: false,
+    caps: [92, 107, 123, 141, 159, 163, 167, 171, 175, 179], decayMul: 3.2, glideMul: 0.02, noLiftCarry: 18, stallSpeed: 15, trail: 'leaf' }, // grid-tuned (BALANCE.md)
+  theme: { bits: [0x3fae4a, 0x2f7a3a], sky: 0xa8e6ff, fogNear: 90, fogFar: 420, hemiGround: 0x3f7a3a, sun: 0xfff6d8,
+    ground: { low: [0.25, 0.42, 0.2], grass: [0.2, 0.55, 0.22], high: [0.4, 0.36, 0.28], water: null },
+    base: 0x2f8a3a, rock: 0x6b5a4a, scenery: 'mixed', treesPerChunk: 18, rocksPerChunk: 3,
+    // v1.3 theme data: the river glints in the ditches; monsoon bands fall as diagonal rain; mist bands drift low.
+    jungle: { river: [0.22, 0.58, 0.86], rain: 0xd8ecff, mist: 0xffffff } },
+  ground: { style: 'rolling', center: 4, side: 14 },
+  ditches: [{ d: 520, depth: 4, halfLength: 10 }, { d: 1240, depth: 4, halfLength: 10 }, { d: 1960, depth: 3, halfLength: 8 }], // the winding river
+  pits: [{ x: 7, d: 360, depth: 4, radius: 7 }, { x: -6, d: 780, depth: 4, radius: 7 }],
+  zones: [
+    { side: 'right', kind: 'monsoon', from: 700, to: 950 }, { side: 'right', kind: 'cavern', from: 1000, to: 1080 },
+    { side: 'left', kind: 'treeSlalom', from: 1320, to: 1500 }, { side: 'left', kind: 'monsoon', from: 1700, to: 1900 },
+  ],
+  // MONSOON TAILWINDS: rain bands on the fast lines push the plane FORWARD while inside (the wind-band mechanic).
+  tailwinds: [
+    { x0: -10, x1: 10, d0: 180, d1: 480, push: 1.5 }, { x0: 4, x1: 22, d0: 700, d1: 950, push: 1.5 },
+    { x0: -10, x1: 10, d0: 1300, d1: 1560, push: 1.5 }, { x0: -22, x1: -4, d0: 1700, d1: 1900, push: 1.5 },
+  ],
+  // The CANOPY TUNNEL (the signature fly-through): a tube through the tree crowns, right side.
+  caverns: [{ shape: 'block', start: 1000, mouth: 1005, exit: 1075, end: 1080, height: 28, laneMin: 14, laneMax: 26, edge: 9, roof: 11, canopy: true }],
+  // The TEMPLE ARCH: a freestanding stone gateway across the corridor.
+  archways: [{ kind: 'templeArch', d: 620, cx: 0, w: 14, h: 12, leg: 3, thick: 3, depth: 5 }],
+  // The VINE-AND-TRUNK SLALOM: giant jungle trees, left side.
+  columnSets: [{ kind: 'tree', from: 1320, to: 1500, step: 25, xs: [-12, -21], r: 0.9, h: 18, hero: { d: 1420, x: -18, r: 1.6, h: 22 } }],
+  diveGates: [{ d: 850, x: 0, w: 10, h: 7 }, { d: 1650, x: 4, w: 10, h: 7 }],
+  slots: [{ d: 1780, x: 14, gap: 2, wall: 2.5, h: 14, look: 'trees' }],
+  courses: [{ id: 'jungle-palms', look: 'palms', gates: [gate(1100, -4), gate(1125, 4), gate(1150, -4), gate(1175, 4), gate(1200, -4)] }],
+  bumpables: [['pigeonFlock', 300, 13], ['hotAirBalloon', 760, -10], ['kite', 1180, 10], ['pigeonFlock', 1570, 13], ['hotAirBalloon', 1850, 8]].map(([type, d, x]) => ({ type, d, x })),
+  pockets: [
+    pocket('temple-ruins', 'TEMPLE RUINS', 'templeRuins', -1, 140, 400, 8, [['pigeonFlock', 130, 3], ['kite', 300, -3]]),
+    pocket('parrot-hollow', 'PARROT HOLLOW', 'parrotHollow', 1, 1150, 400, 8, [['pigeonFlock', 130, -3], ['balloonBunch', 290, 3]]),
+  ],
+  secrets: [
+    { id: 'jungle-tunnel', name: 'Deep in the canopy tunnel', x: 20, y: 3, d: 1040, coins: 14, radius: 5 },
+    { id: 'jungle-arch', name: 'On top of the temple arch', x: 0, y: 17.5, d: 620, coins: 13, radius: 5 },
+    { id: 'jungle-trees', name: 'Behind the giant trees', x: -25, y: 4, d: 1510, coins: 15, radius: 6 },
+    { id: 'jungle-parrots', name: 'The parrots\' treasure tree', x: 75, y: 4, d: 1400, coins: 14, radius: 5 },
+    { id: 'jungle-sky', name: 'Above the misty canopy', x: -10, y: 40, d: 11200, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['gustRider', 'treeWeave']),
+};
+STAGES.skyislands = {
+  ...base,
+  id: 'skyislands', name: 'Sky Islands',
+  unlock: { after: 'jungle', best: 9000 },
+  unlockBanner: 'NEW PLANE: ZEPHYR!',
+  plane: { name: 'Zephyr', body: 0xf6f8ff, wing: 0xff8fb8, accent: 0xffc61a, wingScale: 1.15, floats: false,
+    caps: [95, 110, 127, 145, 164, 168, 172, 176, 180, 184], decayMul: 1.8, glideMul: 0.02, noLiftCarry: 30, stallSpeed: 14, trail: 'cloud' }, // grid-tuned (BALANCE.md)
+  theme: { bits: [0xffffff, 0x8fd0ff], sky: 0x8fd0ff, fogNear: 160, fogFar: 540, hemiGround: 0xdfe8f2, sun: 0xfff6e0,
+    ground: { low: [0.86, 0.9, 0.97], grass: [0.93, 0.95, 0.99], high: [0.42, 0.7, 0.32], water: null },
+    base: 0xe6edf7, rock: 0x8a7a6a, scenery: 'none', treesPerChunk: 0, rocksPerChunk: 0,
+    // v1.3 theme data: mist spirals in the updrafts, waterfalls + rainbows between the islands.
+    islands: { spiral: 0xffffff, waterfall: 0x9fe0ff, rainbow: true } },
+  ground: { style: 'rolling', center: 2, side: 5 },          // the sea of clouds below the islands
+  flatStart: 60,
+  // The ISLANDS: grassy tops rising out of the cloud sea beside the corridor (the hops between them).
+  bigHills: [
+    { shape: 'mesa', x: -40, d: 300, rx: 16, rd: 30, height: 30 }, { shape: 'mesa', x: 42, d: 760, rx: 18, rd: 34, height: 34 },
+    { shape: 'mesa', x: -38, d: 1300, rx: 16, rd: 30, height: 28 }, { shape: 'mesa', x: 40, d: 1750, rx: 18, rd: 30, height: 32 },
+  ],
+  ditches: [{ d: 480, depth: 4, halfLength: 10 }, { d: 1450, depth: 4, halfLength: 9 }], // cloud valleys
+  pits: [{ x: -4, d: 640, depth: 6, radius: 10 }, { x: 6, d: 1860, depth: 6, radius: 10 }],  // holes in the cloud sea
+  zones: [
+    { side: 'left', kind: 'island', from: 270, to: 330 }, { side: 'right', kind: 'island', from: 726, to: 794 },
+    { side: 'left', kind: 'cavern', from: 1000, to: 1150 }, { side: 'right', kind: 'island', from: 1720, to: 1780 },
+  ],
+  // ISLAND UPDRAFTS: strong rising air at the island edges (+ one mid-corridor) — ride them island to island.
+  updrafts: [
+    { x: -22, d: 300, r: 9, lift: 5 }, { x: 22, d: 760, r: 9, lift: 5 }, { x: 0, d: 1050, r: 8, lift: 4 },
+    { x: -22, d: 1300, r: 9, lift: 5 }, { x: 22, d: 1750, r: 9, lift: 5 },
+  ],
+  // ISLAND-HOP ARCHES: freestanding stone gateways between the islands (fly through, or hop over).
+  archways: [{ kind: 'islandArch', d: 560, cx: 0, w: 16, h: 14, leg: 3, thick: 3, depth: 5 }, { kind: 'islandArch', d: 1550, cx: 0, w: 16, h: 14, leg: 3, thick: 3, depth: 5 }],
+  // The ISLAND GROTTO (the signature fly-through): a lit tunnel under an island, left side.
+  caverns: [{ shape: 'hill', start: 1000, mouth: 1040, exit: 1110, end: 1150, height: 28, laneMin: -26, laneMax: -14, edge: -8, roof: 10, lit: true }],
+  bridges: [{ kind: 'cloud', d: 920, x0: -30, x1: 30, under: 14, thick: 6, depth: 10 }],
+  diveGates: [{ d: 920, x: 0, w: 10, h: 9 }, { d: 1880, x: 10, w: 10, h: 8 }],
+  slots: [{ d: 1650, x: 14, gap: 2, wall: 6, h: 14, look: 'cloud' }],
+  courses: [{ id: 'sky-banners', look: 'banners', gates: [gate(1200, -4), gate(1225, 4), gate(1250, -4), gate(1275, 4), gate(1300, -4)] }],
+  bumpables: [['highGoose', 220, 8], ['weatherBalloon', 640, -12], ['kite', 1170, 10], ['highGoose', 1450, -8], ['weatherBalloon', 1950, 8]].map(([type, d, x]) => ({ type, d, x })),
+  pockets: [
+    pocket('waterfall-grotto', 'WATERFALL GROTTO', 'grotto', 1, 180, 400, 8, [['highGoose', 130, -3], ['kite', 300, 3]]),
+    pocket('rainbow-roof', 'RAINBOW ROOF', 'rainbowRoof', -1, 1400, 400, 8, [['weatherBalloon', 130, 3], ['highGoose', 290, -3]]),
+  ],
+  secrets: [
+    { id: 'sky-grotto', name: 'Deep in the island grotto', x: -20, y: 3, d: 1075, coins: 14, radius: 5 },
+    { id: 'sky-island', name: 'On the first island\'s meadow', x: -40, y: 3, d: 300, coins: 12, radius: 7 },
+    { id: 'sky-arch', name: 'On top of the island arch', x: 0, y: 20, d: 560, coins: 13, radius: 5 },
+    { id: 'sky-rainbow', name: 'Under the rainbow roof', x: -69, y: 4, d: 1650, coins: 14, radius: 5 },
+    { id: 'skyislands-sky', name: 'The highest cloud', x: -10, y: 40, d: 12800, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['cloudDive', 'updraftCatch']),
+};
+
+// ───────────────────────── S12 NEON VOID — the true finale (v1.2) ─────────────────────────
 // Black by design (the owner's call for the finale): the world drawn as neon outlines on a void.
 // The base layer below repeats every 2,000 m like every world; the 40,000 m authored run — the
 // barrier walls, laser slaloms, sliding walls and the SLIPSTREAM lanes — lives in neon.js.
 STAGES.neonvoid = {
   ...base,
   id: 'neonvoid', name: 'Neon Void',
-  unlock: { after: 'jetstream', best: 14000 },
+  // v1.3: re-pointed to Sky Islands. GRANDFATHER: a save from before the new worlds (it never stored
+  // Volcano) that met the v1.2 bar keeps Neon Void forever (save.js deriveUnlocked, on load).
+  unlock: { after: 'skyislands', best: 12000, legacy: { after: 'jetstream', best: 14000, before: 'volcano' } },
   unlockBanner: 'NEW PLANE: VOID RUNNER!',
   // The VOID RUNNER: a dark light-flyer — near-black body, cyan neon trim, a neon ring propeller
   // and a light-ribbon trail. The fastest stage plane; stalls at 18 and steers × 1.1 (precision).

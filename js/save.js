@@ -77,13 +77,16 @@ function cleanPrefs(raw) {
 
 // Unlock chain: a stage is unlocked if it was unlocked before (stored, never re-locks),
 // if its own record exists, or if the previous stage's best meets its bar.
-export function deriveUnlocked(stages, stored = []) {
+// v1.3 GRANDFATHER (`onLoad`, from validateSave only): a save from before a re-pointed unlock — it never
+// stored `legacy.before` — that met the OLD bar keeps the world (Neon Void: 14,000 m in Jetstream).
+export function deriveUnlocked(stages, stored = [], onLoad = false) {
   const out = [DEFAULT_STAGE];
   for (const id of STAGE_ORDER) {
     if (id === DEFAULT_STAGE) continue;
     const u = STAGES[id].unlock;
     const prevBest = stages[u.after]?.best ?? 0;
-    if (stored.includes(id) || stages[id] || (out.includes(u.after) && prevBest >= u.best)) out.push(id);
+    const legacy = onLoad && u.legacy && !stored.includes(u.legacy.before) && (stages[u.legacy.after]?.best ?? 0) >= u.legacy.best;
+    if (stored.includes(id) || stages[id] || legacy || (out.includes(u.after) && prevBest >= u.best)) out.push(id);
   }
   return out;
 }
@@ -180,7 +183,7 @@ export function validateSave(data) {
   }
   if (!stages[DEFAULT_STAGE]) stages[DEFAULT_STAGE] = freshRecord();
   const stored = Array.isArray(data.unlocked) ? data.unlocked.filter((id) => STAGE_ORDER.includes(id)) : [];
-  const unlocked = deriveUnlocked(stages, stored);
+  const unlocked = deriveUnlocked(stages, stored, true);
   const currentStage = typeof data.currentStage === 'string' && STAGES[data.currentStage] && unlocked.includes(data.currentStage)
     ? data.currentStage : DEFAULT_STAGE;
   const storedPlanes = Array.isArray(data.planesUnlocked) ? data.planesUnlocked : [];

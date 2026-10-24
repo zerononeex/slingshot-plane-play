@@ -406,7 +406,7 @@ export function buildPlane(tune) {
   beam.position.set(0, -0.3, -0.2);
   beam.visible = false;
   model.add(beam);
-  let ship = false, beamT = 0, ionLevel = 1, runner = false;
+  let ship = false, beamT = 0, ionLevel = 1, runner = false, trailKind = null;
   const ION = [0xffb06a, 0xc8e0ff, 0x9fd0ff, 0x6fb4ff, 0x3f7bff, 0x5a5cff, 0x7a4dff, 0x9d3dff, 0xc23dff, 0xff4fe0]; // v1.0: Lv6–10 push into violet
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
 
@@ -425,6 +425,7 @@ export function buildPlane(tune) {
     jet = !!def.jet;
     ship = !!def.ship;
     runner = !!def.runner;
+    trailKind = def.trail ?? null; // v1.3: ember / leaf / cloud trails
     neonRing.visible = runner;
     model.traverse((o) => { if (o.material === EDGE_MAT || o.material === RUNNER_EDGE_MAT) o.material = runner ? RUNNER_EDGE_MAT : EDGE_MAT; });
     prop.visible = !jet && !ship;
@@ -633,5 +634,5 @@ export function buildPlane(tune) {
 
   bakeShading(model); // v0.7: the shaded, less-toy look (vertex colours, baked once)
   const setSpoiler = (on) => { spoilerWant = on ? 1 : 0; };
-  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : runner ? 'runner' : 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
+  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : runner ? 'runner' : trailKind ?? 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
 }
