@@ -17,6 +17,8 @@ import {
 import { loadSave, writeSave, getStage, setStage, checkUnlocks, isUnlocked, selectStage, setPrefs } from './save.js';
 import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, HANGAR, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
 import { buildPlane } from './plane.js';
+import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, GATE_COUNT } from './goals.js';
+import { createGoalView } from './goalview.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
 import { unlockAudio, sfx, audioCtx } from './audio.js';
@@ -82,6 +84,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 520);
 const world = createWorld(scene);
 const fx = createFx(scene);
+const goalView = createGoalView(scene); // v0.9 STAGE GOALS
 let terrain = terrainFor(loadout());
 world.setStage(stage, terrain);
 
@@ -157,7 +160,7 @@ function buildCarousel() {
     b.dataset.stage = id;
     const sky = hex(st.theme.sky), base = hex(st.theme.base);
     b.innerHTML = `<span class="st-art" style="background:linear-gradient(180deg, ${sky} 0%, ${sky} 55%, ${base} 56%, ${hex(st.theme.rock)} 100%)"><span class="st-motif">${MOTIF[id] ?? '✈️'}</span></span>
-      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span></span><span class="st-lock"></span></span>`;
+      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span><span class="st-gates"></span></span><span class="st-lock"></span></span>`;
     b.addEventListener('click', () => scrollToCard(STAGE_ORDER.indexOf(id)));
     row.appendChild(b);
   }
@@ -181,10 +184,12 @@ function updateCarousel() {
     b.classList.toggle('selected', id === stageId);
     b.classList.toggle('locked', !open);
     b.disabled = !open;
-    b.querySelector('.st-name').textContent = open ? st.name : `🔒 ${st.name}`;
+    b.querySelector('.st-name').textContent = open ? `${isComplete(r) ? '★ ' : ''}${st.name}` : `🔒 ${st.name}`;
     b.querySelector('.st-plane').textContent = open ? st.plane.name : '';
     b.querySelector('.st-best').textContent = open ? `Best ${r.best} m` : '';
     b.querySelector('.st-secrets').textContent = open ? `Secrets ${r.secrets.length}/${st.secrets.length}` : '';
+    b.querySelector('.st-gates').textContent = open ? `⛳ ${gatesOf(r).length}/${GATE_COUNT}` : ''; // v0.9 goal gates
+    b.classList.toggle('complete', open && isComplete(r));
     b.querySelector('.st-lock').textContent = open ? '' : lockLine(id);
   }
   [...$('car-dots').children].forEach((d, i) => { d.classList.toggle('on', i === carouselIndex); d.classList.toggle('locked', !isUnlocked(save, STAGE_ORDER[i])); });
@@ -213,13 +218,14 @@ function renderWorlds() {
   for (const id of STAGE_ORDER) {
     const st = STAGES[id], r = getStage(save, id), open = isUnlocked(save, id);
     const b = document.createElement('button');
-    b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}`;
+    b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}${open && isComplete(r) ? ' complete' : ''}`;
     b.dataset.world = id;
     b.style.setProperty('--wt', hex(st.theme.sky));
     b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span>';
-    b.querySelector('.wt-name').textContent = open ? st.name : `🔒 ${st.name}`;
+    b.querySelector('.wt-name').textContent = open ? `${isComplete(r) ? '★ ' : ''}${st.name}` : `🔒 ${st.name}`;
     b.querySelector('.wt-sub').textContent = st.plane.name;
-    b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length}` : lockLine(id);
+    b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length} · ⛳ ${gatesOf(r).length}/${GATE_COUNT}` : lockLine(id);
+    if (open && isComplete(r)) b.insertAdjacentHTML('beforeend', '<span class="wt-done">★ COMPLETE</span>');
     b.addEventListener('click', () => {
       if (!open) { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); return; }
       const i = STAGE_ORDER.indexOf(id);
@@ -526,6 +532,61 @@ function newWorld() {
   terrain = terrainFor(lo);
   flightSeed = (Math.random() * 2 ** 31) | 0;
   world.newFlight(terrain, flightSeed);
+  setupGoals();
+}
+
+// v0.9 STAGE GOALS: this flight's goal state (from the FLOWN world's record) and the gate/goal looks.
+let goalRun = null, goalYs = [], goalTopY = 0, goalPrevD = 0;
+const goalEvents = [];
+function setupGoals() {
+  const goals = goalsFor(stageId);
+  goalRun = createGoalRun(wrec);
+  goalPrevD = 0;
+  if (!goals) { goalView.build(null); return; }
+  goalYs = goals.gates.map((g) => gateY(terrain, g));
+  goalTopY = gateY(terrain, goals.goal);
+  goalView.build(goals, goalYs, goalTopY, goalRun.owned, goalRun.open);
+}
+// Only the plane itself collects (not the eject glide, not after the flight ended).
+function stepGoals() {
+  const goals = goalsFor(stageId);
+  if (goals && goalRun) {
+    goalEvents.length = 0;
+    stepGoalRun(goalRun, goals, goalYs, goalTopY, goalPrevD, flight.x, flight.y, flight.d, !ejected && !flight.ended, goalEvents);
+    for (const ev of goalEvents) onGoalEvent(ev, goals);
+  }
+  goalPrevD = flight.d;
+}
+function onGoalEvent(ev, goals) {
+  if (ev.type === 'gate') {
+    const i = goals.gates.findIndex((g) => g.n === ev.n), g = goals.gates[i];
+    goalView.setCollected(ev.n);
+    fx.sparkleBurst(g.x, goalYs[i], -g.at);
+    sfx.goalGate();
+    banner(`GOAL GATE ${ev.n} — ${ev.count}/10!`, 2.2);
+  } else if (ev.type === 'gateRepass') sfx.goalTick();
+  else if (ev.type === 'goalOpen') { // the 10th gate: THE GOAL appears (burst at the goal + at the plane)
+    goalView.showGoal(true);
+    goalView.goalPos(_v);
+    fx.goalBurst(_v.x, _v.y, _v.z, Math.max(1, goals.goal.size / 9));
+    plane.root.getWorldPosition(_v);
+    fx.sparkleBurst(_v.x, _v.y + 1, _v.z);
+    setTimeout(() => { if (mode === 'fly') { sfx.goalOpen(); banner('★ THE GOAL IS OPEN! ★', 2.6); } }, 1300);
+  } else if (ev.type === 'complete') { // through the goal, first time: STAGE COMPLETE (+prize at the credit)
+    plane.root.getWorldPosition(_v);
+    fx.confetti(_v.x, _v.y, _v.z);
+    goalView.goalPos(_v);
+    fx.goalBurst(_v.x, _v.y, _v.z, Math.max(1, goals.goal.size / 9));
+    sfx.stageComplete();
+    banner('★ STAGE COMPLETE! ★', 3);
+  } else if (ev.type === 'goalRepass') { // already complete: a modest gold sparkle + a floating ★
+    plane.root.getWorldPosition(_v);
+    fx.sparkleBurst(_v.x, _v.y + 1, _v.z);
+    sfx.goalTick();
+    $('puff-text').textContent = '★';
+    $('puff-text').hidden = false;
+    puffTimer = 1.2;
+  }
 }
 
 function resetPilot() {
@@ -633,7 +694,7 @@ function launch() {
 
 // A flight credits the WORLD flown (coins, best, secrets); unlocks read world bests.
 function creditFlight(distance) {
-  const r = creditRun(save, stageId, { distance, coins: runCoins, landingBonus, secrets: secretsFound });
+  const r = creditRun(save, stageId, { distance, coins: runCoins, landingBonus, secrets: secretsFound, gates: goalRun?.fresh ?? [], completed: !!goalRun?.completedNow });
   save = r.save;
   writeSave(save);
   reloadRecords();
@@ -668,6 +729,9 @@ function finishRun() {
   const bs = bumpSummary(bumpsRun);
   $('res-bumps').hidden = !bs;
   if (bs) $('res-bumps').textContent = bs.text;
+  const gl = goalRun ? goalLines(goalRun) : { gates: null, complete: null }; // v0.9 STAGE GOALS
+  $('res-gates').textContent = gl.gates ?? '';
+  $('res-complete').textContent = gl.complete ?? '';
   $('res-msg').textContent = flop ? 'Oops, a little flop! Try a bigger pull!' : secretsFound.length ? `SECRET FOUND! (${wrec.secrets.length}/${stage.secrets.length})` : '';
   mode = 'results';
   showScreen('results');
@@ -715,6 +779,7 @@ let bannerTimer = 0;
 function banner(text, seconds = 1.8) {
   const b = $('banner');
   b.textContent = text;
+  b.classList.toggle('long', text.length > 16); // long lines shrink to fit a phone
   b.hidden = false;
   b.style.animation = 'none';
   void b.offsetWidth; // restart the pop animation
@@ -1305,6 +1370,7 @@ function frame(now) {
     animatePilot(dt);
     if (lo.magnet.sparkle && mode !== 'fly' && Math.random() < dt * 4) magnetSpark(0xffe14d);
     fx.update(dt);
+    goalView.update(dt, clock);
     speedFx(dt);
     if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $('banner').hidden = true;
     updateCamera(dt);
@@ -1420,6 +1486,7 @@ function stepGame(dt) {
   while (acc >= STEP && n < 6) {
     // After an eject the empty plane noses down and flies on by itself.
     stepFlight(flight, ejected ? { x: 0, y: -0.4, boost: false } : input, STEP, params, terrain);
+    stepGoals();
     if (!ejected) {
       collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: pickupRadiusFor(flight, COINS.pickupRadius), speed: flight.speed });
     } else {

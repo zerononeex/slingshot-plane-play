@@ -6,13 +6,15 @@
 //              skills: [skill ids]
 // (planesUnlocked and skills are v0.6, additive: older saves derive them from their unlocked worlds.)
 // record = { coins, band, engine, tank, ramp, magnet, wheels, eject,
-//            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[] }
+//            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[],
+//            gates[]?, complete? }   (v0.9 STAGE GOALS, sparse: absent = no gates / not complete)
 //
 // Game code reads/writes progression ONLY through getStage(save, id) / setStage(save, id, rec).
 import { SAVE_KEY } from './config.js';
 import { STAGES, DEFAULT_STAGE, STAGE_ORDER, EXTRA_PLANES, EXTRA_PLANE_ORDER } from './stages.js';
 import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel, paintFits } from './economy.js';
 import { PAINTS } from './config.js';
+import { cleanGates, cleanComplete } from './goals.js';
 
 const MAX_COINS = 10_000_000;
 const MAX_BEST = 10_000_000;
@@ -140,6 +142,10 @@ export function validateRecord(raw, stageId = DEFAULT_STAGE) {
   rec.parts = cleanParts(r.parts);
   rec.paints = cleanPaints(r.paints, stageId);
   rec.secrets = cleanSecrets(r.secrets, stageId);
+  // v0.9 goal gates: known numbers, no duplicates; `complete` only as a real true with all 10 behind it.
+  const gates = STAGES[stageId] ? cleanGates(r.gates) : [];
+  if (gates.length) rec.gates = gates;
+  if (cleanComplete(r.complete, gates)) rec.complete = true;
   return rec;
 }
 

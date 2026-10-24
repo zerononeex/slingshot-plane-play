@@ -79,6 +79,20 @@ export function createFx(scene) {
         spawn(x, y, z, { color: i % 2 ? 0xffe14d : 0xffffff, size: 0.5, life: 0.9, vx: Math.cos(a) * 6, vy: Math.sin(a) * 6, vz: (r() - 0.5) * 4, grow: -0.4, flicker: true });
       }
     },
+    // v0.9 STAGE GOALS: the goal appearing (a big gold burst) and STAGE COMPLETE confetti.
+    goalBurst(x, y, z, scale = 1) {
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2, sp = (10 + r() * 6) * scale;
+        spawn(x, y, z, { color: i % 3 ? 0xffc61a : 0xffffff, size: 1.6 * scale, life: 1.3, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: (r() - 0.5) * 6, grow: -0.6, flicker: true });
+      }
+    },
+    confetti(x, y, z) {
+      const cols = [0xff4fa3, 0xffd23f, 0x3fc5ff, 0x3ccf5a, 0xffffff, 0x8a4dff];
+      for (let i = 0; i < 40; i++) {
+        const a = r() * Math.PI * 2, sp = 4 + r() * 7;
+        spawn(x, y + 1, z, { color: cols[i % cols.length], size: 0.35 + r() * 0.25, life: 1.4 + r() * 0.6, vx: Math.cos(a) * sp, vy: 4 + r() * 6, vz: Math.sin(a) * sp, grow: -0.1, flicker: true });
+      }
+    },
     // Launch / touchdown dust, world-tinted, scaled by the impact (v0.7).
     dust(x, y, z, color, n = 10, size = 0.7) {
       for (let i = 0; i < n; i++) {

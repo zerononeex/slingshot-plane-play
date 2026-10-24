@@ -396,6 +396,7 @@
     background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 25%, var(--gold) 70%, rgba(255, 170, 0, 0));
     box-shadow: 18px 6px 0 -1px rgba(255, 255, 255, 0.7);
   }
+  .banner.long { font-size: clamp(16px, min(4vh, 5.2vw), 40px); padding-left: 26px; padding-right: 26px; }
   /* Speedometer: a dark dial with glowing ticks, needle tip and gold zone. */
   .speedo-rim { fill: rgba(14, 21, 36, 0.86); }
   #speedo-ticks line { stroke: #dff3ff; stroke-width: 2.5; }
@@ -442,6 +443,15 @@
   .st-meta { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: 13px; font-weight: 800; }
   .home-scene .stage-card .st-plane, .home-scene .stage-card .st-secrets { opacity: 0.75; }
   .home-scene .stage-card .st-secrets::before { content: "· "; }
+  .home-scene .stage-card .st-gates::before { content: "· "; }
+  .home-scene .stage-card .st-gates { opacity: 0.85; }
+  .st-meta { flex-wrap: nowrap; white-space: nowrap; }
+  .home-scene .stage-card.complete .st-name { color: #b57900; }
+  .home-scene .stage-card.complete .st-banner::before { height: 4px; background: linear-gradient(90deg, var(--gold), #fff2a8 60%, rgba(255, 198, 26, 0)); }
+  .world-tile .wt-done { margin-top: 3px; padding: 1px 7px; border-radius: 3px 9px 3px 9px; font-size: 10px; font-weight: 900; font-style: italic;
+    color: #1b2438; background: linear-gradient(180deg, #ffe680, var(--gold)); box-shadow: 0 1px 0 #d98e00; }
+  .world-tile.complete { border-color: #ffd23f; }
+  .world-tile.complete .wt-name { color: #b57900; }
   .home-scene .stage-card .st-lock { padding: 0; font-size: 13px; color: #6d4a00; font-weight: 800; }
   .home-scene .stage-card.locked .st-banner { background: rgba(238, 241, 244, 0.94); color: #5d6977; }
   .home-scene .car-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 56px; background: rgba(14, 22, 40, 0.35); color: #fff; box-shadow: none; z-index: 1; }
@@ -508,6 +518,8 @@
   #results .unlock { font-size: clamp(13px, 1.8vh, 16px); padding: 4px 10px; border-radius: 10px; line-height: 1.25; }
   #results .verdict { font-size: clamp(15px, 2.1vh, 19px); line-height: 1.2; }
   #results .msg { font-size: clamp(13px, 1.8vh, 16px); line-height: 1.25; }
+  #results .res-goal { font-weight: 900; color: #6a35d9; }
+  #results #res-complete { color: #c98200; }
   #results .stat-row { flex-wrap: nowrap; gap: 5px; width: 100%; }
   #results .stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 3px; border-radius: 4px 12px 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1); line-height: 1.15; }
   #results .stat small { font-size: 9.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; }
@@ -522,7 +534,7 @@
   #results .btn-row > button { min-height: 56px; padding: 6px 12px; font-size: clamp(18px, 2.6vh, 22px); }
   #btn-again { flex: 2 1 0; }
   #btn-home { flex: 1 1 0; }
-  @media (orientation: landscape) and (max-height: 520px) { #results .panel { gap: 5px; padding: 8px 12px; } #results .btn-row > button { min-height: 50px; } }
+  @media (orientation: landscape) and (max-height: 520px) { #results .panel { gap: 3px; padding: 7px 12px; } #results .msg, #results .verdict { line-height: 1.1; } #results .btn-row > button { min-height: 50px; } }
   @media (orientation: landscape) and (max-height: 520px) {
     .screen { gap: 1.4vh; }
     .panel { padding: 2vh 20px; gap: 1.4vh; }
@@ -729,6 +741,8 @@
     <p class="verdict" id="res-verdict"></p>
     <p class="msg" id="res-msg"></p>
     <p class="msg res-bumps" id="res-bumps" hidden></p>
+    <p class="msg res-goal" id="res-gates"></p>
+    <p class="msg res-goal" id="res-complete"></p>
     <div class="stat-row res-money">
       <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
       <div class="stat"><small>DIST BONUS</small>+<span id="res-bonus">0</span></div>

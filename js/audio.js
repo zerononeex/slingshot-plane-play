@@ -83,5 +83,10 @@ export const sfx = {
   loopRing: () => notes([659, 784, 988, 784, 1319], 95), // happy jingle
   speedGate: (speed = 30) => { const f = 700 + Math.min(1, speed / 70) * 900; blip('sine', f, f, 0.35, 0.16); }, // clean ding, pitched by speed
   chaChing: () => { blip('square', 1900, 1500, 0.05, 0.06); setTimeout(() => notes([1568, 2093], 60, 'triangle', 0.12), 60); },
+  // v0.9 STAGE GOALS
+  goalGate: () => notes([1046, 1318, 1568, 2093], 65, 'triangle', 0.16),  // bright chime
+  goalTick: () => blip('sine', 2093, 2093, 0.05, 0.03),                    // faint re-pass tick
+  goalOpen: () => notes([523, 659, 784, 1046, 1318, 1568], 90, 'triangle', 0.16),
+  stageComplete: () => { notes([784, 784, 784, 1046], 120, 'square', 0.1); setTimeout(() => notes([1318, 1568, 2093], 110, 'triangle', 0.16), 520); },
   secret: () => { blip('triangle', 784, 1046, 0.12, 0.2); setTimeout(() => blip('triangle', 1046, 1568, 0.25, 0.2), 120); },
 };

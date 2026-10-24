@@ -2,6 +2,8 @@
 // Code = "SP1-" + base64url(JSON of the validated save) + "-" + 4-char FNV-1a checksum.
 // Import validates prefix + checksum + the payload through the normal save
 // validation/migration BEFORE anything is written; a bad code changes nothing.
+// v0.9: each world's goal gates[] + complete ride along (sparse, like the save); import cleans them
+// (known numbers, no duplicates, complete only as a real true with 10/10) and older codes read as none.
 import { validateSave } from './save.js';
 import { STAGES, STAGE_ORDER } from './stages.js';
 
