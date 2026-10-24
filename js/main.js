@@ -18,12 +18,13 @@ import {
 import { loadSave, writeSave, getStage, setStage, isUnlocked, selectStage, setPrefs } from './save.js';
 import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
 import { buildPlane } from './plane.js';
-import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal } from './goals.js';
+import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal, BEAT_LINE } from './goals.js';
 import { createGoalView } from './goalview.js';
 import { shapesFor, createShapeRun, stepShapeRun, shapeY, shapeScale, SHAPES } from './shapes.js';
 import { createShapesView } from './shapesview.js';
 import { setPiecesFor } from './longrun.js';
 import { createSetPiecesView } from './setpieces.js';
+import { createNeonView } from './neonview.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
 import { unlockAudio, sfx, audioCtx } from './audio.js';
@@ -92,6 +93,7 @@ const fx = createFx(scene);
 const goalView = createGoalView(scene); // v0.9 STAGE GOALS
 const shapesView = createShapesView(scene); // v1.0 BOOST SHAPES
 const setPiecesView = createSetPiecesView(scene); // v1.1 LONG STAGES
+const neonView = createNeonView(scene); // v1.2 NEON VOID: walls, laser slaloms, sliding walls, slipstreams
 let terrain = terrainFor(loadout());
 world.setStage(stage, terrain);
 
@@ -142,7 +144,7 @@ function showScreen(id) {
 }
 
 // ---------- home (the hangar) ----------
-const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️' };
+const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', neonvoid: '🌌' };
 let carouselIndex = 0;
 let lockedView = false;
 
@@ -163,7 +165,7 @@ function buildCarousel() {
   for (const id of STAGE_ORDER) {
     const st = STAGES[id];
     const b = document.createElement('button');
-    b.className = 'stage-card';
+    b.className = `stage-card${st.theme.neon ? ' neon' : ''}`; // v1.2: Neon Void's card is black + neon
     b.dataset.stage = id;
     const sky = hex(st.theme.sky), base = hex(st.theme.base);
     b.innerHTML = `<span class="st-art" style="background:linear-gradient(180deg, ${sky} 0%, ${sky} 55%, ${base} 56%, ${hex(st.theme.rock)} 100%)"><span class="st-motif">${MOTIF[id] ?? '✈️'}</span></span>
@@ -205,7 +207,8 @@ function updateCarousel() {
 // The unlock requirement line a locked world shows (scene banner and WORLDS panel).
 function lockLine(id) {
   const st = STAGES[id], prev = STAGES[st.unlock.after];
-  return `Fly ${st.unlock.best} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)`;
+  const bar = st.unlock.best >= 10000 ? st.unlock.best.toLocaleString('en-US') : st.unlock.best; // v1.2: "14,000"
+  return `Fly ${bar} m in ${prev.name} to unlock! (Best: ${getStage(save, prev.id).best} m)`;
 }
 
 // v0.8 Home panels: WORLDS / MORE slide up over the scene; the tab bar shows which is open.
@@ -218,14 +221,14 @@ function setPanel(name) {
   if (name === 'worlds') renderWorlds();
 }
 
-// WORLDS: all eight at a glance; tapping an open one selects it (the same selection the swipe makes).
+// WORLDS: every world at a glance; tapping an open one selects it (the same selection the swipe makes).
 function renderWorlds() {
   const grid = $('worlds-grid');
   grid.textContent = '';
   for (const id of STAGE_ORDER) {
     const st = STAGES[id], r = getStage(save, id), open = isUnlocked(save, id);
     const b = document.createElement('button');
-    b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}${open && isComplete(r) ? ' complete' : ''}`;
+    b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}${open && isComplete(r) ? ' complete' : ''}${st.theme.neon ? ' neon' : ''}`;
     b.dataset.world = id;
     b.style.setProperty('--wt', hex(st.theme.sky));
     b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span>';
@@ -434,6 +437,7 @@ function trackCard(item) {
 const WORLD_TINT = {
   plains: [0x3ccf5a, 0x24a33f], canyon: [0xc8572a, 0x8f3517], city: [0xe8b100, 0xa87c00], snow: [0x5cb8ff, 0x2f86d1],
   desert: [0xe2b064, 0xb07f2f], ocean: [0x16a89f, 0x0b7470], space: [0x7c5cff, 0x5136d1], jetstream: [0xff9a4d, 0xd9661b],
+  neonvoid: [0x00b8d4, 0x00838f],
 };
 const rgba = (n, a) => `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 function applyTint() {
@@ -521,7 +525,7 @@ function refreshShop() {
     b.className = `swatch${rec.paints.current === p.id ? ' current' : ''}${poor ? ' poor' : ''}`;
     b.dataset.key = `paint:${p.id}`;
     b.disabled = poor;
-    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : '';
+    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : '';
     b.innerHTML = `<span class="dot ${fancy}" style="${fancy ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
     b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id, planeId)); });
     paints.appendChild(b);
@@ -591,7 +595,8 @@ function setupShapes() {
   shapeYs = shapes ? shapes.map((sh) => shapeY(terrain, sh)) : [];
   shapesView.build(shapes, shapeYs, shapeScale(stageId));
   if (setPiecesBuilt !== stageId) { // built once per world (the pieces never change within a world)
-    setPiecesView.build(setPiecesFor(stageId), (x, d) => terrain.surfaceAt(x, d, -Infinity));
+    setPiecesView.build(setPiecesFor(stageId), (x, d) => terrain.surfaceAt(x, d, -Infinity), stage.theme.neon ?? null);
+    neonView.build(terrain.neon, stage.theme.neon);
     setPiecesBuilt = stageId;
   }
 }
@@ -761,11 +766,13 @@ function launch() {
 }
 
 // A flight credits the WORLD flown (coins, best, secrets); unlocks read world bests.
+let beatGame = false;
 function creditFlight(distance) {
   const r = creditRun(save, stageId, { distance, coins: runCoins, landingBonus, secrets: secretsFound, gates: goalRun?.fresh ?? [], completed: !!goalRun?.completedNow });
   save = r.save;
   writeSave(save);
   reloadRecords();
+  beatGame = r.beatGame; // v1.2 THE FINAL FLOURISH (once ever)
   return [...r.newly, ...r.newPlanes, ...(r.newSkills ?? []).map((id) => `skill:${id}`)];
 }
 
@@ -800,6 +807,8 @@ function finishRun() {
   const gl = goalRun ? goalLines(goalRun) : { gates: null, complete: null }; // v0.9 STAGE GOALS
   $('res-gates').textContent = gl.gates ?? '';
   $('res-complete').textContent = gl.complete ?? '';
+  $('res-beat').hidden = !beatGame; // v1.2: completing Neon Void with every other world ★
+  if (beatGame) { $('res-beat').textContent = BEAT_LINE; plane.root.getWorldPosition(_v); fx.confetti(_v.x, _v.y, _v.z); sfx.secret(); }
   $('res-msg').textContent = flop ? 'Oops, a little flop! Try a bigger pull!' : secretsFound.length ? `SECRET FOUND! (${wrec.secrets.length}/${stage.secrets.length})` : '';
   mode = 'results';
   showScreen('results');
@@ -1325,7 +1334,7 @@ $('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are
 
 // ---------- v0.7 speed FX ----------
 // World-tinted dust: snow puffs white, desert tan, moon grey…
-const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc };
+const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, neonvoid: 0x00e5ff };
 const trails = createTrails(scene), streaks = createStreaks(scene, camera);
 const _tl = new THREE.Vector3(), _tr = new THREE.Vector3();
 function speedFx(dt) {
@@ -1486,6 +1495,7 @@ function frame(now) {
     goalView.update(dt, clock);
     shapesView.update(clock);
     setPiecesView.update(Math.max(0, -plane.root.position.z), dt);
+    neonView.update(Math.max(0, -plane.root.position.z), flight && mode === 'fly' ? flight.time : 0, dt);
     speedFx(dt);
     if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $('banner').hidden = true;
     updateCamera(dt);

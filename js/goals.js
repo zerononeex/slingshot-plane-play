@@ -5,10 +5,11 @@
 // no physics effect. NOT the DIVE skill's dive gates (posts + banner, +15 per flight).
 // Pure data + maths (no DOM / three.js).
 import { FLIGHT } from './config.js';
+import { STAGE_ORDER } from './stages.js';
 
 export const GATE_COUNT = 20;           // v1.0 (was 10 in v0.9)
 export const V09_GATES = 10;             // gates 1–10: the v0.9 collection, grandfathered
-export const MAX_GATES = 30;             // v1.1: Space + Jetstream carry 30 (the others keep 20)
+export const MAX_GATES = 50;             // v1.1: Space + Jetstream carry 30 (the others keep 20); v1.2 Neon Void 50
 export const GOAL_PRIZE = 250;
 
 // ───────────────────────── placement (lap-free absolute distances) ─────────────────────────
@@ -294,6 +295,66 @@ for (const [id, x] of Object.entries(V11)) {
   GOALS[id].goal = x.goal;
 }
 
+// ───────────────────────── v1.2 NEON VOID: 50 gates (the most in the game) ─────────────────────────
+// Authored straight into its completion zone (Z = 37,829 m, its FULL-maxed corner): regular gates run
+// 5 % → 84 % of Z in number order, each ≥ 50 m from every neon wall / laser row / sliding wall and
+// reachable from the openings either side; the specials sit in their structures; the goal at 88 % of Z.
+GOALS.neonvoid = {
+  gates: [
+    G(1, 1890, 0, 40, 9, 'high'),
+    G(2, 2500, 0, 30, 9, 'high'),
+    G(3, 3160, 0, 12, 9, 'mid'),
+    G(4, 4375, -72, 7, 6, 'inside THE GRID CORE', 'pocket'),
+    G(5, 4460, 0, 24, 9, 'mid'),
+    G(6, 4890, 0, 44, 9, 'high'),
+    G(7, 5550, -6, 34, 9, 'high'),
+    G(8, 6145, 0, 34, 9, 'high'),
+    G(9, 7180, 20, 5.5, 4, 'through the GRID TUNNEL', 'signature'),
+    G(10, 7430, -6, 30, 9, 'high'),
+    G(11, 7990, -6, 40, 9, 'high'),
+    G(12, 8600, 14, 30, 9, 'high'),
+    G(13, 9210, 0, 12, 9, 'mid'),
+    G(14, 9870, 0, 40, 9, 'high'),
+    G(15, 10445, 0, 24, 9, 'mid'),
+    G(16, 10940, 0, 44, 9, 'high'),
+    G(17, 11575, 14, 14, 9, 'mid'),
+    G(18, 12160, 10, 34, 9, 'high'),
+    G(19, 12870, 0, 30, 9, 'high'),
+    G(20, 13465, -10, 30, 9, 'high'),
+    G(21, 14105, 0, 30, 9, 'high'),
+    G(22, 14700, 10, 30, 9, 'high'),
+    G(23, 15210, 0, 40, 9, 'high'),
+    G(24, 15890, 0, 40, 9, 'high'),
+    G(25, 16530, 0, 24, 9, 'mid'),
+    G(26, 17155, 0, 44, 9, 'high'),
+    G(27, 16915, 72, 7, 6, 'inside the PRISM VAULT', 'pocket2'),
+    G(28, 18375, 0, 34, 9, 'high'),
+    G(29, 18955, 0, 20, 9, 'mid'),
+    G(30, 19565, 0, 10.5, 9, 'skimming low'),
+    G(31, 20160, 10, 16, 9, 'mid'),
+    G(32, 20875, 0, 30, 9, 'high'),
+    G(33, 21410, 0, 12, 9, 'mid'),
+    G(34, 22070, 0, 40, 9, 'high'),
+    G(35, 22680, 0, 24, 9, 'mid'),
+    G(36, 23270, 0, 44, 9, 'high'),
+    G(37, 23880, 0, 34, 9, 'high'),
+    G(38, 24460, 0, 34, 9, 'high'),
+    G(39, 25170, 0, 20, 9, 'mid'),
+    G(40, 25725, 0, 40, 9, 'high'),
+    G(41, 26385, 0, 30, 9, 'high'),
+    G(42, 26895, 0, 30, 9, 'high'),
+    G(43, 27535, 0, 40, 9, 'high'),
+    G(44, 28115, 0, 34, 9, 'high'),
+    G(45, 28725, 0, 24, 9, 'mid'),
+    G(46, 29205, 0, 44, 9, 'high'),
+    G(47, 29960, 0, 34, 9, 'high'),
+    G(48, 30555, 6, 34, 9, 'high'),
+    G(49, 31165, 0, 20, 9, 'mid'),
+    G(50, 31745, 0, 40, 9, 'high'),
+  ],
+  goal: { at: 33290, x: 0, height: 28, size: 13 },
+};
+
 // ───────────────────────── geometry ─────────────────────────
 // The ring's centre height (absolute y). In a tunnel lane the floor is the lane floor.
 export const gateY = (terrain, g) => terrain.surfaceAt(g.x, g.at, -Infinity) + g.height;
@@ -395,6 +456,13 @@ export function goalLines(run) {
 }
 
 export const goalsFor = (stageId) => GOALS[stageId] ?? null;
+
+// v1.2 THE FINAL FLOURISH: the flight that completes NEON VOID while every other world is already ★
+// beats the game — once ever (the save's gameComplete flag; the stars stay the permanent record).
+export const FINALE = 'neonvoid';
+export const BEAT_LINE = '🏆 YOU BEAT SLINGSHOT PLANE! 🏆';
+export const beatsTheGame = (before, after) =>
+  !before.gameComplete && !isComplete(before.stages[FINALE]) && STAGE_ORDER.every((id) => isComplete(after.stages[id]));
 // v1.1: each world's own gate total, read from its data (20; Space + Jetstream 30). Every displayed
 // total and the goal's activation use this — never a fixed 20.
 export const gateTotal = (stageId) => GOALS[stageId]?.gates.length ?? GATE_COUNT;

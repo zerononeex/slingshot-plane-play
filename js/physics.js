@@ -133,6 +133,7 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     stallSink: flight.stallSink * e.stallSinkMul * g, // …and you sink slower
     pitchRateDeg: flight.pitchRateDeg * e.responseMul,
     lateralResponse: flight.lateralResponse * e.responseMul,
+    lateralSpeed: flight.lateralSpeed * (plane.steerMul ?? 1), // v1.2 the Void Runner steers × 1.1 (precision at 250 m/s)
     bounceKeep: snow ? Math.min(0.97, wheels.keep + snow.keepBonus) : wheels.keep,
     bouncePop: wheels.pop,
     landingSinkBonus: (snow ? snow.sinkBonus : 0) + (lowG ? lowG.sinkBonus : 0),
@@ -281,7 +282,7 @@ function startTumble(s) {
 // obstacle again while you are still in it or for BONK.sameFor seconds (trunk → its canopy).
 function solidHit(s, env, P) {
   if (s.swing) return null; // a sub-area swing: bonks are suspended
-  const hit = env.hitTest(s.x, s.y, s.d, P.clearance, spanOf(s, P));
+  const hit = env.hitTest(s.x, s.y, s.d, P.clearance, spanOf(s, P), s.time);
   if (!hit) { if (s.bonkGrace <= 0 && s.bonkWithT <= 0) s.bonkWith = null; return null; }
   if (s.bonkGrace > 0 || hit === s.bonkWith) return null;
   return hit;
@@ -390,8 +391,8 @@ function stepAir(s, input, dt, P, env) {
     s.fuel = Math.max(0, s.fuel - dt);
     if (s.speed < P.boostCap) thrust = P.boostThrust;
   }
-  // Tailwind: a push forward (never past the boost cap).
-  const wind = zone.push > 0 && s.speed < P.boostCap ? zone.push : 0;
+  // Tailwind: a push forward (never past the boost cap). A v1.2 slipstream only catches a fast plane (pushMin).
+  const wind = zone.push > 0 && s.speed < P.boostCap && s.speed >= (zone.pushMin ?? 0) ? zone.push : 0;
   s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust + wind) * dt);
   if ((thrust > 0 || wind > 0) && s.speed > P.boostCap) s.speed = Math.max(P.boostCap, s.speed - (thrust + wind) * dt);
   // v1.0 SPOILER BRAKES (held): strong drag, but never below stall + 2 m/s (it can't stall you out).
@@ -590,7 +591,7 @@ function stepTumble(s, dt, P, env) {
   const dPrev = s.d;
   s.d += s.speed * dt;
   const g = env.groundAt(s.x, s.d, s.y);
-  if (g > s.y - P.clearance + P.faceStep || env.hitTest(s.x, s.y, s.d, P.clearance)) {
+  if (g > s.y - P.clearance + P.faceStep || env.hitTest(s.x, s.y, s.d, P.clearance, P.clearance, s.time)) {
     s.d = dPrev;
     s.speed = 0;
   } else {

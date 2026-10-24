@@ -12,10 +12,26 @@ export const SPACE_NAMES = {
   parts: 'BUILD YOUR SHIP', paints: 'STAR SKINS',
   radar: 'SENSOR DISH', horn: 'PARTY KLAXON', chute: 'RETRO CHUTE', brakes: 'AIR BRAKES', balloons: 'ANTI-GRAV PODS', fun: 'FUN UPGRADES', // v1.0
 };
+// v1.2 the VOID RUNNER — and anything upgraded in Neon Void — gets void names (Space precedent); the
+// lines not renamed here keep their stock names.
+export const VOID_NAMES = {
+  ...STOCK_NAMES,
+  band: 'LIGHT RIBBON', engine: 'PHOTON DRIVE', tank: 'OVERCHARGE CELLS', magnet: 'TRACTOR GLOW', ramp: 'LAUNCH RAIL', wheels: 'GYRO WHEELS',
+  radar: 'VOID SENSE', balloons: 'GLOW ORBS',
+};
 // The short labels on the Home hangar strip.
 const STOCK_CHIPS = { band: 'ELASTIC', engine: 'PROPELLER', leftWing: 'LEFT WING', rightWing: 'RIGHT WING', tail: 'TAIL' };
 const SPACE_CHIPS = { band: 'RAIL', engine: 'ION ENGINE', leftWing: 'LEFT FIN', rightWing: 'RIGHT FIN', tail: 'STABILIZER' };
+const VOID_CHIPS = { ...STOCK_CHIPS, band: 'LIGHT RIBBON', engine: 'PHOTON DRIVE' };
 
-export const spaceNamed = (planeId, worldId) => planeId === 'space' || worldId === 'space';
-export const upgradeNames = (planeId, worldId) => (spaceNamed(planeId, worldId) ? SPACE_NAMES : STOCK_NAMES);
-export const chipNames = (planeId, worldId) => (spaceNamed(planeId, worldId) ? SPACE_CHIPS : STOCK_CHIPS);
+// Which name set: the plane's own first (the Starship / the Void Runner), else the world's.
+function nameSet(planeId, worldId) {
+  if (planeId === 'space') return 'space';
+  if (planeId === 'neonvoid') return 'void';
+  if (worldId === 'space') return 'space';
+  if (worldId === 'neonvoid') return 'void';
+  return 'stock';
+}
+export const spaceNamed = (planeId, worldId) => nameSet(planeId, worldId) === 'space';
+export const upgradeNames = (planeId, worldId) => ({ space: SPACE_NAMES, void: VOID_NAMES, stock: STOCK_NAMES })[nameSet(planeId, worldId)];
+export const chipNames = (planeId, worldId) => ({ space: SPACE_CHIPS, void: VOID_CHIPS, stock: STOCK_CHIPS })[nameSet(planeId, worldId)];

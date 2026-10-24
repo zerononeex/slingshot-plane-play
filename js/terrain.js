@@ -12,6 +12,7 @@ import { columnCap, fillSceneryChunk, newSceneryChunk } from './scenery.js';
 import { CAST, slowFor } from './bumpables.js';
 import { pocketRects, rectWeight } from './pockets.js';
 import { tailBumpablesFor } from './longrun.js';
+import { neonRunFor, LANE_PUSH, LANE_MIN } from './neon.js';
 
 export const DECK = { start: -8, end: 1.5, halfWidth: 2.2 };
 
@@ -50,6 +51,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   const deckStart = DECK.start - deckExtra;
   const local = (d) => (d >= cycle ? d % cycle : d);
   const waterLevel = stage.water ? stage.water.level : null;
+  const neon = neonRunFor(stage.id); // v1.2 Neon Void's walls, laser slaloms, sliding walls and slipstreams (absolute d)
 
   // Solid columns (trees, pillars, cacti, towers, posts, lighthouse).
   const columns = [];
@@ -338,7 +340,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
 
   // ARCHWAYS: freestanding arches — two legs + a lintel; the opening is safe.
-  const archways = stage.archways.map((a, i) => ({ ...a, id: i, kind: 'archway', base: featuresAt(a.cx, a.d, -Infinity), x: a.cx }));
+  const archways = stage.archways.map((a, i) => { const base = featuresAt(a.cx, a.d, -Infinity); return { ...a, id: i, kind: 'archway', base, y0abs: base, x: a.cx }; }); // y0abs: a coin in the frame slides into the opening
   function hitArchway(x, y, dl, radius) {
     for (const a of archways) {
       if (Math.abs(dl - a.d) > a.depth / 2 + radius) continue;
@@ -369,8 +371,10 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
 
   // Solid obstacles: returns what you hit (a column, scenery, an asteroid or arch rock), else null.
-  function hitTest(x, y, d, radius = 0.6, span = radius) {
+  // t = flight time (only Neon Void's sliding walls move with it).
+  function hitTest(x, y, d, radius = 0.6, span = radius, t = 0) {
     const dl = local(d);
+    if (neon) { const n = neon.hit(x, y, d, radius, span, t); if (n) return n; }
     const st = hitStructures(x, y, dl, radius) ?? hitSlot(x, y, dl, radius, span);
     if (st) return st;
     const bucket = colBuckets.get(Math.floor(dl / BUCKET));
@@ -388,14 +392,15 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
 
   // Gimmick forces at a point (one shared result object — no allocation per step).
-  const fx = { lift: 0, push: 0, gust: 0, updraft: null };
+  const fx = { lift: 0, push: 0, pushMin: 0, gust: 0, updraft: null };
   function effectsAt(x, y, d) {
     const dl = local(d);
-    fx.lift = 0; fx.push = 0; fx.gust = 0; fx.updraft = null;
+    fx.lift = 0; fx.push = 0; fx.pushMin = 0; fx.gust = 0; fx.updraft = null;
     for (const u of stage.updrafts) {
       if (Math.abs(u.d - dl) < u.r && Math.hypot(u.x - x, u.d - dl) < u.r && y < 75) { fx.lift = u.lift; fx.updraft = u; }
     }
     for (const t of stage.tailwinds) if (x >= t.x0 && x <= t.x1 && dl >= t.d0 && dl <= t.d1) fx.push = t.push;
+    if (neon && neon.laneAt(x, y, d)) { fx.push = LANE_PUSH; fx.pushMin = LANE_MIN; } // a SLIPSTREAM: the tailwind push, in a box, if you're fast
     for (const g of stage.gusts) if (x >= g.x0 && x <= g.x1 && dl >= g.d0 && dl <= g.d1) fx.gust = g.push;
     return fx;
   }
@@ -427,7 +432,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt,
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     gates, storms, bridges, slots, loopRings, loopRingAt, diveGates, bumpables, bumpAt, archways, courses, pockets: pocketList,
-    edgeWalls: !!stage.edgeWalls,
+    edgeWalls: !!stage.edgeWalls, neon,
   };
   return terrainApi;
 }

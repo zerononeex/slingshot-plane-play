@@ -183,6 +183,7 @@
   .swatch:disabled { cursor: default; transform: none; color: var(--ink); background: #fff; box-shadow: 0 4px 0 #c3ccd4; }
   .rainbow-dot { background: conic-gradient(red, orange, yellow, lime, cyan, blue, violet, red); }
   .nebula-dot { background: conic-gradient(#7a3fd1, #19c3c3, #b06ad9, #7a3fd1); }
+  .tron-dot { background: #05050a; box-shadow: inset 0 0 0 3px #00e5ff; } /* v1.2 TRON: black + cyan */
 
   /* Launch speedometer */
   .speedo { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); width: min(64vw, 340px); }
@@ -503,6 +504,12 @@
   .world-tile.selected { border-color: var(--gold); background: #fff8dc; box-shadow: 0 4px 0 #e59f00; }
   .world-tile.locked { background: #eef1f4; color: #7b8794; }
   .world-tile.locked .wt-name { opacity: 0.8; }
+  /* v1.2 the one deliberate exception: Neon Void's own card + row are black with neon (menus stay bright) */
+  .world-tile.neon { background: #05050c; color: #e8fbff; border-color: #00e5ff; box-shadow: 0 6px 0 #007a8a, 0 0 14px rgba(0, 229, 255, 0.45); }
+  .world-tile.neon::before { background: linear-gradient(#00e5ff, #ff2bd6); }
+  .world-tile.neon.selected { border-color: var(--gold); }
+  .world-tile.neon.locked { background: #14141f; color: #8aa3b0; }
+  .home-scene .stage-card.neon .st-banner { background: rgba(5, 5, 12, 0.92); color: #e8fbff; box-shadow: 0 0 0 2px #00e5ff, 0 0 14px rgba(0, 229, 255, 0.45); }
   .world-tile.wiggle { animation: wiggle 0.32s ease-in-out; }
   @keyframes wiggle { 20% { transform: translateX(-5px) rotate(-1.5deg); } 50% { transform: translateX(5px) rotate(1.5deg); } 80% { transform: translateX(-3px); } }
   .sheet-rows { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 4px; }
@@ -521,6 +528,7 @@
   #results .msg { font-size: clamp(13px, 1.8vh, 16px); line-height: 1.25; }
   #results .res-goal { font-weight: 900; color: #6a35d9; }
   #results #res-complete { color: #c98200; }
+  #results #res-beat { color: #c98200; font-size: 1.25em; } /* v1.2: the game is beaten */
   #results .stat-row { flex-wrap: nowrap; gap: 5px; width: 100%; }
   #results .stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 3px; border-radius: 4px 12px 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1); line-height: 1.15; }
   #results .stat small { font-size: 9.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; }
@@ -763,6 +771,7 @@
     <p class="msg res-bumps" id="res-bumps" hidden></p>
     <p class="msg res-goal" id="res-gates"></p>
     <p class="msg res-goal" id="res-complete"></p>
+    <p class="msg res-goal" id="res-beat" hidden></p>
     <div class="stat-row res-money">
       <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
       <div class="stat"><small>DIST BONUS</small>+<span id="res-bonus">0</span></div>

@@ -2,6 +2,7 @@
 // character zone, and the world landmarks outside the corridor. Looks only: nothing here collides.
 // Built once per world (absolute positions); only the pieces near the plane are shown.
 import * as THREE from 'three';
+import { neonify } from './neonlook.js';
 
 const lam = (color, extra) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const basic = (color, extra) => new THREE.MeshBasicMaterial({ color, ...extra });
@@ -50,6 +51,9 @@ function landmark(look, k) {
     case 'cloudCastle': add(new THREE.IcosahedronGeometry(7, 1), lam(0xffffff), 0, 2, 0, [1.6, 0.6, 1.2]); add(new THREE.BoxGeometry(5, 10, 5), lam(0xeef3fb), 0, 8); for (const x of [-5, 5]) { add(new THREE.CylinderGeometry(1.4, 1.4, 14, 8), lam(0xeef3fb), x, 9); add(new THREE.ConeGeometry(2, 4, 8), lam(0x6f9be6), x, 18); } break;
     case 'zeppelin': add(new THREE.SphereGeometry(4, 14, 10), lam(0xdfe6ee), 0, 24, 0, [1, 1, 3]); add(new THREE.BoxGeometry(2, 1.4, 4), lam(0x5a3a22), 0, 19.5); add(new THREE.BoxGeometry(0.2, 4, 3), lam(0xe8262c), 0, 24, -11); break;
     case 'skyIsland': add(new THREE.ConeGeometry(7, 10, 7), lam(0x8a7a6a), 0, 20).rotation.x = Math.PI; add(new THREE.CylinderGeometry(7, 7, 1.4, 7), lam(0x4fb34a), 0, 25.7); add(new THREE.ConeGeometry(1.8, 5, 6), lam(0x2f7a3a), 2, 28.9); break;
+    case 'gridPyramid': add(new THREE.ConeGeometry(11, 16, 4), lam(0x0a0a18), 0, 8).rotation.y = Math.PI / 4; break;
+    case 'neonTower': add(new THREE.BoxGeometry(3, 30, 3), lam(0x0a0a18), 0, 15); add(new THREE.TorusGeometry(3.4, 0.25, 6, 24), basic(0xff2bd6), 0, 31).rotation.x = Math.PI / 2; break;
+    case 'prismCube': { const c = add(new THREE.BoxGeometry(8, 8, 8), lam(0x0a0a18), 0, 18); c.rotation.set(0.6, 0.8, 0); c.userData.spin = true; break; }
     default: add(new THREE.OctahedronGeometry(2, 0), lam(0xffd23f), 0, 3);
   }
   g.scale.setScalar(k);
@@ -65,8 +69,9 @@ export function createSetPiecesView(scene) {
   let items = [];      // { g, d }
   const spinners = [];
   return {
-    // pieces = setPiecesFor(world); floor(x, d) = the floor height there.
-    build(pieces, floor) {
+    // pieces = setPiecesFor(world); floor(x, d) = the floor height there; neon = the theme's neon
+    // colours in a neon world (v1.2: dark faces + neon edges), else null.
+    build(pieces, floor, neon = null) {
       for (const it of items) { root.remove(it.g); it.g.traverse((o) => { if (o.material?.map) o.material.map.dispose(); }); }
       items = []; spinners.length = 0;
       for (const p of pieces ?? []) {
@@ -86,6 +91,7 @@ export function createSetPiecesView(scene) {
           m.traverse((o) => { if (o.userData.spin) spinners.push(o); });
           g.add(m);
         } else continue; // coins are coins (coins.js); shapes are boost shapes (shapesview.js)
+        if (neon) neonify(g, neon);
         g.visible = false;
         root.add(g);
         items.push({ g, d: p.d });

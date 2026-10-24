@@ -186,7 +186,9 @@ export function validateSave(data) {
   const storedPlanes = Array.isArray(data.planesUnlocked) ? data.planesUnlocked : [];
   const planesUnlocked = derivePlanes(unlocked, storedPlanes);
   const skills = deriveSkills(unlocked, Array.isArray(data.skills) ? data.skills : []);
-  return { v: 2, currentStage, unlocked, planesUnlocked, skills, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked, planesUnlocked), prefs: cleanPrefs(data.prefs), stages };
+  const out = { v: 2, currentStage, unlocked, planesUnlocked, skills, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked, planesUnlocked), prefs: cleanPrefs(data.prefs), stages };
+  if (data.gameComplete === true) out.gameComplete = true; // v1.2: sparse (absent = false), only a real true
+  return out;
 }
 
 // The ONLY way game code reads progression: a validated copy of one stage's record.

@@ -8,7 +8,7 @@
 // (secrets at their own distance, once: 1–4 in the first lap, v1.0's secret 5 far out).
 
 export const DEFAULT_STAGE = 'plains';
-export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream'];
+export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'neonvoid'];
 
 const range = (from, to, step) => { const a = []; for (let d = from; d <= to; d += step) a.push(d); return a; };
 const SHARED_PATTERNS = ['line', 'highArc', 'slalom', 'dive', 'stairs', 'wave', 'fork', 'ring'];
@@ -655,3 +655,50 @@ const SECRET5_V11 = { plains: { d: 1520, x: -10, y: 40 }, canyon: { d: 2340, x: 
 for (const [id, p] of Object.entries(SECRET5_V11)) Object.assign(STAGES[id].secrets[4], p);
 // The Hidden Canyon is TILT country: a slot inside it.
 STAGES.canyon.slots = [...STAGES.canyon.slots, { d: 1460, x: 72, gap: 2, wall: 2.5, h: 12, look: 'pillars', inPocket: true }];
+
+// ───────────────────────── S9 NEON VOID — the true finale (v1.2) ─────────────────────────
+// Black by design (the owner's call for the finale): the world drawn as neon outlines on a void.
+// The base layer below repeats every 2,000 m like every world; the 40,000 m authored run — the
+// barrier walls, laser slaloms, sliding walls and the SLIPSTREAM lanes — lives in neon.js.
+STAGES.neonvoid = {
+  ...base,
+  id: 'neonvoid', name: 'Neon Void',
+  unlock: { after: 'jetstream', best: 14000 },
+  unlockBanner: 'NEW PLANE: VOID RUNNER!',
+  // The VOID RUNNER: a dark light-flyer — near-black body, cyan neon trim, a neon ring propeller
+  // and a light-ribbon trail. The fastest stage plane; stalls at 18 and steers × 1.1 (precision).
+  plane: { name: 'Void Runner', body: 0x10101c, wing: 0x1a1a30, accent: 0x00e5ff, wingScale: 0.9, floats: false, runner: true,
+    caps: [96, 112, 129, 147, 166, 181, 197, 215, 234, 255], decayMul: 5, glideMul: 0.02, noLiftCarry: 20, stallSpeed: 18, steerMul: 1.1, engineSound: 'hum' },
+  theme: { bits: [0x00e5ff, 0xff2bd6], sky: 0x020208, fogNear: 160, fogFar: 560, hemiGround: 0x101024, sun: 0x9aa8ff,
+    ground: { low: [0.02, 0.02, 0.05], grass: [0.03, 0.03, 0.07], high: [0.05, 0.05, 0.1], water: null },
+    base: 0x04040a, rock: 0x14142a, scenery: 'none', treesPerChunk: 0, rocksPerChunk: 0,
+    // v1.2 THEME DATA: every neon colour lives here, not in the renderers (other worlds have no `neon`).
+    neon: { void: 0x020208, terrain: 0x00e5ff, feature: 0xff2bd6, obstacle: 0xff8a1a, grid: 0x0c4f6a, lane: 0x38fff2, face: 0x07070f } },
+  ground: { style: 'rolling', center: 1.5, side: 6 },
+  flatStart: 60,
+  ditches: [{ d: 520, depth: 3, halfLength: 10 }, { d: 1380, depth: 3, halfLength: 10 }],
+  pits: [{ x: -6, d: 760, depth: 5, radius: 9, rim: 1.5, crater: true }, { x: 7, d: 1720, depth: 5, radius: 9, rim: 1.5, crater: true }], // neon craters
+  zones: [{ side: 'right', kind: 'neonBlock', from: 1140, to: 1220 }, { side: 'left', kind: 'neonBlock', from: 1560, to: 1640 }], // the Grid Tunnel · the laser slot
+  // The GRID TUNNEL: a lit block with a tube through it (the signature fly-through).
+  caverns: [{ shape: 'block', start: 1140, mouth: 1145, exit: 1215, end: 1220, height: 24, laneMin: 14, laneMax: 26, edge: 9, roof: 11, lit: true, neon: true }],
+  // The NEON ARCH: a freestanding gateway on the lap (the opening is safe, the frame bonks).
+  archways: [{ kind: 'neonArch', d: 1430, cx: 0, w: 14, h: 14, leg: 3, thick: 3, depth: 4 }],
+  slots: [{ d: 1600, x: -14, gap: 2, wall: 4, h: 14, look: 'neon' }],
+  loopRings: [{ d: 1300, x: 0, yc: 18, R: 12 }],
+  diveGates: [{ d: 420, x: 0, w: 10, h: 8 }, { d: 1500, x: 6, w: 10, h: 8 }],
+  bumpables: [['drone', 300, 8], ['pebbleRocks', 600, -8], ['satellite', 700, -10], ['drone', 1050, -8], ['satellite', 1450, 10], ['drone', 1850, -6]].map(([type, d, x]) => ({ type, d, x })),
+  // The LASER COURSE: five neon gates on the lap (thin posts bonk; all five in one pass = COURSE CLEAR).
+  courses: [{ id: 'neon-lasers', look: 'lasers', gates: [gate(980, -4), gate(1005, 4), gate(1030, -4), gate(1055, 4), gate(1080, -4)] }],
+  pockets: [
+    pocket('grid-core', 'THE GRID CORE', 'gridCore', -1, 180, 400, 8, [['drone', 130, 3], ['satellite', 290, -3]]),
+    pocket('prism-vault', 'PRISM VAULT', 'prism', 1, 640, 400, 8, [['satellite', 130, -3], ['drone', 290, 3]]),
+  ],
+  secrets: [
+    { id: 'neon-tunnel', name: 'Deep in the Grid Tunnel', x: 20, y: 3, d: 1180, coins: 14, radius: 5 },
+    { id: 'neon-loop', name: 'Top of the neon loop', x: 0, y: 30, d: 1300, coins: 13, radius: 5 },
+    { id: 'neon-slot', name: 'Behind the laser slot', x: -14, y: 6, d: 1625, coins: 15, radius: 5 },
+    { id: 'neon-prism', name: 'At the heart of the Prism Vault', x: 75, y: 4, d: 880, coins: 14, radius: 5 },
+    { id: 'neon-far', name: 'The last light in the void', x: -10, y: 40, d: 29505, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['ditchDip', 'craterDip']),
+};

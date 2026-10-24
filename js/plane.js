@@ -57,7 +57,7 @@ const IDENTITY = {
   'City Hopper': { num: '03', stripe: [0xe8262c, 0x2b3a55] }, 'Snow Owl': { num: '04', stripe: [0x3f86e8, 0xffffff] },
   'Dune Hawk': { num: '05', stripe: [0x8a5a1a, 0xfff1d6] }, 'Sea Falcon': { num: '06', stripe: [0xffffff, 0xff7a1a] },
   Starship: { num: '07', stripe: [0xff7a1a, 0xffffff] }, Barnstormer: { num: '08', stripe: [0xfff1d6, 0xd8262c] },
-  'Sky Dart': { num: '09', stripe: [0xff7a1a, 0x3b4252] },
+  'Sky Dart': { num: '09', stripe: [0xff7a1a, 0x3b4252] }, 'Void Runner': { num: '10', stripe: [0x00e5ff, 0xff2bd6] },
 };
 const hexCss = (n) => `#${n.toString(16).padStart(6, '0')}`;
 function canvasTex(w, h) {
@@ -72,6 +72,8 @@ const decalMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, 
 
 // Thin dark silhouette lines on the few big parts (fuselage, wing decks, tail): ~8 extra draw calls.
 const EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x0d1626, transparent: true, opacity: 0.38 });
+// v1.2 the VOID RUNNER: the same lines, glowing cyan (its neon trim).
+const RUNNER_EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x00e5ff });
 function edges(mesh, angle = 28) {
   const l = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), EDGE_MAT);
   mesh.add(l);
@@ -218,6 +220,10 @@ export function buildPlane(tune) {
   prop.add(hub);
   const blade = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.14, 0.04), darkMat);
   prop.add(blade);
+  // v1.2 the Void Runner's NEON RING propeller: a glowing ring around the spinning blades.
+  const neonRing = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.04, 6, 32), new THREE.MeshBasicMaterial({ color: 0x00e5ff }));
+  neonRing.visible = false;
+  prop.add(neonRing);
   prop.visible = !!tune.propeller;
   model.add(prop);
 
@@ -400,7 +406,7 @@ export function buildPlane(tune) {
   beam.position.set(0, -0.3, -0.2);
   beam.visible = false;
   model.add(beam);
-  let ship = false, beamT = 0, ionLevel = 1;
+  let ship = false, beamT = 0, ionLevel = 1, runner = false;
   const ION = [0xffb06a, 0xc8e0ff, 0x9fd0ff, 0x6fb4ff, 0x3f7bff, 0x5a5cff, 0x7a4dff, 0x9d3dff, 0xc23dff, 0xff4fe0]; // v1.0: Lv6–10 push into violet
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
 
@@ -418,6 +424,9 @@ export function buildPlane(tune) {
     leftWing.userData.upper.visible = rightWing.userData.upper.visible = !!def.biplane;
     jet = !!def.jet;
     ship = !!def.ship;
+    runner = !!def.runner;
+    neonRing.visible = runner;
+    model.traverse((o) => { if (o.material === EDGE_MAT || o.material === RUNNER_EDGE_MAT) o.material = runner ? RUNNER_EDGE_MAT : EDGE_MAT; });
     prop.visible = !jet && !ship;
     intake.visible = jet;
     shipParts.visible = ship;
@@ -624,5 +633,5 @@ export function buildPlane(tune) {
 
   bakeShading(model); // v0.7: the shaded, less-toy look (vertex colours, baked once)
   const setSpoiler = (on) => { spoilerWant = on ? 1 : 0; };
-  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
+  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : runner ? 'runner' : 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
 }

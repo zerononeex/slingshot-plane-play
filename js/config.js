@@ -200,6 +200,10 @@ export const PAINTS = [
   { id: 'rainbow', name: 'RAINBOW',         cost: 230, color: 0xff4040, rainbow: true },
   // Space-only STAR SKIN: belongs to the Starship record only (not in the shared totals).
   { id: 'nebula',  name: 'Nebula',          cost: 230, color: 0x7a3fd1, nebula: true, only: 'space' },
+  // v1.2 the Void Runner's NEON set (its record only, not in the shared totals): TRON = black + cyan trim.
+  { id: 'tron',    name: 'TRON',            cost: 230, color: 0x05050a, tron: true, only: 'neonvoid' },
+  { id: 'laser',   name: 'Laser Pink',      cost: 110, color: 0xff2bd6, only: 'neonvoid' },
+  { id: 'lime',    name: 'Electric Lime',   cost: 110, color: 0x7dff2b, only: 'neonvoid' },
 ];
 
 // PLANE PARTS — one-time buys, in this order. Start = body + propeller only.

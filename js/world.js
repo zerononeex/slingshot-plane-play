@@ -9,6 +9,7 @@ import { DECK } from './terrain.js';
 import { rng, makePatternPicker, patternCoins, featureCoins } from './coins.js';
 import { fillSceneryChunk, newSceneryChunk, TREE_SLOTS, ROCK_SLOTS, columnCap } from './scenery.js';
 import { buildCritter, animateCritter, resetCritter } from './critters.js';
+import { neonify, edgeMat } from './neonlook.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -85,6 +86,7 @@ export function createWorld(scene) {
   const _z = new THREE.Color(), _h = new THREE.Color(), _w = new THREE.Color(), _k = new THREE.Color();
   function paintSky(th) {
     if (th.space) { _z.setHex(0x03050f); _h.setHex(th.sky); _w.setHex(0x1a2040); }
+    else if (th.neon) { _z.setHex(th.neon.void); _h.setHex(th.neon.void); _w.setHex(th.neon.void); } // v1.2: the void
     else {
       _h.setHex(th.sky).lerp(_k.setHex(0xffffff), 0.28);           // horizon: lighter
       _z.setHex(th.sky).multiplyScalar(0.82);                        // zenith: a deeper version of the sky
@@ -284,10 +286,10 @@ export function createWorld(scene) {
       const g = terrain.surfaceAt(t.x, t.d, -Infinity);
       setInst(colBody, i, t.x, g - 0.5, t.d, t.r, t.h + 0.5, t.r);
       const COURSE = { flags: 0xff4fa3, banners: 0xffd23f, scaffold: 0xffb020, palms: 0x3fae4a, buoys: 0xff7a1a, pylons: 0xff5d2e };
-      colBody.setColorAt(i, _c.setHex(t.kind === 'lighthouse' && i % 2 ? 0xe8262c : t.kind === 'flag' ? (t.look === 'scaffold' ? 0xffb020 : 0xffffff) : look.body));
+      colBody.setColorAt(i, _c.setHex(theme.neon ? theme.neon.feature : t.kind === 'lighthouse' && i % 2 ? 0xe8262c : t.kind === 'flag' ? (t.look === 'scaffold' ? 0xffb020 : 0xffffff) : look.body)); // v1.2: glowing neon posts
       const cap = columnCap(t);
       setInst(colCap, i, t.x, g + t.h + cap.y * 0.4, t.d, cap.r, cap.y, cap.r);
-      colCap.setColorAt(i, _c.setHex(t.kind === 'flag' ? COURSE[t.look] ?? look.cap : look.cap));
+      colCap.setColorAt(i, _c.setHex(theme.neon ? theme.neon.feature : t.kind === 'flag' ? COURSE[t.look] ?? look.cap : look.cap));
     });
     colBody.instanceMatrix.needsUpdate = true;
     colCap.instanceMatrix.needsUpdate = true;
@@ -440,7 +442,8 @@ export function createWorld(scene) {
     // SUB-AREAS: a glowing PORTAL at the side of the corridor, an end-portal in the pocket lane,
     // the pocket's own decor along its sides (looks only), and the BONUS STASH sign.
     const PORTAL = { mushrooms: 0xffd23f, slotCanyon: 0xff9a3c, garden: 0x7fff9a, aurora: 0x9fe6ff, oasis: 0x5fffd0, coral: 0xff7ab8, nebula: 0xc08aff, stormEye: 0xffd23f,
-      sunflowers: 0xffe14d, goldMine: 0xffb020, neon: 0xff3fd0, glacier: 0xbff4ff, temple: 0xffc070, shipwreck: 0x5fd0ff, comet: 0x9fd8ff, rainbow: 0xff6ad5 }; // v1.0 second pockets
+      sunflowers: 0xffe14d, goldMine: 0xffb020, neon: 0xff3fd0, glacier: 0xbff4ff, temple: 0xffc070, shipwreck: 0x5fd0ff, comet: 0x9fd8ff, rainbow: 0xff6ad5, // v1.0 second pockets
+      gridCore: 0x00e5ff, prism: 0xff2bd6 }; // v1.2 Neon Void
     for (const p of terrain.pockets ?? []) {
       const glow = new THREE.MeshBasicMaterial({ color: PORTAL[p.look] ?? 0xffd23f });
       const ringAt = (x, d, base) => {
@@ -474,6 +477,8 @@ export function createWorld(scene) {
         else if (p.look === 'shipwreck') { if (i % 3 === 0) { const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 9), lam(0x6b4423)); hull.rotation.z = side * 0.4; hull.position.y = 1; y.add(hull); const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 9, 6), lam(0x8a5a35)); mast.rotation.z = side * 0.5; mast.position.y = 4.5; y.add(mast); } else { const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8), lam(0x9a6b3a)); barrel.position.y = 0.6; y.add(barrel); } }
         else if (p.look === 'comet') { const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4 + (i % 2), 0), lam(0xcfe6ff, { emissive: 0x1a3a6a })); ice.position.y = 7 + (i % 3) * 2; y.add(ice); const tail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 6), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.set(0, 7 + (i % 3) * 2, -3.5); y.add(tail); }
         else if (p.look === 'rainbow') { const arc = new THREE.Mesh(new THREE.TorusGeometry(3, 0.35, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 9; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), lam(0xffffff)); puff.position.y = 8; y.add(puff); }
+        else if (p.look === 'gridCore') { const c = new THREE.Mesh(new THREE.BoxGeometry(2.4, 6 + (i % 3) * 2, 2.4), lam(0x0a0a18)); c.position.y = 3 + (i % 3); y.add(c); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 2.6), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); cap.position.y = 6.2 + (i % 3) * 2; y.add(cap); }
+        else if (p.look === 'prism') { const pr = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), new THREE.MeshBasicMaterial({ color: [0xff2bd6, 0x00e5ff, 0xffe14d][i % 3], transparent: true, opacity: 0.7 })); pr.scale.set(1, 2.4, 1); pr.position.y = 5 + (i % 2) * 3; y.add(pr); }
         else { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), lam(0xffb070, { emissive: 0x6a3a10 })); crystal.position.y = 1.2; y.add(crystal); }
         y.position.set(x, g0, -d);
         keep(y);
@@ -590,6 +595,8 @@ export function createWorld(scene) {
         keep(pad);
       }
     }
+    // v1.2 NEON VOID: every lap feature drawn as dark faces + neon edges (the theme's colours).
+    if (theme.neon) for (const o of stageMeshes) neonify(o, theme.neon);
   }
 
   function showLap(lap) {
@@ -600,6 +607,7 @@ export function createWorld(scene) {
   // ---------- small scenery ---------- (placement lives in scenery.js, shared with the colliders)
 
   function groundColor(h, x, d) {
+    if (theme.neon) { _c.setHex(theme.neon.face); return; } // v1.2: black ground (the grid is the light)
     const G = theme.ground;
     const shade = 0.5 + 0.5 * Math.sin(x * 0.37 + d * 0.23) * Math.cos(d * 0.11);
     if (G.water && terrain.surfaceKind(x, d) === 'water') { _c.setRGB(G.water[0] + 0.04 * shade, G.water[1] + 0.05 * shade, G.water[2]); return; }
@@ -611,6 +619,28 @@ export function createWorld(scene) {
     // v0.7: a very subtle fine grain so big slopes aren't empty (a hash, no visible tiling).
     const grain = (((Math.sin(x * 12.9898 + d * 78.233) * 43758.5453) % 1) + 1) % 1 * 0.03 - 0.015;
     _c.setRGB(c[0] + 0.06 * shade + h * 0.004 + grain, c[1] + 0.06 * shade + grain, c[2] + 0.04 * shade + grain);
+  }
+
+  // v1.2 NEON VOID: a glowing grid on the ground — lines along the chunk's own vertices (every 8 m),
+  // made the first time a neon world shows the chunk and rewritten in place on recycle.
+  const GRID_COLS = xs.map((x, c) => (Math.abs(x) > 40 || x % 8 === 0 ? c : -1)).filter((c) => c >= 0);
+  const GRID_ROWS = Array.from({ length: ZS }, (_, r) => r).filter((r) => r % 2 === 0);
+  function writeGrid(ch) {
+    const n = (GRID_COLS.length * (ZS - 1) + GRID_ROWS.length * (xs.length - 1)) * 2;
+    if (!ch.grid) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      ch.grid = new THREE.LineSegments(geo, edgeMat(theme.neon.grid));
+      ch.grid.frustumCulled = false;
+      scene.add(ch.grid);
+    }
+    ch.grid.material = edgeMat(theme.neon.grid);
+    const src = ch.mesh.geometry.attributes.position, dst = ch.grid.geometry.attributes.position;
+    let i = 0;
+    const put = (v) => { dst.setXYZ(i++, src.getX(v), src.getY(v) + 0.06, src.getZ(v)); };
+    for (const c of GRID_COLS) for (let r = 0; r < ZS - 1; r++) { put(r * xs.length + c); put((r + 1) * xs.length + c); }
+    for (const r of GRID_ROWS) for (let c = 0; c < xs.length - 1; c++) { put(r * xs.length + c); put(r * xs.length + c + 1); }
+    dst.needsUpdate = true;
   }
 
   function buildChunk(ch, k) {
@@ -631,6 +661,7 @@ export function createWorld(scene) {
     }
     pos.needsUpdate = true;
     col.needsUpdate = true;
+    if (theme.neon) writeGrid(ch);
 
     const sc = fillSceneryChunk(stage, terrain, k, ch.scenery);
     for (let t = 0; t < TP; t++) {
@@ -866,20 +897,22 @@ export function createWorld(scene) {
     if (ringMesh.instanceColor) ringMesh.instanceColor.needsUpdate = true;
     // Wind streaks in the bands near the plane.
     const bandsNear = [];
-    for (const b of stage.tailwinds) if (b.d1 + lapOff > planeD - 40 && b.d0 + lapOff < planeD + 260) bandsNear.push({ b, fwd: true });
-    for (const b of stage.gusts) if (b.d1 + lapOff > planeD - 40 && b.d0 + lapOff < planeD + 260) bandsNear.push({ b, fwd: false });
+    for (const b of stage.tailwinds) if (b.d1 + lapOff > planeD - 40 && b.d0 + lapOff < planeD + 260) bandsNear.push({ b, fwd: true, off: lapOff });
+    for (const b of stage.gusts) if (b.d1 + lapOff > planeD - 40 && b.d0 + lapOff < planeD + 260) bandsNear.push({ b, fwd: false, off: lapOff });
+    // v1.2 SLIPSTREAM lanes (absolute distances, a box of air): light rushes through them.
+    if (terrain.neon) for (const b of terrain.neon.lanes) if (b.d1 > planeD - 40 && b.d0 < planeD + 260) bandsNear.push({ b, fwd: true, off: 0, lane: true });
     for (let i = 0; i < STREAKS; i++) {
       const s = streaks[i];
       const nb = bandsNear[i % Math.max(1, bandsNear.length)];
       if (!nb) { streakMesh.setMatrixAt(i, ZERO); continue; }
-      const b = nb.b;
-      if (s.band !== b || s.d < b.d0 + lapOff || s.d > b.d1 + lapOff || s.x < b.x0 || s.x > b.x1) {
+      const b = nb.b, off = nb.off;
+      if (s.band !== b || s.d < b.d0 + off || s.d > b.d1 + off || s.x < b.x0 || s.x > b.x1) {
         s.band = b;
         s.x = b.x0 + Math.random() * (b.x1 - b.x0);
-        s.d = b.d0 + lapOff + Math.random() * (b.d1 - b.d0);
-        s.y = terrain.surfaceAt(s.x, s.d, Infinity) + 2 + Math.random() * 24;
+        s.d = b.d0 + off + Math.random() * (b.d1 - b.d0);
+        s.y = nb.lane ? b.y0 + Math.random() * (b.y1 - b.y0) : terrain.surfaceAt(s.x, s.d, Infinity) + 2 + Math.random() * 24;
       }
-      if (nb.fwd) s.d += 40 * dt; else s.x += Math.sign(b.push) * 25 * dt;
+      if (nb.fwd) s.d += (nb.lane ? 160 : 40) * dt; else s.x += Math.sign(b.push) * 25 * dt;
       setInst(streakMesh, i, s.x, s.y, s.d, 1, 1, 1, nb.fwd ? 0 : Math.PI / 2);
     }
     streakMesh.instanceMatrix.needsUpdate = true;
@@ -957,12 +990,13 @@ export function createWorld(scene) {
   }
 
   // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
-  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a };
+  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018 };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
     if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }
     else { const h = paintSky(theme); scene.fog.color.copy(h); scene.background.copy(h); }
-    dome.visible = farLayer.visible = !c; // a tinted pocket hides the sky dome + far range
+    dome.visible = !c; // a tinted pocket hides the sky dome + far range (v1.2: the void never has one)
+    farLayer.visible = !c && !theme.neon;
   }
   // The cloud tunnel feels like fog for 2 s (v0.6 part 2).
   let fogPulse = 0;
@@ -981,6 +1015,8 @@ export function createWorld(scene) {
     scene.fog.far = theme.fogFar;
     hemi.groundColor.setHex(theme.hemiGround);
     sun.color.setHex(theme.sun);
+    hemi.intensity = theme.neon ? 0.5 : 1.6; // v1.2: the void is dim (the neon lines are unlit)
+    sun.intensity = theme.neon ? 0.5 : 1.8;
     baseMat.color.setHex(theme.base);
     rockMatSmall.color.setHex(stage.id === 'snow' ? 0xdfe8f2 : theme.rock);
     const sc = theme.scenery;
@@ -996,6 +1032,10 @@ export function createWorld(scene) {
     bandMat.emissive.setHex(theme.space ? 0x335577 : 0x000000);
     cloudMat.color.setHex(theme.space ? 0x7a7d86 : 0xffffff);   // space: floating rock islets
     cloudMat.emissive.setHex(theme.space ? 0x15161c : 0x777777);
+    // v1.2 NEON VOID: an empty black void — no far range, no clouds; the ground grid shows.
+    farLayer.visible = clouds.visible = !theme.neon;
+    streakMesh.material.color.setHex(theme.neon ? theme.neon.lane : 0x5f8fc8);
+    for (const ch of chunks) if (ch.grid) ch.grid.visible = !!theme.neon;
     buildStageMeshes();
     for (const ch of chunks) ch.index = -9999;
     lapShown = -1;
