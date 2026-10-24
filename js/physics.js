@@ -16,12 +16,14 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 // (needs 20 m/s); ROLL = a barrel roll that sweeps coins; DIVE (hold) = a steep, fast dive.
 export const SKILLS = {
   tiltTime: 0.35, tiltSink: 2.5, tiltSteer: 0.8, tiltSpan: 0.3, wingSpan: 1.6,
-  loopMinSpeed: 20, loopTime: 1.15, loopExitKeep: 0.72, loopRadius: (v) => clamp(7 + 0.1 * v, 8, 13),
-  rollTime: 0.6, rollCooldown: 1.5, rollPickupMul: 2.2, rollDrift: 3,
+  loopMinSpeed: 20, loopTime: 1.15, loopExitKeep: 0.95, loopRadius: (v) => clamp(7 + 0.1 * v, 8, 13), // exit was × 0.72
+  rollTime: 0.6, rollCooldown: 1.0, rollPickupMul: 2.2, rollDrift: 3,
   diveDeg: -55, diveGravityMul: 1.6,
 };
 // Coin pickup reach: a ROLL sweeps × 2.2 wider while it lasts.
 export const pickupRadiusFor = (s, base) => (s.rollT > 0 ? base * SKILLS.rollPickupMul : base);
+// The DODGE window: true mid-barrel-roll (rollT > 0). Projectiles (the mega-stages) pass through.
+export const isDodging = (s) => s.rollT > 0;
 // The plane's half-width against slot walls: knife-edge, wings out, or just the body.
 export const spanOf = (s, P) => (s.tilted ? SKILLS.tiltSpan : (P.lift ?? 1) > 0 ? SKILLS.wingSpan : P.clearance);
 
@@ -41,7 +43,8 @@ export function tryLoop(s) {
   s.events.push('loop');
   return true;
 }
-// ROLL: 0.6 s barrel roll toward `dir` (−1 left, +1 right), 1.5 s cooldown, no speed cost.
+// ROLL: 0.6 s barrel roll toward `dir` (−1 left, +1 right), 1.0 s cooldown, no speed cost: decay + drag
+// are paused while it lasts (it holds your speed), and it is the dodge (isDodging).
 export function tryRoll(s, dir = 1) {
   if (s.mode !== 'air' || s.loop || s.ended || s.rollCool > 0) return false;
   s.rollT = SKILLS.rollTime;
@@ -51,7 +54,7 @@ export function tryRoll(s, dir = 1) {
   return true;
 }
 
-// The loop itself: a full vertical circle (back to where it started), then exit at × 0.72.
+// The loop itself: a full vertical circle (back to where it started), then exit at × 0.95.
 function stepLoop(s, dt, P, env) {
   const L = s.loop;
   L.t += dt;
@@ -384,7 +387,7 @@ function stepAir(s, input, dt, P, env) {
   const upBleed = (P.lift ?? 1) <= 0 && iy > 0 && !carrying ? P.noLiftUpBleed * iy : 0; // nose up with no wings = drag
   const pushed = s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry); // band push: no decay/drag
   const decay = P.decay * (s.speed < (P.slowBelow ?? 0) ? P.slowDecayMul ?? 1 : P.fastDecayMul ?? 1);
-  const bleed = (pushed ? 0 : decay + P.drag * s.speed * s.speed) + upBleed;
+  const bleed = (pushed || s.rollT > 0 ? 0 : decay + P.drag * s.speed * s.speed) + upBleed; // a ROLL pauses decay + drag
   let thrust = 0;
   if (input.boost && s.fuel > 0) {
     s.boosting = true;
