@@ -204,6 +204,10 @@ export const PAINTS = [
   { id: 'tron',    name: 'TRON',            cost: 230, color: 0x05050a, tron: true, only: 'neonvoid' },
   { id: 'laser',   name: 'Laser Pink',      cost: 110, color: 0xff2bd6, only: 'neonvoid' },
   { id: 'lime',    name: 'Electric Lime',   cost: 110, color: 0x7dff2b, only: 'neonvoid' },
+  // v1.5 the Sky Knight's HERALDRY (its record only, not in the shared totals): DRAGON WINGS at the rainbow tier.
+  { id: 'dragonwings', name: 'DRAGON WINGS',   cost: 230, color: 0x9a1a1a, dragonwings: true, only: 'dragonwar' },
+  { id: 'knightsteel', name: 'Knight Steel',   cost: 110, color: 0x9aa4b2, only: 'dragonwar' },
+  { id: 'royalbanner', name: 'Royal Banner',   cost: 110, color: 0x1f3fa8, only: 'dragonwar' },
   // v1.4 THE DRAGON's skin, free with it (its record only): the Dragonite model in place of the Dragon.
   { id: 'dragonite', name: 'Dragonite',      cost: 0,   color: 0xf5a142, skin: 'dragonite', only: 'dragon' },
 ];

@@ -3,6 +3,7 @@
 import { MAGNET_PULL_SPEED } from './config.js';
 import { rng } from './rng.js';
 import { setPiecesFor, setPieceCoins } from './longrun.js';
+import { loopCircleCoins } from './loopdoors.js';
 
 export { rng };
 
@@ -240,6 +241,8 @@ export function featureCoins(stage, terrain, lap) {
       out.push({ x, y: Math.max(rv.y, terrain.groundAt(x, d, Infinity) + 3) + 2 * Math.sin(t * Math.PI * 5), d: d + off });
     }
   }
+  // v1.5 LOOP DOORS: the loop circle of coins that marks the move (absolute: lap 0 only).
+  if (lap === 0 && terrain.mega) for (const door of terrain.mega.doors) for (const c of loopCircleCoins(door)) out.push(c);
   // SLOTS: the 10-coin TOKEN right behind each slot (paid by a tilted pass, not by pickup) + a coin line.
   for (const sl of terrain.slots ?? []) {
     const y = sl.base + Math.min(sl.h - 1.5, 5);

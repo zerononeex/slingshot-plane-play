@@ -13,6 +13,7 @@ import { CAST, slowFor } from './bumpables.js';
 import { pocketRects, rectWeight } from './pockets.js';
 import { tailBumpablesFor } from './longrun.js';
 import { neonRunFor, LANE_PUSH, LANE_MIN } from './neon.js';
+import { megaRunFor } from './megarun.js';
 
 export const DECK = { start: -8, end: 1.5, halfWidth: 2.2 };
 
@@ -52,6 +53,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   const local = (d) => (d >= cycle ? d % cycle : d);
   const waterLevel = stage.water ? stage.water.level : null;
   const neon = neonRunFor(stage.id); // v1.2 Neon Void's walls, laser slaloms, sliding walls and slipstreams (absolute d)
+  const mega = megaRunFor(stage.id); // v1.5 a mega-stage's weave rows, tilt sectors, loop doors, shooters, wild flyers, thermals, wind lanes
 
   // Solid columns (trees, pillars, cacti, towers, posts, lighthouse).
   const columns = [];
@@ -92,12 +94,33 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     blockBuckets.get(k).push(b);
   }
 
+  // v1.5 the arc's ground shape at d (one shared record, no allocation): centre / side amplitude + snow peaks.
+  const _arc = { center: 0, side: 0, peaks: 0 };
+  function arcShape(d) {
+    const A = G.arcs, L = G.arcLen, i = Math.max(0, Math.min(A.length - 1, Math.floor(d / L))), a = A[i], into = d - i * L;
+    let b = a, k = 0;
+    if (into < 250 && i > 0) { b = A[i - 1]; k = 0.5 - into / 500; }
+    else if (L - into < 250 && i < A.length - 1) { b = A[i + 1]; k = 0.5 - (L - into) / 500; }
+    _arc.center = a.center + (b.center - a.center) * k;
+    _arc.side = a.side + (b.side - a.side) * k;
+    _arc.peaks = (a.peaks ?? 0) + ((b.peaks ?? 0) - (a.peaks ?? 0)) * k;
+    return _arc;
+  }
+
   function baseGround(x, d) {
     const ramp = smooth((d - stage.flatStart) / 100);
     const ax = Math.abs(x);
     const edgeFade = smooth((150 - ax) / 30); // fade out at the world's side edges
     let g = 0;
-    if (G.style === 'rolling' || G.style === 'canyon' || G.style === 'snow') {
+    if (G.arcs) { // v1.5 a mega-stage: each 10,000 m arc has its own ground (blended over ±250 m at the edges)
+      const a = arcShape(d);
+      const n =
+        0.5 * Math.sin(d * 0.021 + 1.3) * Math.cos(x * 0.045) +
+        0.3 * Math.sin(d * 0.0063 + x * 0.031) +
+        0.2 * Math.sin(d * 0.047 - x * 0.07 + 2.1);
+      g = ramp * (a.center + (a.side - a.center) * smooth((ax - 10) / 30)) * (0.5 + 0.5 * n) * edgeFade;
+      if (a.peaks) g += ramp * a.peaks * smooth((ax - 34) / 14) * (0.65 + 0.35 * Math.sin(d * 0.013 + x * 0.05)) * edgeFade;
+    } else if (G.style === 'rolling' || G.style === 'canyon' || G.style === 'snow') {
       const n =
         0.5 * Math.sin(d * 0.021 + 1.3) * Math.cos(x * 0.045) +
         0.3 * Math.sin(d * 0.0063 + x * 0.031) +
@@ -186,6 +209,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
       if (w > 0) { const floor = baseGround(Math.max(-20, Math.min(20, x - p.cx)), d); if (floor < g) g += (floor - g) * w; }
     }
     if (waterLevel !== null && g < waterLevel) g = waterLevel; // the sea is the floor
+    if (mega?.hall) g = Math.max(g, mega.floorAt(x, d)); // v1.5 §6 THE GREAT HALL's raised stone floor
     return g;
   }
 
@@ -203,6 +227,10 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
 
   // Tunnel roof height (only inside a tunnel lane), else Infinity.
   function ceilingAt(x, d) {
+    if (mega?.cave || mega?.hall) { // v1.5 §6 THE SHELTER's tunnel roof (the base lap's caverns are buried under THE GREAT HALL)
+      const roof = mega.ceilingAt(x, d);
+      if (roof < Infinity || mega.inHall(d)) return roof;
+    }
     const dl = local(d);
     for (const c of stage.caverns) {
       if (dl < c.mouth || dl > c.exit) continue;
@@ -375,6 +403,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   function hitTest(x, y, d, radius = 0.6, span = radius, t = 0) {
     const dl = local(d);
     if (neon) { const n = neon.hit(x, y, d, radius, span, t); if (n) return n; }
+    if (mega) { const m = mega.hit(x, y, d, radius, span, t); if (m) return m; }
     const st = hitStructures(x, y, dl, radius) ?? hitSlot(x, y, dl, radius, span);
     if (st) return st;
     const bucket = colBuckets.get(Math.floor(dl / BUCKET));
@@ -402,6 +431,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     for (const t of stage.tailwinds) if (x >= t.x0 && x <= t.x1 && dl >= t.d0 && dl <= t.d1) fx.push = t.push;
     if (neon && neon.laneAt(x, y, d)) { fx.push = LANE_PUSH; fx.pushMin = LANE_MIN; } // a SLIPSTREAM: the tailwind push, in a box, if you're fast
     for (const g of stage.gusts) if (x >= g.x0 && x <= g.x1 && dl >= g.d0 && dl <= g.d1) fx.gust = g.push;
+    if (mega) mega.effects(x, y, d, fx); // v1.5 THERMALS (lift) and WAR-WIND lanes (push, if you're fast)
     return fx;
   }
 
@@ -426,6 +456,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     return null;
   }
 
+  const floorAt = (x, d) => featuresAt(x, d, -Infinity);
   // surfaceAt = the ground without the launch deck (what the terrain mesh draws).
   // (The scenery colliders read it too: local, surfaceAt, surfaceKind.)
   const terrainApi = {
@@ -433,6 +464,9 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     gates, storms, bridges, slots, loopRings, loopRingAt, diveGates, bumpables, bumpAt, archways, courses, pockets: pocketList,
     edgeWalls: !!stage.edgeWalls, neon,
+    // v1.5 the mega layer: hazards stepped from stepFlight (shots, doors), door key rings during a loop.
+    mega, stepHazards: mega ? (s, dt, P) => mega.stepHazards(s, dt, P, floorAt) : null,
+    keyRingAt: mega ? mega.keyRingAt : null, loopDone: mega ? mega.loopDone : null,
   };
   return terrainApi;
 }

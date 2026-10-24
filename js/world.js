@@ -85,11 +85,11 @@ export function createWorld(scene) {
   embers.frustumCulled = false;
   embers.visible = false;
   scene.add(embers);
-  let emberDir = 1; // +1 embers rise (Volcano), −1 leaves fall (Jungle)
+  let emberDir = 1, emberSpeed = 1; // +1 embers rise (Volcano), −1 leaves fall (Jungle); v1.5 each Dragon War arc sets its own
   function driftEmbers(dt, camPos) {
     embers.position.set(camPos.x, 0, camPos.z);
     for (let i = 0; i < EMBERS; i++) {
-      let y = emberPos[i * 3 + 1] + emberDir * dt * (2 + (i % 5)); if (y > 45) y -= 55; else if (y < -10) y += 55;
+      let y = emberPos[i * 3 + 1] + emberDir * emberSpeed * dt * (2 + (i % 5)); if (y > 45) y -= 55; else if (y < -10) y += 55;
       emberPos[i * 3 + 1] = y; emberPos[i * 3] += Math.sin(y * 0.2 + i) * dt * 0.8;
     }
     emberGeo.attributes.position.needsUpdate = true;
@@ -135,7 +135,8 @@ export function createWorld(scene) {
   farLayer.renderOrder = -1;
   farLayer.frustumCulled = false;
   scene.add(farLayer);
-  const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks', volcano: 'peaks', skyislands: 'islands' };
+  const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks', volcano: 'peaks', skyislands: 'islands',
+    snowfields: 'peaks', deepforest: 'hills', warplains: 'castles', firelands: 'peaks', skycastles: 'islands' }; // v1.5: Dragon War's arcs
   function profile(style, a) {
     const s1 = Math.sin(a * 3 + 1.3), s2 = Math.sin(a * 7 + 0.4), s3 = Math.sin(a * 17 + 2.2);
     switch (style) {
@@ -145,12 +146,13 @@ export function createWorld(scene) {
       case 'dunes': return 12 + 10 * (0.5 + 0.5 * s1) + 4 * s2;
       case 'islands': return 4 + Math.max(0, 22 * Math.sin(a * 4 + 0.9) - 6) + 3 * s3;
       case 'rims': return 10 + 8 * Math.abs(s2) + 4 * s3;
+      case 'castles': { const b = Math.floor(a * 60), keep = (b * 7919) % 17; return 14 + 6 * (0.5 + 0.5 * s1) + (keep < 3 ? 22 + keep * 6 : keep < 6 ? 10 : 0) + (b % 2 ? 2.5 : 0); } // v1.5: walls, keeps, merlons
       default: return 16 + 12 * (0.5 + 0.5 * s1) + 6 * s2 + 2 * s3; // rolling hills
     }
   }
-  function buildFar(st, horizon) {
-    const style = FAR_STYLE[st.id] ?? 'hills';
-    const top = _k.setHex(st.theme.rock).lerp(horizon, st.theme.space ? 0.35 : 0.62); // paler, hazier than anything near
+  function buildFar(st, horizon, arc = null) {
+    const style = FAR_STYLE[arc ? arc.id : st.id] ?? 'hills';
+    const top = _k.setHex(arc ? arc.rock : st.theme.rock).lerp(horizon, st.theme.space ? 0.35 : 0.62); // paler, hazier than anything near
     for (let i = 0; i <= FAR_N; i++) {
       const a = (i / FAR_N) * Math.PI * 2, h = profile(style, a);
       const x = Math.cos(a) * FAR_R, z = Math.sin(a) * FAR_R, o = i * 6;
@@ -644,11 +646,38 @@ export function createWorld(scene) {
 
   // ---------- small scenery ---------- (placement lives in scenery.js, shared with the colliders)
 
+  // ---------- v1.5 a mega-stage's ARCS (theme.arcs): the ground palette of each 1,000 m zone (its arc's,
+  // shifted by the zone's tint, blended over ±250 m at the arc edges) and the sky / light blend ----------
+  const _ag = { low: [0, 0, 0], grass: [0, 0, 0], high: [0, 0, 0], water: null, lava: null, river: null };
+  const _arcK = { a: null, b: null, k: 0, i: 0 };
+  function arcPair(d) {
+    const A = theme.arcs, L = A[0].to - A[0].from, i = Math.max(0, Math.min(A.length - 1, Math.floor(d / L))), into = d - i * L;
+    _arcK.a = A[i]; _arcK.b = A[i]; _arcK.k = 0; _arcK.i = i;
+    if (into < 250 && i > 0) { _arcK.b = A[i - 1]; _arcK.k = 0.5 - into / 500; }
+    else if (L - into < 250 && i < A.length - 1) { _arcK.b = A[i + 1]; _arcK.k = 0.5 - (L - into) / 500; }
+    return _arcK;
+  }
+  const PAL_KEYS = ['low', 'grass', 'high'], _tint = [0, 0];
+  function arcGround(d) {
+    const { a, b, k } = arcPair(d);
+    theme.zoneTint(Math.floor(d / 1000), _tint);
+    const br = _tint[0], warm = _tint[1];
+    for (const key of PAL_KEYS) {
+      const ca = a.pal[key], cb = b.pal[key], o = _ag[key];
+      for (let j = 0; j < 3; j++) o[j] = (ca[j] + (cb[j] - ca[j]) * k) * br + (j === 0 ? warm : j === 2 ? -warm : 0);
+    }
+    const near = k < 0.5 ? a : b;
+    _ag.lava = near.lava ?? null; _ag.river = near.lava || near.cloudSea ? null : near.water ?? null;
+    return _ag;
+  }
+
   function groundColor(h, x, d) {
     if (theme.neon) { _c.setHex(theme.neon.face); return; } // v1.2: black ground (the grid is the light)
     if (theme.lava && h < -1) { _c.setRGB(...theme.lava.glow); return; } // v1.3 Volcano: lava rivers + pools glow
     if (theme.jungle && h < -1) { _c.setRGB(...theme.jungle.river); return; } // v1.3 Jungle: the winding river
-    const G = theme.ground;
+    const G = theme.arcs ? arcGround(d) : theme.ground;
+    if (G.lava && h < -1) { _c.setRGB(...G.lava); return; }   // v1.5 the Firelands' lava rivers glow
+    if (G.river && h < -1) { _c.setRGB(...G.river); return; } // v1.5 a frozen / running river
     const shade = 0.5 + 0.5 * Math.sin(x * 0.37 + d * 0.23) * Math.cos(d * 0.11);
     if (G.water && terrain.surfaceKind(x, d) === 'water') { _c.setRGB(G.water[0] + 0.04 * shade, G.water[1] + 0.05 * shade, G.water[2]); return; }
     let c;
@@ -941,6 +970,7 @@ export function createWorld(scene) {
     for (const b of stage.gusts) if (b.d1 + lapOff > planeD - 40 && b.d0 + lapOff < planeD + 260) bandsNear.push({ b, fwd: false, off: lapOff });
     // v1.2 SLIPSTREAM lanes (absolute distances, a box of air): light rushes through them.
     if (terrain.neon) for (const b of terrain.neon.lanes) if (b.d1 > planeD - 40 && b.d0 < planeD + 260) bandsNear.push({ b, fwd: true, off: 0, lane: true });
+    if (terrain.mega) for (const b of terrain.mega.lanes) if (b.d1 > planeD - 40 && b.d0 < planeD + 260) bandsNear.push({ b, fwd: true, off: 0, lane: true }); // v1.5 WAR-WIND lanes
     for (let i = 0; i < STREAKS; i++) {
       const s = streaks[i];
       const nb = bandsNear[i % Math.max(1, bandsNear.length)];
@@ -976,6 +1006,7 @@ export function createWorld(scene) {
     }
     if (spaceSky.visible && camPos) spaceSky.position.copy(camPos);
     if (camPos) { dome.position.copy(camPos); farLayer.position.set(camPos.x, 0, camPos.z); }
+    if (theme.arcs && dome.visible) applyArcLook(planeD);
     if (embers.visible && camPos) driftEmbers(dt, camPos);
     const first = Math.floor(planeD / L) - 1;
     for (let k = first; k < first + N; k++) {
@@ -1030,11 +1061,45 @@ export function createWorld(scene) {
     }
   }
 
+  // v1.5 the arc look at the plane: sky, fog, lights, clouds and the ground beyond the chunks blend over
+  // ±250 m at an arc's edge (repainted only when the blend moves a step); the arc's particles, scenery
+  // colours and far range swap at the edge itself.
+  let arcKey = -1, arcNow = -1;
+  const _skyTh = { sky: 0 }, _l1 = new THREE.Color(), _l2 = new THREE.Color();
+  const lerpHex = (out, h1, h2, k) => out.setHex(h1).lerp(_l2.setHex(h2), k);
+  const PARTICLES = { snow: [0.7, 1, 0.9], leaves: [0.6, 0.6, 0.9], ash: [0.45, 0.35, 0.7], embers: [0.6, 1, 0.85], motes: [0.5, 0.3, 0.6] }; // size, speed, opacity
+  function applyArcLook(planeD) {
+    const { a, b, k, i } = arcPair(Math.max(0, planeD));
+    const key = i * 100 + Math.round(k * 20) * (a === b ? 0 : b.from > a.from ? 1 : -1);
+    if (key !== arcKey) {
+      arcKey = key;
+      _skyTh.sky = lerpHex(_l1, a.sky, b.sky, k).getHex();
+      const horizon = paintSky(_skyTh);
+      scene.background.copy(horizon); scene.fog.color.copy(horizon);
+      hemi.groundColor.copy(lerpHex(_l1, a.hemi, b.hemi, k));
+      sun.color.copy(lerpHex(_l1, a.sun, b.sun, k));
+      cloudMat.color.copy(lerpHex(_l1, a.cloud, b.cloud, k));
+      baseMat.color.copy(lerpHex(_l1, a.base, b.base, k));
+      const near = k < 0.5 ? a : b, ni = theme.arcs.indexOf(near);
+      if (ni !== arcNow) {
+        arcNow = ni;
+        buildFar(stage, horizon, near);
+        rockMatSmall.color.setHex(near.rock);
+        coneMat.color.setHex(near.scenery.cone); ballMat.color.setHex(near.scenery.ball); trunkMat.color.setHex(near.scenery.trunk);
+        const pk = PARTICLES[near.particles.kind] ?? PARTICLES.snow;
+        embers.material.color.setHex(near.particles.color); embers.material.size = pk[0]; embers.material.opacity = pk[2];
+        emberDir = near.particles.dir; emberSpeed = pk[1];
+        updraftRings.material.color.setHex(near.lava ? 0xffa060 : 0xffffff);
+      }
+    }
+  }
+
   // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
-  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
+  const POCKET_FOG = { dragonRoost: 0x5a2a18, warChest: 0x4a3a18, nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
     if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }
+    else if (theme.arcs) arcKey = -1; // v1.5: the arc look repaints the sky next frame
     else { const h = paintSky(theme); scene.fog.color.copy(h); scene.background.copy(h); }
     dome.visible = !c; // a tinted pocket hides the sky dome + far range (v1.2: the void never has one)
     farLayer.visible = !c && !theme.neon;
@@ -1075,10 +1140,12 @@ export function createWorld(scene) {
     cloudMat.emissive.setHex(theme.space ? 0x15161c : 0x777777);
     // v1.2 NEON VOID: an empty black void — no far range, no clouds; the ground grid shows.
     farLayer.visible = clouds.visible = !theme.neon;
-    embers.visible = !!(theme.lava || theme.jungle); // v1.3: drifting embers (Volcano) / falling leaves (Jungle)
+    embers.visible = !!(theme.lava || theme.jungle || theme.arcs); // v1.3: drifting embers (Volcano) / falling leaves (Jungle); v1.5 every Dragon War arc
+    emberSpeed = 1; embers.material.size = 0.6; embers.material.opacity = 0.85;
+    arcKey = -1; arcNow = -1; // v1.5: the arc look re-applies from the next frame
     if (theme.lava) { embers.material.color.setHex(theme.lava.ember); emberDir = 1; }
     if (theme.jungle) { embers.material.color.setHex(0x5fbf4a); emberDir = -1; }
-    streakMesh.material.color.setHex(theme.neon ? theme.neon.lane : theme.jungle ? theme.jungle.rain : 0x5f8fc8);
+    streakMesh.material.color.setHex(theme.neon ? theme.neon.lane : theme.jungle ? theme.jungle.rain : theme.arcs ? 0xffe9a8 : 0x5f8fc8);
     updraftRings.material.color.setHex(theme.lava ? 0xffa060 : 0xffffff);
     for (const ch of chunks) if (ch.grid) ch.grid.visible = !!theme.neon;
     buildStageMeshes();

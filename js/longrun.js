@@ -6,12 +6,14 @@
 // corners cannot move. Each ~1,000 m block is its own character zone with its own mix + order.
 // Pure data + maths (no DOM / three.js).
 import { neonRunFor } from './neon.js';
+import { megaRunFor } from './megarun.js';
+import { DW_ZONES, HEROES, GOLDEN_SET, dragonWarPieces } from './dragonwar.js';
 
-export const LADDER = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 20000, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 40000 };
+export const LADDER = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 20000, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 40000, dragonwar: 50000 };
 export const uniqueRun = (stageId) => LADDER[stageId] ?? 0;
 // v1.1 FAIRNESS RULE: each world's COMPLETION ZONE = min(unique run, its own v1.0 FULL-maxed corner).
 // All completion content (goal gates, secrets, the GOAL) lives inside it; beyond it is bonus country.
-export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17063, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 37829 }; // v1.3: provisional for the new worlds until their corners are tuned
+export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17063, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 37829, dragonwar: 46455 }; // v1.3: provisional for the new worlds until their corners are tuned
 export const completionZone = (stageId) => COMPLETION_ZONE[stageId] ?? 0;
 
 // One character zone per 1,000 m block (its name rides the zone's banner arch).
@@ -35,6 +37,7 @@ export const ZONES = {
     'SYNTH STREET', 'ARC REACTOR', 'HOLO HIGHWAY', 'ION ISLES', 'STROBE STRAIT', 'PHOTON FIELDS', 'WIREFRAME WOODS', 'ECHO CANYON', 'QUANTUM QUARRY', 'PLASMA PLAZA',
     'RADIANT RIDGE', 'SIGNAL TOWERS', 'LIGHT CYCLE TRACK', 'GRID GORGE', 'LUMEN LAKE', 'SPARK SPIRES', 'VOLTAGE VAULT', 'NEBULA NODE', 'FLUX FALLS', 'CYBER CAVES',
     'BINARY BAY', 'ORBIT OUTPOST', 'ZENITH ZONE', 'DATA DUNES', 'HALO HARBOR', 'RETRO RINGS', 'STARLIGHT STRIP', 'AURORA ARRAY', 'FINAL FRONTIER', 'THE LAST LIGHT'],
+  dragonwar: DW_ZONES, // v1.5: fifty zones in five arcs (dragonwar.js)
 };
 // The world landmarks (scenery set pieces, outside the corridor; looks only).
 export const LANDMARKS = {
@@ -50,6 +53,7 @@ export const LANDMARKS = {
   jungle: ['jungleTemple', 'waterfall', 'giantTree'],
   skyislands: ['skyIsland', 'rainbowArch', 'waterfallIsland'],
   neonvoid: ['gridPyramid', 'neonTower', 'prismCube'],
+  dragonwar: [...new Set([...HEROES.map((h) => h[2]), 'ruinedTemple', ...GOLDEN_SET.map((g) => g[2])])], // v1.5: 25 unique hero landmarks (+ the forest's ruined temples, + §6 the Golden City's set)
 };
 export const PIECE_KINDS = ['coinArc', 'coinRing', 'hoops', 'bannerArch', 'landmark', 'shape'];
 
@@ -842,6 +846,8 @@ SET_PIECES.neonvoid = [
   { kind: "coinRing", d: 39620, x: 12, y: 14, r: 3, id: "neonvoid-220" },
   { kind: "coinRing", d: 39840, x: 12, y: 14, r: 3, id: "neonvoid-221" },
 ];
+// v1.5 DRAGON WAR: ≥ 10 authored pieces per 1,000 m zone, generated from its data (dragonwar.js).
+SET_PIECES.dragonwar = dragonWarPieces();
 // ───────────────────────── v1.1 §4 DEEP TAIL (past Z to the end of the run) ─────────────────────────
 // Bonus country only: coin lines, boost shapes, bumpables and set pieces — NO gates, secrets or goal.
 // Only Jetstream has one (Z 17063 → 20000; every other world's run ends inside its FULL-maxed reach).
@@ -910,6 +916,8 @@ export function authoredFeatures(stage, d0, d1) {
   for (const b of tailBumpablesFor(stage.id)) if (b.d >= d0 && b.d < d1) out.push({ d: b.d, type: `bump:${b.type}` });
   const neon = neonRunFor(stage.id); // v1.2 Neon Void's walls, laser rows, sliding walls and slipstreams
   if (neon) for (const f of [...neon.obstacles, ...neon.lanes.map((l) => ({ d: l.d0, kind: 'lane' }))]) if (f.d >= d0 && f.d < d1) out.push({ d: f.d, type: `neon:${f.kind}` });
+  const mega = megaRunFor(stage.id); // v1.5 a mega-stage's weave rows, tilt sectors, loop doors, shooters, wild flyers, thermals, wind lanes
+  if (mega) for (const f of mega.features) if (f.d >= d0 && f.d < d1) out.push({ d: f.d, type: `mega:${f.kind}` });
   for (let L = Math.floor(d0 / stage.cycle); L * stage.cycle < d1; L++) for (const it of lapItems) { const d = L * stage.cycle + it.d; if (d >= d0 && d < d1) out.push({ d, type: it.type }); }
   return out.sort((a, b) => a.d - b.d);
 }

@@ -73,11 +73,15 @@ export function newSceneryChunk() {
 }
 
 // Fill `out` with chunk k's scenery (the same rng sequence the renderer always used).
+// v1.5 a mega-stage's arcs each bring their own small scenery (kind + density): the arc this chunk is in.
+export const sceneryArc = (theme, d) => (theme.arcs ? theme.arcs.find((a) => d >= a.from && d < a.to) ?? theme.arcs[theme.arcs.length - 1] : null);
+
 export function fillSceneryChunk(stage, terrain, k, out) {
-  const theme = stage.theme;
   const d0 = k * L;
+  const theme = stage.theme, arc = sceneryArc(theme, d0);
+  const kind = arc ? arc.scenery.kind : theme.scenery;
+  const treesPer = arc ? arc.scenery.trees : theme.treesPerChunk, rocksPer = arc ? arc.scenery.rocks : theme.rocksPerChunk;
   const r = rng(k * 7919 + 17);
-  const kind = theme.scenery;
   out.k = k;
   for (let t = 0; t < TREE_SLOTS; t++) {
     const o = out.trees[t];
@@ -86,7 +90,7 @@ export function fillSceneryChunk(stage, terrain, k, out) {
     if (kind === 'street') x = (r() < 0.5 ? -1 : 1) * (7.5 + r() * 1.5);
     const h = terrain.surfaceAt(x, d, Infinity);
     const s = 0.8 + r() * 0.9;
-    const hide = t >= theme.treesPerChunk || (terrain.surfaceKind(x, d) === 'water') || (kind === 'street' && h > 0.5);
+    const hide = t >= treesPer || (terrain.surfaceKind(x, d) === 'water') || (kind === 'street' && h > 0.5);
     const roll = r(), spin = r() * 6;
     o.x = x; o.d = d; o.h = h; o.s = s; o.spin = spin; o.street = kind === 'street';
     if (hide || kind === 'none') { o.kind = 'none'; continue; }
@@ -99,7 +103,7 @@ export function fillSceneryChunk(stage, terrain, k, out) {
     const d = d0 + r() * L;
     const x = sceneryX(stage, terrain, (r() * 2 - 1) * (HALF - 10), d);
     const s = 0.6 + r() * 1.4;
-    if (t >= theme.rocksPerChunk || terrain.surfaceKind(x, d) === 'water') { o.on = false; continue; }
+    if (t >= rocksPer || terrain.surfaceKind(x, d) === 'water') { o.on = false; continue; }
     o.on = true; o.x = x; o.d = d; o.s = s; o.h = terrain.surfaceAt(x, d, Infinity); o.ry = r() * 6;
   }
   for (const c of out.clouds) {

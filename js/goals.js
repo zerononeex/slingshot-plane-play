@@ -9,7 +9,7 @@ import { STAGE_ORDER } from './stages.js';
 
 export const GATE_COUNT = 20;           // v1.0 (was 10 in v0.9)
 export const V09_GATES = 10;             // gates 1–10: the v0.9 collection, grandfathered
-export const MAX_GATES = 50;             // v1.1: Space + Jetstream carry 30 (the others keep 20); v1.2 Neon Void 50
+export const MAX_GATES = 60;             // v1.1: Space + Jetstream carry 30 (the others keep 20); v1.2 Neon Void 50; v1.5 Dragon War 60
 export const GOAL_PRIZE = 250;
 
 // ───────────────────────── placement (lap-free absolute distances) ─────────────────────────
@@ -460,6 +460,78 @@ GOALS.neonvoid = {
     G(50, 31745, 0, 40, 9, 'high'),
   ],
   goal: { at: 33290, x: 0, height: 28, size: 13 },
+};
+
+// ───────────────────────── v1.5 DRAGON WAR: 60 gates (the first mega-stage) ─────────────────────────
+// Z = min(50,000, FULL corner 46,455) = 46,455 m (v1.5 §6; was 46,636). Regular gates run 5 % → 84 % of Z in number order (jumbo
+// rings, size 9 — 270 m/s passes), each ≥ 45 m clear of every weave row and wild dragon, clear of the
+// tilt sectors' run-in and of the loop doors' circles; the specials sit in their structures (gate 4 in
+// the DRAGON ROOST, gate 9 on the Deep Forest's signature weave line, gate 15 in the WAR CHEST VAULT).
+// The goal at 87 % of Z, ahead of the Sky Gate's key circle. (Authored with tools-side validation.)
+GOALS.dragonwar = {
+  gates: [
+    G(1, 2335, 0, 10.5, 9, 'skimming low'),
+    G(2, 3025, -8, 24, 9, 'mid'),
+    G(3, 3600, 6, 40, 9, 'high'),
+    G(4, 4405, -72, 7, 6, 'inside the DRAGON ROOST', 'pocket'),
+    G(5, 4305, 0, 16, 9, 'mid'),
+    G(6, 4860, 10, 34, 9, 'high'),
+    G(7, 5600, -6, 44, 9, 'high'),
+    G(8, 6285, 4, 20, 9, 'mid'),
+    G(9, 10480, 8, 30, 5, 'through the SIGNATURE WEAVE (the Deep Forest)', 'signature'),
+    G(10, 6940, -10, 30, 9, 'high'),
+    G(11, 7410, 0, 12, 9, 'skimming low'),
+    G(12, 8260, 8, 38, 9, 'high'),
+    G(13, 8860, -4, 26, 9, 'mid'),
+    G(14, 9600, 12, 44, 9, 'high'),
+    G(15, 15305, 72, 7, 6, 'inside the WAR CHEST VAULT', 'pocket2'),
+    G(16, 10285, 0, 10.5, 9, 'skimming low'),
+    G(17, 10860, -8, 30, 9, 'high'),
+    G(18, 11600, 6, 18, 9, 'mid'),
+    G(19, 12150, 0, 36, 9, 'high'),
+    G(20, 12850, 10, 10.5, 9, 'skimming low'),
+    G(21, 13600, -6, 24, 9, 'mid'),
+    G(22, 14150, 4, 40, 9, 'high'),
+    G(23, 14845, -10, 16, 9, 'mid'),
+    G(24, 15410, 0, 34, 9, 'high'),
+    G(25, 16140, 8, 44, 9, 'high'),
+    G(26, 16755, -4, 20, 9, 'mid'),
+    G(27, 17410, 12, 30, 9, 'high'),
+    G(28, 18110, 0, 12, 9, 'skimming low'),
+    G(29, 18755, -8, 38, 9, 'high'),
+    G(30, 19410, 6, 26, 9, 'mid'),
+    G(31, 20085, 0, 44, 9, 'high'),
+    G(32, 20740, 10, 10.5, 9, 'skimming low'),
+    G(33, 21400, -6, 30, 9, 'high'),
+    G(34, 22085, 4, 18, 9, 'mid'),
+    G(35, 22730, -10, 36, 9, 'high'),
+    G(36, 23405, 0, 10.5, 9, 'skimming low'),
+    G(37, 24030, 8, 24, 9, 'mid'),
+    G(38, 24670, -4, 40, 9, 'high'),
+    G(39, 25345, 12, 16, 9, 'mid'),
+    G(40, 25995, 0, 34, 9, 'high'),
+    G(41, 26660, -8, 44, 9, 'high'),
+    G(42, 27315, 6, 20, 9, 'mid'),
+    G(43, 27985, 0, 30, 9, 'high'),
+    G(44, 28630, 10, 12, 9, 'skimming low'),
+    G(45, 29290, -6, 38, 9, 'high'),
+    G(46, 29985, 4, 26, 9, 'mid'),
+    G(47, 30625, -10, 44, 9, 'high'),
+    G(48, 31265, 0, 10.5, 9, 'skimming low'),
+    G(49, 31895, 8, 30, 9, 'high'),
+    G(50, 32625, -4, 18, 9, 'mid'),
+    G(51, 33260, 12, 36, 9, 'high'),
+    G(52, 33895, 0, 10.5, 9, 'skimming low'),
+    G(53, 34535, -8, 24, 9, 'mid'),
+    G(54, 34860, 6, 40, 9, 'high'),
+    G(55, 35885, 0, 16, 9, 'mid'),
+    G(56, 36850, 6, 34, 9, 'high'),   // v1.5 §6: out of THE SHELTER's rock (was 36,525)
+    G(57, 37260, -6, 44, 9, 'high'),
+    G(58, 37885, 4, 20, 9, 'mid'),
+    G(59, 38525, -10, 30, 9, 'high'),
+    G(60, 39100, 0, 12, 9, 'skimming low'),
+  ],
+  goal: { at: 40560, x: 0, height: 28, size: 13 },
 };
 
 // ───────────────────────── geometry ─────────────────────────

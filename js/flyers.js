@@ -46,7 +46,7 @@ export const FLYERS = [
     flight: { stallSpeed: 12, decayMul: 2.6, glideMul: 0.0045, engineSound: 'hum' },
     character: 'All-range fighter: white wedge body, drooped wings, blue tip blades, twin blue engines',
     colors: { body: 0xf2f4f7, trim: 0x2f6fe8, dark: 0x4a5160 } },
-  { id: 'dragon', name: 'THE DRAGON', unlock: '★ ALL TWELVE worlds (the grand prize)', caps: [105, 122, 141, 161, 183, 188, 194, 200, 206, 212], stars: 'all',
+  { id: 'dragon', name: 'THE DRAGON', unlock: '★ EVERY world (the grand prize)', caps: [105, 122, 141, 161, 183, 188, 194, 200, 206, 212], stars: 'all',
     flight: { stallSpeed: 9, decayMul: 2.4, glideMul: 0.003, balloonMul: 0.7, engineSound: 'hum', trail: 'ember' },
     character: 'Flapping dragon: big hinged wings, horns, belly plates, spiked tail, claw feet',
     colors: { body: 0xb3202a, trim: 0xffc61a, dark: 0x5a1015, membrane: 0x7a1820, horn: 0xf4ead2 }, flap: { span: 3.6, amp: 0.7, rate: 0.9 } },

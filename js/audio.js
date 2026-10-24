@@ -100,4 +100,15 @@ export const sfx = {
   goalOpen: () => notes([523, 659, 784, 1046, 1318, 1568], 90, 'triangle', 0.16),
   stageComplete: () => { notes([784, 784, 784, 1046], 120, 'square', 0.1); setTimeout(() => notes([1318, 1568, 2093], 110, 'triangle', 0.16), 520); },
   secret: () => { blip('triangle', 784, 1046, 0.12, 0.2); setTimeout(() => blip('triangle', 1046, 1568, 0.25, 0.2), 120); },
+  // v1.5 the mega-stages: a fireball / boulder hit (a soft whump), a dodge (a bright swish), a door key,
+  // the door's fanfare, the heavy door bonk and the gate grinding open.
+  fireHit: () => { blip('sawtooth', 220, 70, 0.22, 0.1); blip('triangle', 520, 180, 0.12, 0.08); },
+  dodge: () => sweep(1400, 3200, 1800, 0.22, 0.06, 2),
+  keyRing: () => notes([1175, 1568], 70, 'triangle', 0.16),
+  doorOpen: () => { notes([523, 659, 784, 1046], 110, 'square', 0.09); setTimeout(() => notes([784, 1046, 1318, 1568, 2093], 90, 'triangle', 0.16), 460); },
+  doorBonk: () => { blip('square', 160, 40, 0.5, 0.18); blip('sawtooth', 90, 45, 0.6, 0.1); },
+  grind: () => blip('sawtooth', 70, 55, 1.4, 0.06),
+  // v1.5 §6: THE LAVA WAVE's warning horn (a low rumble + a horn call) and its crash.
+  waveWarn: () => { blip('sawtooth', 60, 48, 1.6, 0.08); notes([392, 392, 523], 260, 'square', 0.08); },
+  waveCrash: () => { blip('sawtooth', 120, 30, 1.2, 0.16); blip('square', 80, 40, 0.9, 0.1); },
 };

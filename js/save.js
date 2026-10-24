@@ -22,7 +22,7 @@ import { FUN_IDS, cleanFun } from './funlines.js';
 
 const MAX_COINS = 10_000_000;
 const MAX_BEST = 10_000_000;
-const MAX_STAGES = 32; // v1.4: 12 worlds + the Barnstormer + 10 reward flyers, with room to spare
+const MAX_STAGES = 32; // v1.4: 12 worlds + the Barnstormer + 10 reward flyers, with room to spare (v1.5: 13 worlds)
 const STAGE_ID = /^[a-z][a-z0-9-]{0,23}$/;
 
 export const freshParts = () => Object.fromEntries(PART_IDS.map((id) => [id, false]));

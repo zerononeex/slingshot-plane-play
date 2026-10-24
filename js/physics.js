@@ -71,6 +71,12 @@ function stepLoop(s, dt, P, env) {
     L.count = (L.count ?? 0) + 1;
     L.set = lr.ring.set;
   }
+  // v1.5 LOOP DOORS: the door key rings this loop threads (both = the door opens when the loop ends).
+  const kr = env.keyRingAt ? env.keyRingAt(s.x, s.y, s.d) : null;
+  if (kr) {
+    const key = `${kr.i}:${kr.key}`;
+    if (!(L.keys ??= new Set()).has(key)) { L.keys.add(key); s.events.push('keyRing'); }
+  }
   const hit = solidHit(s, env, P);
   const g = env.groundAt(s.x, s.d, s.y);
   if (hit || s.y - P.clearance < g) { // clipped something: the loop breaks off
@@ -87,6 +93,7 @@ function stepLoop(s, dt, P, env) {
     s.speed *= SKILLS.loopExitKeep;
     s.events.push('loopEnd');
     if (L.count >= 8 && L.rings.size === 1) s.events.push('loopMaster'); // all 8 of one set in ONE loop
+    if (L.keys && env.loopDone) env.loopDone(s, L.keys); // v1.5: a keyed loop opens its door in advance
   }
 }
 
@@ -183,6 +190,7 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 
     chain: null,            // a slalom course in progress { course, next, lap }
     noseUp: 0,              // extra nose-up (looks only) when a wingless plane holds "up"
     bonkGrace: 0,           // seconds of collision grace after a bonk
+    hitGrace: 0, shake: 0, hits: 0, doorBonks: 0, hz: null, // v1.5 mega-stages: projectile grace, screen shake, per-flight hazard state
     bonks: 0,
     bonkWith: null,
     bonkWithT: 0,         // the obstacle last bonked (can't bonk again until you leave it)
@@ -229,6 +237,7 @@ export function stepFlight(s, input, dt, P, envIn) {
   else if (s.mode === 'air') stepAir(s, input, dt, P, env);
   else if (s.mode === 'ground') stepGround(s, input, dt, P, env);
   else stepTumble(s, dt, P, env);
+  if (env.stepHazards) env.stepHazards(s, dt, P); // v1.5 the mega-stages: shots + loop doors (shooters.js, loopdoors.js)
   if (s.speed > s.peakSpeed) s.peakSpeed = s.speed;
   return s;
 }

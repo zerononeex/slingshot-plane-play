@@ -8,9 +8,10 @@
 // (secrets at their own distance, once: 1–4 in the first lap, v1.0's secret 5 far out).
 
 import { FLYERS } from './flyers.js';
+import { ARCS, ARC_LEN, DW_LAP, zoneTint } from './dragonwar.js';
 
 export const DEFAULT_STAGE = 'plains';
-export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid']; // v1.3: three new worlds before the finale
+export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid', 'dragonwar']; // v1.3: three new worlds before the finale; v1.5: the first mega-stage after it
 
 const range = (from, to, step) => { const a = []; for (let d = from; d <= to; d += step) a.push(d); return a; };
 const SHARED_PATTERNS = ['line', 'highArc', 'slalom', 'dive', 'stairs', 'wave', 'fork', 'ring'];
@@ -868,6 +869,59 @@ STAGES.neonvoid = {
     { id: 'neon-slot', name: 'Behind the laser slot', x: -14, y: 6, d: 1625, coins: 15, radius: 5 },
     { id: 'neon-prism', name: 'At the heart of the Prism Vault', x: 75, y: 4, d: 880, coins: 14, radius: 5 },
     { id: 'neon-far', name: 'The last light in the void', x: -10, y: 40, d: 29505, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['ditchDip', 'craterDip']),
+};
+
+// ───────────────────────── S13 DRAGON WAR — the first 50,000 m MEGA-STAGE (v1.5) ─────────────────────────
+// A Skyrim-flavoured medieval war world in five 10,000 m biome arcs (dragonwar.js). The base lap below
+// repeats every 2,000 m like every world (a castle arch, a loop ring, dive gates, a war-banner course,
+// two pockets); the 50,000 m authored run on top of it — weave slaloms, tilt sectors, loop doors,
+// dragons, trebuchets, thermals, war-wind lanes — is the shared mega layer (megarun.js). Bright look.
+const DW0 = ARCS[0];
+STAGES.dragonwar = {
+  ...base,
+  id: 'dragonwar', name: 'Dragon War',
+  unlock: { after: 'neonvoid', best: 25000 },
+  unlockBanner: 'NEW PLANE: SKY KNIGHT!',
+  // The SKY KNIGHT: a steel-and-royal-blue war plane with gold trim and a gold pennant trail. Caps Lv1–5
+  // locked; Lv6–10 ≈ +9 %/level (the Neon Void precedent: the fastest stage plane at every level).
+  plane: { name: 'Sky Knight', body: 0xc9ced6, wing: 0x1f4fa8, accent: 0xffc61a, wingScale: 1.05, floats: false, knight: true,
+    caps: [100, 116, 134, 153, 174, 190, 207, 226, 246, 268], decayMul: 5, glideMul: 0.02, noLiftCarry: 22, stallSpeed: 16, trail: 'knight' }, // grid-tuned (BALANCE.md)
+  theme: { bits: [0xc9ced6, 0x8a6a4a], sky: DW0.sky, fogNear: 150, fogFar: 500, hemiGround: DW0.hemi, sun: DW0.sun,
+    ground: { ...DW0.pal, water: null }, base: DW0.base, rock: DW0.rock, scenery: DW0.scenery.kind, treesPerChunk: DW0.scenery.trees, rocksPerChunk: DW0.scenery.rocks,
+    // v1.5 THEME DATA: the five arcs (palette, sky, scenery, particles, dressing kit) — every renderer
+    // branch for the mega look is keyed on `arcs` (only Dragon War carries it).
+    arcs: ARCS, zoneTint },
+  ground: { style: 'snow', center: 4, side: 16, peaks: 34, arcs: ARCS.map((a) => a.ground), arcLen: ARC_LEN },
+  flatStart: 60,
+  // The rivers (frozen in the Snowfields, lava in the Firelands — the arc's palette) and a few hollows.
+  ditches: [{ d: 520, depth: 3, halfLength: 9 }, { d: 1440, depth: 3, halfLength: 8 }],
+  pits: [{ x: -7, d: 770, depth: 4, radius: 8, rim: 1.5, crater: true }, { x: 8, d: 1760, depth: 4, radius: 8 }], // a dragon-strike crater + a hollow
+  zones: [
+    { side: 'left', kind: 'riverFalls', from: 500, to: 540 }, { side: 'left', kind: 'cavern', from: 1110, to: 1250 },
+    { side: 'right', kind: 'riverFalls', from: 1420, to: 1460 }, { side: 'left', kind: 'slot', from: 1600, to: 1640 },
+  ],
+  // The CASTLE ARCH: a freestanding stone gateway on the lap (the opening is safe, the stone bonks).
+  archways: [DW_LAP.archway],
+  // The GATEHOUSE TUNNEL (left): the cavern tech as a lit stone block; and the RIVER BRIDGE (fly under or over).
+  caverns: [DW_LAP.cavern],
+  bridges: [DW_LAP.bridge],
+  slots: [DW_LAP.slot],
+  loopRings: [DW_LAP.loopRing],
+  diveGates: DW_LAP.diveGates,
+  courses: [{ id: 'dragonwar-banners', look: 'banners', gates: DW_LAP.course.map((d, i) => gate(d, i % 2 ? 4 : -4)) }],
+  bumpables: [['vulture', 300, 13], ['pigeonFlock', 560, -12], ['highGoose', 1000, 12], ['kite', 1350, -10], ['vulture', 1620, 12], ['highGoose', 1880, -12]].map(([type, d, x]) => ({ type, d, x })),
+  pockets: [
+    pocket('dragon-roost', 'DRAGON ROOST', 'dragonRoost', -1, 180, 400, 8, [['vulture', 130, 3], ['caveBats', 300, -3]]),
+    pocket('war-chest-vault', 'WAR CHEST VAULT', 'warChest', 1, 1180, 400, 8, [['pigeonFlock', 130, -3], ['vulture', 290, 3]]),
+  ],
+  secrets: [
+    { id: 'dragonwar-arch', name: 'On top of the castle arch', x: 0, y: 21, d: 700, coins: 13, radius: 5 },
+    { id: 'dragonwar-roost', name: 'Among the dragon eggs', x: -72, y: 4, d: 480, coins: 14, radius: 5 },
+    { id: 'dragonwar-loop', name: 'Top of the castle loop', x: 0, y: 32, d: 900, coins: 15, radius: 5 },
+    { id: 'dragonwar-chest', name: 'Inside the War Chest Vault', x: 75, y: 4, d: 1450, coins: 14, radius: 5 },
+    { id: 'dragonwar-sky', name: 'Above the last sky castle', x: -10, y: 40, d: 40000, coins: 15, radius: 7 },
   ],
   patterns: patterns(['ditchDip', 'craterDip']),
 };

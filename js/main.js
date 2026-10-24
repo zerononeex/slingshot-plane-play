@@ -25,6 +25,7 @@ import { createShapesView } from './shapesview.js';
 import { setPiecesFor } from './longrun.js';
 import { createSetPiecesView } from './setpieces.js';
 import { createNeonView } from './neonview.js';
+import { createMegaView } from './megaview.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
 import { unlockAudio, sfx, audioCtx } from './audio.js';
@@ -94,6 +95,7 @@ const goalView = createGoalView(scene); // v0.9 STAGE GOALS
 const shapesView = createShapesView(scene); // v1.0 BOOST SHAPES
 const setPiecesView = createSetPiecesView(scene); // v1.1 LONG STAGES
 const neonView = createNeonView(scene); // v1.2 NEON VOID: walls, laser slaloms, sliding walls, slipstreams
+const megaView = createMegaView(scene, fx); // v1.5 the MEGA-STAGES: weave, tilt sectors, loop doors, dragons + trebuchets, the arcs' dressing
 let terrain = terrainFor(loadout());
 world.setStage(stage, terrain);
 
@@ -144,7 +146,7 @@ function showScreen(id) {
 }
 
 // ---------- home (the hangar) ----------
-const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', volcano: '🌋', jungle: '🌴', skyislands: '🏝️', neonvoid: '🌌' };
+const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', volcano: '🌋', jungle: '🌴', skyislands: '🏝️', neonvoid: '🌌', dragonwar: '🐉' };
 let carouselIndex = 0;
 let lockedView = false;
 
@@ -438,7 +440,7 @@ const WORLD_TINT = {
   plains: [0x3ccf5a, 0x24a33f], canyon: [0xc8572a, 0x8f3517], city: [0xe8b100, 0xa87c00], snow: [0x5cb8ff, 0x2f86d1],
   desert: [0xe2b064, 0xb07f2f], ocean: [0x16a89f, 0x0b7470], space: [0x7c5cff, 0x5136d1], jetstream: [0xff9a4d, 0xd9661b],
   volcano: [0xe8552a, 0xa8331a], jungle: [0x2fae4a, 0x1f7a33], skyislands: [0xff8fb8, 0xd9578a],
-  neonvoid: [0x00b8d4, 0x00838f],
+  neonvoid: [0x00b8d4, 0x00838f], dragonwar: [0xc0392b, 0x8a1f1a],
 };
 const rgba = (n, a) => `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 function applyTint() {
@@ -526,7 +528,7 @@ function refreshShop() {
     b.className = `swatch${rec.paints.current === p.id ? ' current' : ''}${poor ? ' poor' : ''}`;
     b.dataset.key = `paint:${p.id}`;
     b.disabled = poor;
-    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : '';
+    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : p.dragonwings ? 'dragon-dot' : '';
     b.innerHTML = `<span class="dot ${fancy}" style="${fancy ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
     b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id, planeId)); });
     paints.appendChild(b);
@@ -580,7 +582,7 @@ function setupGoals() {
   const goals = goalsFor(stageId);
   goalRun = createGoalRun(wrec, gateTotal(stageId));
   goalPrevD = 0;
-  if (!goals) { goalView.build(null); return; }
+  if (!goals) { goalView.build(null); setupShapes(); return; } // (the world's set pieces + mega layer still build)
   goalYs = goals.gates.map((g) => gateY(terrain, g));
   goalTopY = gateY(terrain, goals.goal);
   goalView.build(goals, goalYs, goalTopY, goalRun.owned, goalRun.open);
@@ -598,6 +600,7 @@ function setupShapes() {
   if (setPiecesBuilt !== stageId) { // built once per world (the pieces never change within a world)
     setPiecesView.build(setPiecesFor(stageId), (x, d) => terrain.surfaceAt(x, d, -Infinity), stage.theme.neon ?? null);
     neonView.build(terrain.neon, stage.theme.neon);
+    megaView.build(terrain.mega, stage, terrain);
     setPiecesBuilt = stageId;
   }
 }
@@ -685,6 +688,7 @@ function startRun() {
   camera.fov = baseFov; camera.updateProjectionMatrix(); // the speed kick starts from rest
   runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set(); bumpsRun = []; stashReached = new Set();
   world.setPocketLook(null);
+  megaArc = -1; spectaclesSeen.clear();
   flop = false; pull = 0; endTimer = 0; crashTimer = 0; paused = false; tumbleSpin = 0;
   boostHeld = false;
   resetPilot();
@@ -1336,7 +1340,7 @@ $('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are
 
 // ---------- v0.7 speed FX ----------
 // World-tinted dust: snow puffs white, desert tan, moon grey…
-const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, volcano: 0x6a5a55, jungle: 0x8a7a5a, skyislands: 0xf4f7fc, neonvoid: 0x00e5ff };
+const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, volcano: 0x6a5a55, jungle: 0x8a7a5a, skyislands: 0xf4f7fc, neonvoid: 0x00e5ff, dragonwar: 0xdfe6ee };
 const trails = createTrails(scene), streaks = createStreaks(scene, camera);
 const _tl = new THREE.Vector3(), _tr = new THREE.Vector3();
 function speedFx(dt) {
@@ -1439,6 +1443,9 @@ function updateCamera(dt) {
   camLook.lerp(_look, 1 - Math.exp(-9 * dt));
   camera.position.copy(camPos);
   camera.lookAt(camLook);
+  // v1.5 the mega-stages: a hit shakes the view (a loop door's bonk shakes it hardest)
+  const shake = flight && mode === 'fly' ? flight.shake ?? 0 : 0;
+  if (shake > 0) { camera.position.x += shake * 0.9 * Math.sin(clock * 61); camera.position.y += shake * 0.7 * Math.sin(clock * 47 + 1); }
 }
 
 function updateHud() {
@@ -1498,6 +1505,7 @@ function frame(now) {
     shapesView.update(clock);
     setPiecesView.update(Math.max(0, -plane.root.position.z), dt);
     neonView.update(Math.max(0, -plane.root.position.z), flight && mode === 'fly' ? flight.time : 0, dt);
+    megaView.update(Math.max(0, -plane.root.position.z), flight && mode === 'fly' ? flight.time : 0, dt, mode === 'fly' ? flight : null, camera.position);
     speedFx(dt);
     if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $('banner').hidden = true;
     updateCamera(dt);
@@ -1600,6 +1608,26 @@ function collect(pos, opts) {
   }
 }
 
+// v1.5 the mega-stages: the door the plane is keying / passing, and the arc + spectacle banners.
+function megaDoorNear() {
+  const m = terrain.mega;
+  if (!m) return null;
+  let best = null;
+  for (const d of m.doors) if (!best || Math.abs(d.loopD - flight.d) < Math.abs(best.loopD - flight.d)) best = d;
+  return best;
+}
+let megaArc = -1;
+const spectaclesSeen = new Set();
+function megaMoments() {
+  const arcs = stage.theme.arcs, m = terrain.mega;
+  if (!arcs || !m || ejected) return;
+  const a = Math.max(0, Math.min(arcs.length - 1, Math.floor(flight.d / (arcs[0].to - arcs[0].from))));
+  if (a !== megaArc) { if (megaArc >= 0 || a > 0) banner(arcs[a].name, 2.6); megaArc = a; }
+  for (const sp of m.spectacles) if (!spectaclesSeen.has(sp) && flight.d > sp.d - 700 && flight.d < sp.d) { spectaclesSeen.add(sp); banner(sp.name, 2.4); }
+  // v1.5 §6: the hall's DIVE / CLIMB gap walls called out as they come up
+  for (const g of m.gaps) if (!spectaclesSeen.has(g) && flight.d > g.d - 140 && flight.d < g.d) { spectaclesSeen.add(g); puffText(g.move === 'dive' ? 'DIVE!' : 'CLIMB!'); }
+}
+
 function stepGame(dt) {
   input.x = pointerId === null ? keys.x : input.x;
   input.y = pointerId === null ? keys.y : input.y;
@@ -1689,6 +1717,18 @@ function stepGame(dt) {
     if (ev === 'ring') { runCoins += stage.ringBonus; banner(`THROUGH THE ${stage.ringName ?? 'RING'}! +${stage.ringBonus}`, 1.2); sfx.secret(); }
     if (ev === 'devil') { banner('WHOOSH! DUST DEVIL BOOST!', 1.4); sfx.whoosh(); }
     if (ev === 'updraft') sfx.whoosh();
+    // v1.5 THE MEGA-STAGES (no damage, ever: a hit is a shake + 1 % speed; a roll dodges)
+    if (ev === 'hit') { sfx.fireHit(); plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y + 0.3, _v.z - 1, 0xff8a1f, 0xffd23f); bonkWobble = Math.max(bonkWobble, 0.3); }
+    if (ev === 'boulderHit') puffText('BOULDER!');
+    if (ev === 'dodge') { sfx.dodge(); puffText('DODGED!'); }
+    if (ev === 'keyRing') { sfx.keyRing(); puffText(flight.loop?.keys?.size >= 2 ? 'BOTH KEYS!' : 'KEY!'); }
+    if (ev === 'doorOpen') { const dr = megaDoorNear(); sfx.doorOpen(); banner(`${dr ? dr.name : 'THE GATE'} OPENS!`, 2.4); if (dr) fx.goalBurst(dr.x, dr.y + 12, -dr.d, 2); }
+    if (ev === 'doorBonk') { sfx.doorBonk(); setTimeout(() => sfx.grind(), 150); banner('CLONK! THE GATE GRINDS OPEN…', 2.2); bonkWobble = 0.9; plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y, _v.z - 2, 0x6b4423, 0x2a2d36); }
+    if (ev === 'tiltSector') { runCoins += 10; banner('KNIFE EDGE! +10', 1.6); sfx.slot(); }
+    // v1.5 §6 THE LAVA WAVE: the warning, the shelter's fanfare, or the heavy knock outside (no damage)
+    if (ev === 'waveWarn') { sfx.waveWarn(); banner('THE LAVA WAVE IS COMING! TAKE SHELTER IN THE CAVE →', 3.4); }
+    if (ev === 'shelter') { sfx.waveCrash(); setTimeout(() => sfx.doorOpen(), 350); banner('SAFE IN THE SHELTER!', 2.6); plane.root.getWorldPosition(_v); fx.goalBurst(_v.x, _v.y + 4, _v.z - 30, 1.2); }
+    if (ev === 'waveHit') { sfx.waveCrash(); banner('SWEPT BY THE LAVA WAVE!', 2.4); bonkWobble = 1; plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y, _v.z - 2, 0xff6a1a, 0xffd23f); }
     if (ev === 'splash' || ev === 'bigSplash') {
       plane.root.getWorldPosition(_v);
       fx.splash(_v.x, terrain.groundAt(flight.x, flight.d), _v.z, ev === 'bigSplash');
@@ -1697,6 +1737,7 @@ function stepGame(dt) {
     }
   }
   flight.events.length = 0;
+  megaMoments();
   // BUMPABLES: pay instantly, start the set-piece, a "+N", coin sparkles and a silly sound.
   for (const bp of flight.bumps) {
     world.bump(bp.b.id, bp.lap);
@@ -1810,4 +1851,5 @@ window.__game = {
   get mode() { return mode; }, get flight() { return flight; }, get pilot() { return pilot; },
   get save() { return save; }, get rec() { return rec; }, get coins() { return world.activeCoins(); },
   get pattern() { return flightSeed; }, eject, get music() { return music.file; }, get sound() { return flightSound.kind; },
+  get render() { return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }; }, // v1.5: the perf budget check
 };
