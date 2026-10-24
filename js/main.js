@@ -872,6 +872,7 @@ function eject() {
   ejected = true;
   pilotChuteT = 0;
   scene.attach(plane.pilot.group);
+  plane.pilot.group.visible = true; // v1.4: out of a flyer's cockpit
   $('btn-eject').hidden = true;
   $('btn-boost').hidden = true;
   boostHeld = false;
@@ -1258,7 +1259,7 @@ $('btn-xfer-back').addEventListener('click', () => { mode = 'title'; showScreen(
 $('btn-xfer-send').addEventListener('click', sendTransfer);
 
 // The show (~2.2 s, tap to skip): a cargo plane crosses the top trailing coins that rain onto
-// the destination card; every 5th coin veers into THE BANKER's bag (cha-ching); he tips his hat.
+// the destination card; every 2nd coin veers into THE BANKER's bag (cha-ching); he tips his hat.
 const XS_COINS = 15;
 const xsPool = [];
 for (let i = 0; i < XS_COINS; i++) { const c = document.createElement('div'); c.className = 'xs-coin'; $('xs-coinpool').appendChild(c); xsPool.push(c); }
@@ -1278,7 +1279,7 @@ function playTransferShow(from, to, q, before) {
   const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
   const dest = rect(toCard), bag = rect($('bk-bag'));
   const T = 2.2, flyT = 0.75;
-  const banked = (i) => i % 5 === 4; // every 5th coin = the 20 %
+  const banked = (i) => i % 2 === 1; // every 2nd coin = the 50 %
   const plane = (t) => ({ x: -80 + (W + 160) * Math.min(1, t / 1.7), y: H * 0.13 + Math.sin(t * 5) * 6 });
   const drops = xsPool.map((_, i) => ({ t0: 0.12 + i * 0.075, landed: false }));
   let landedNormal = 0;
@@ -1489,7 +1490,7 @@ function frame(now) {
     const spinRate = (flying && !ejected ? 12 + flight.speed * 1.6 : mode === 'fly' ? 0 : 6) * lo.engine.propSpin;
     plane.prop.rotation.z += spinRate * dt;
     plane.propBlurFor(spinRate);
-    plane.animate(dt, clock, flying, flying ? flight.speed : 0, flying && flight.boosting);
+    plane.animate(dt, clock, flying, flying ? flight.speed : 0, flying && flight.boosting, flying ? flight.vy : 0);
     animatePilot(dt);
     if (lo.magnet.sparkle && mode !== 'fly' && Math.random() < dt * 4) magnetSpark(0xffe14d);
     fx.update(dt);
@@ -1772,6 +1773,7 @@ function stepGame(dt) {
     if (flight.ended === 'tumble' && !ejected && !pilotDizzy) {
       pilotDizzy = true;
       scene.attach(plane.pilot.group);
+      plane.pilot.group.visible = true; // v1.4: out of a flyer's cockpit
       plane.pilot.group.position.set(flight.x + 1.6, terrain.groundAt(flight.x + 1.6, flight.d, flight.y) + 0.05, -flight.d);
       plane.pilot.group.rotation.set(0, 0, 0);
       stars.visible = true;

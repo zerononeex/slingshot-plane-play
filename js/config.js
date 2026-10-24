@@ -204,6 +204,8 @@ export const PAINTS = [
   { id: 'tron',    name: 'TRON',            cost: 230, color: 0x05050a, tron: true, only: 'neonvoid' },
   { id: 'laser',   name: 'Laser Pink',      cost: 110, color: 0xff2bd6, only: 'neonvoid' },
   { id: 'lime',    name: 'Electric Lime',   cost: 110, color: 0x7dff2b, only: 'neonvoid' },
+  // v1.4 THE DRAGON's skin, free with it (its record only): the Dragonite model in place of the Dragon.
+  { id: 'dragonite', name: 'Dragonite',      cost: 0,   color: 0xf5a142, skin: 'dragonite', only: 'dragon' },
 ];
 
 // PLANE PARTS — one-time buys, in this order. Start = body + propeller only.

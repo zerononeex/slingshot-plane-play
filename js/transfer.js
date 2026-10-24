@@ -1,14 +1,15 @@
 // Coin transfers between world wallets (pure). The ONE sanctioned exception to "wallets never
-// mix": send coins in clean 10s from one unlocked world to another; THE BANKER keeps 20 %.
-// Amounts are multiples of 10, so the toll (amount / 5) is always a whole number.
+// mix": send coins in clean 10s from one unlocked world to another; THE BANKER keeps 50 %
+// (the owner's call: was 20 %). Amounts are multiples of 10, so the toll (amount × TOLL_RATE) is
+// always a whole number.
 import { getStage, setStage, isUnlocked } from './save.js';
 
 export const STEP = 10;
-export const TOLL_RATE = 0.2;
+export const TOLL_RATE = 0.5;
 
-// The honest math: "Send 100 → 80 arrive · Banker keeps 20".
+// The honest math: "Send 100 → 50 arrive · Banker keeps 50".
 export function quote(amount) {
-  const toll = amount / 5;
+  const toll = Math.round(amount * TOLL_RATE);
   return { send: amount, arrive: amount - toll, toll };
 }
 

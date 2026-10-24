@@ -14,7 +14,7 @@
 //
 // Game code reads/writes progression ONLY through getStage(save, id) / setStage(save, id, rec).
 import { SAVE_KEY } from './config.js';
-import { STAGES, DEFAULT_STAGE, STAGE_ORDER, EXTRA_PLANES, EXTRA_PLANE_ORDER } from './stages.js';
+import { STAGES, DEFAULT_STAGE, STAGE_ORDER, EXTRA_PLANES, EXTRA_PLANE_ORDER, FLYER_ORDER, FLYER_STARS } from './stages.js';
 import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel, paintFits } from './economy.js';
 import { PAINTS } from './config.js';
 import { cleanGates, cleanComplete, gateTotal } from './goals.js';
@@ -22,7 +22,7 @@ import { FUN_IDS, cleanFun } from './funlines.js';
 
 const MAX_COINS = 10_000_000;
 const MAX_BEST = 10_000_000;
-const MAX_STAGES = 16;
+const MAX_STAGES = 32; // v1.4: 12 worlds + the Barnstormer + 10 reward flyers, with room to spare
 const STAGE_ID = /^[a-z][a-z0-9-]{0,23}$/;
 
 export const freshParts = () => Object.fromEntries(PART_IDS.map((id) => [id, false]));
@@ -64,6 +64,8 @@ export function deriveSkills(unlocked, stored = []) {
 export function derivePlanes(unlocked, stored = []) {
   return EXTRA_PLANE_ORDER.filter((id) => stored.includes(id) || unlocked.includes(EXTRA_PLANES[id].unlock.world));
 }
+// v1.4 REWARD FLYERS: earned by ★s, derived (never stored — a ★ never goes away, so neither does its flyer).
+export const flyersUnlocked = (stages) => FLYER_ORDER.filter((id) => FLYER_STARS[id].every((w) => stages?.[w]?.complete === true));
 // prefs.musicLast = { world: 1–3 } — the rotating flight song played last per world (only when set).
 function cleanPrefs(raw) {
   const out = { music: !(isObj(raw) && raw.music === false) };
@@ -106,8 +108,9 @@ export function checkUnlocks(save) {
 }
 
 export const isUnlocked = (save, id) => save.unlocked.includes(id);
-// Worlds' planes unlock with their world; extra planes have their own list.
-export const isPlaneUnlocked = (save, id) => (STAGES[id] ? isUnlocked(save, id) : (save.planesUnlocked ?? []).includes(id));
+// Worlds' planes unlock with their world; extra planes have their own list; reward flyers follow the ★s.
+export const isPlaneUnlocked = (save, id) => (STAGES[id] ? isUnlocked(save, id)
+  : FLYER_STARS[id] ? flyersUnlocked(save.stages).includes(id) : (save.planesUnlocked ?? []).includes(id));
 
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const intOr = (n, lo, hi, dflt) => (Number.isInteger(n) ? Math.min(hi, Math.max(lo, n)) : dflt);
@@ -189,7 +192,7 @@ export function validateSave(data) {
   const storedPlanes = Array.isArray(data.planesUnlocked) ? data.planesUnlocked : [];
   const planesUnlocked = derivePlanes(unlocked, storedPlanes);
   const skills = deriveSkills(unlocked, Array.isArray(data.skills) ? data.skills : []);
-  const out = { v: 2, currentStage, unlocked, planesUnlocked, skills, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked, planesUnlocked), prefs: cleanPrefs(data.prefs), stages };
+  const out = { v: 2, currentStage, unlocked, planesUnlocked, skills, planeChoice: cleanPlaneChoice(data.planeChoice, unlocked, [...planesUnlocked, ...flyersUnlocked(stages)]), prefs: cleanPrefs(data.prefs), stages };
   if (data.gameComplete === true) out.gameComplete = true; // v1.2: sparse (absent = false), only a real true
   return out;
 }

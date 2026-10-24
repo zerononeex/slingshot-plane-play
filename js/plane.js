@@ -3,6 +3,7 @@
 // and its look shows its level (setLoadout).
 import * as THREE from 'three';
 import { funLevel } from './funlines.js';
+import { buildFlyer } from './flyermodels.js';
 
 // v0.7 art pass: every plane material carries baked vertex colours (lighter on top, the colour
 // mid, deeper on the belly) so paint jobs still recolour through material.color.
@@ -414,6 +415,8 @@ export function buildPlane(tune) {
   let defaultBody = tune.bodyColor;
   function setStagePlane(def) {
     defaultBody = def.body;
+    baseFlyer = def.flyer ?? null; // v1.4 a reward flyer: its own model in place of the airframe
+    mountFlyer(baseFlyer);
     wingMat.color.setHex(def.wing);
     accentMat.color.setHex(def.accent);
     const ws = def.wingScale / tune.wingScale;
@@ -487,6 +490,10 @@ export function buildPlane(tune) {
     pilot.chute.children[0].material.color.setHex(CHUTE_COLS[cl]);  // …and striped / recoloured per level
     pilot.chute.children[1].material.color.setHex(cl >= 3 ? 0xffd23f : 0xffffff);
     bodyMat.color.setHex(paint.id === 'default' ? defaultBody : paint.color);
+    if (baseFlyer) { // v1.4: a skin paint swaps the model (the Dragonite); other paints recolour the flyer's body
+      mountFlyer(paint.skin ?? baseFlyer);
+      for (const m of flyer.bodyMats) m.color.setHex(paint.id === 'default' || paint.skin ? flyer.body : paint.color);
+    }
     rainbow = !!paint.rainbow;
     nebula = !!paint.nebula;
     // v1.0 Lv10 rainbow sheen on the engine cowl, the magnet and the wheel rims.
@@ -505,7 +512,10 @@ export function buildPlane(tune) {
     propBlur.visible = k > 0.02;
     blade.visible = k < 0.75;
   }
-  function animate(dt, t, flying, speed = 0, boosting = false) {
+  function animate(dt, t, flying, speed = 0, boosting = false, climb = 0) {
+    if (flyer) { // v1.4: the Dragon flaps (hard when slow or climbing), props spin, flames flicker
+      flyer.f.animate(dt, flying ? speed : 30, flying ? climb : 0);
+    }
     if (jet) intakeGlowMat.opacity = flying ? Math.min(0.9, 0.2 + speed / 120) * (0.75 + 0.25 * Math.sin(t * (6 + speed * 0.2))) : 0.15;
     if (ship) { coreMat.opacity = 0.75 + Math.random() * 0.25; core.scale.set(1, 1, boosting ? 1.6 + Math.random() * 0.6 : 1); }
     if (rainbow) bodyMat.color.copy(_hsl.setHSL((t * (flying ? 0.12 : 0.08)) % 1, 0.85, 0.55));
@@ -526,6 +536,7 @@ export function buildPlane(tune) {
       exhaust.scale.set(f, f, f * len);
       exhaust.position.z = 1.55 + (len - 1) * 0.45;
     }
+    if (flyer && (rainbow || nebula)) for (const m of flyer.bodyMats) m.color.copy(bodyMat.color);
     squash = Math.max(0, squash - dt);
     const k = squash > 0 ? 0.55 + 0.45 * (1 - squash / 0.15) : 1;
     for (const w of wheels) {
@@ -538,6 +549,7 @@ export function buildPlane(tune) {
   // Put the pilot back in the cockpit (after an eject or a Bonk).
   function seatPilot() {
     model.add(pilot.group);
+    pilot.group.visible = !flyer;
     pilot.group.position.copy(cockpitPos);
     pilot.group.rotation.set(0, 0, 0);
     pilot.group.scale.setScalar(1);
@@ -633,6 +645,41 @@ export function buildPlane(tune) {
   }
 
   bakeShading(model); // v0.7: the shaded, less-toy look (vertex colours, baked once)
+
+  // v1.4 REWARD FLYERS: the airframe (fuselage, wings, tail, prop, wheels, decals, per-plane extras)
+  // goes into one group the flyer hides; the pilot rides inside the flyer's own cockpit (hidden until
+  // an eject or a tumble pops them out). The fun-line extras, tank and magnet stay on.
+  const keep = new Set([pilot.group, seat, radar, horn, spoiler, tank, magnet, ...balloons.map((o) => o.b)]);
+  const airframe = new THREE.Group();
+  for (const o of [...model.children]) if (!keep.has(o)) airframe.add(o);
+  model.add(airframe);
+  const FLYER_FIT = 3.8; // the flyer's longest side (length or span), about the stock plane's span
+  const flyerCache = new Map();
+  let flyer = null, baseFlyer = null;
+  function mountFlyer(id) {
+    if (flyer?.id === id) return;
+    if (flyer) model.remove(flyer.holder);
+    flyer = null;
+    if (id) {
+      let e = flyerCache.get(id);
+      if (!e) {
+        const f = buildFlyer(id), holder = new THREE.Group();
+        holder.add(f.root);
+        const box = new THREE.Box3().setFromObject(f.root), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+        const k = FLYER_FIT / Math.max(size.x, size.z);
+        f.root.scale.setScalar(k);
+        f.root.position.set(-mid.x * k, -0.6 - box.min.y * k, -mid.z * k); // sits where the stock wheels touch down
+        const body = f.def.colors.body, bodyMats = [];
+        f.root.traverse((o) => { if (o.isMesh && o.material.color?.getHex() === body && !bodyMats.includes(o.material)) bodyMats.push(o.material); });
+        e = { id, f, holder, body, bodyMats };
+        flyerCache.set(id, e);
+      }
+      flyer = e;
+      model.add(e.holder);
+    }
+    airframe.visible = !flyer;
+    if (pilot.group.parent === model) pilot.group.visible = !flyer;
+  }
   const setSpoiler = (on) => { spoilerWant = on ? 1 : 0; };
-  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : runner ? 'runner' : trailKind ?? 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
+  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : runner ? 'runner' : trailKind ?? 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; }, get isFlyer() { return !!flyer; } };
 }

@@ -7,6 +7,8 @@
 // Every feature list is for the first lap; the layout repeats every `cycle` metres
 // (secrets at their own distance, once: 1–4 in the first lap, v1.0's secret 5 far out).
 
+import { FLYERS } from './flyers.js';
+
 export const DEFAULT_STAGE = 'plains';
 export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid']; // v1.3: three new worlds before the finale
 
@@ -468,8 +470,23 @@ export const EXTRA_PLANES = {
   },
 };
 export const EXTRA_PLANE_ORDER = ['biplane'];
-// Every plane id in picker order: the world planes, then the extras.
-export const PLANE_ORDER = [...STAGE_ORDER.slice(0, 2), ...EXTRA_PLANE_ORDER, ...STAGE_ORDER.slice(2)];
+
+// ---------- v1.4 REWARD FLYERS: extra planes earned by ★s (flyers.js) ----------
+// Each is an extra plane like the Barnstormer (its own record, no home wallet), but its unlock is
+// derived from the worlds' ★s (save.js flyersUnlocked), never stored. `flyer` = its model id.
+export const FLYER_ORDER = FLYERS.map((f) => f.id);
+export const FLYER_STARS = Object.fromEntries(FLYERS.map((f) => [f.id, f.stars === 'all' ? [...STAGE_ORDER] : f.stars]));
+for (const f of FLYERS) {
+  EXTRA_PLANES[f.id] = {
+    id: f.id, name: f.name, kind: f.from ? `${f.from} · ★ reward` : '★ the grand prize', unlock: { stars: FLYER_STARS[f.id] },
+    banner: `NEW FLYER: ${f.name.toUpperCase()}!`,
+    plane: { name: f.name, body: f.colors.body, wing: f.colors.trim, accent: f.colors.dark, wingScale: 1.0, floats: false,
+      caps: f.caps, decayMul: 1, glideMul: 1, trail: { turbine: 'jet', hum: 'ship' }[f.flight.engineSound] ?? null, ...f.flight, flyer: f.id },
+  };
+}
+
+// Every plane id in picker order: the world planes, then the extras, then the reward flyers.
+export const PLANE_ORDER = [...STAGE_ORDER.slice(0, 2), ...EXTRA_PLANE_ORDER, ...STAGE_ORDER.slice(2), ...FLYER_ORDER];
 // { id, name (home label), plane } for any plane id — world planes come from their stage.
 export function planeEntry(id) {
   if (STAGES[id]) return { id, name: STAGES[id].name, plane: STAGES[id].plane, home: id };

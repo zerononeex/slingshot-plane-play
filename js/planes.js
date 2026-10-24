@@ -1,11 +1,11 @@
 // Pure plane-swap + hangar rules (no DOM). A world's plane is unlocked when its world is;
-// extra planes (the Barnstormer) have their own unlock list.
+// extra planes (the Barnstormer) have their own unlock list; v1.4 reward flyers follow the ★s.
 // Flying world W with plane P: P's record supplies the loadout and P's plane the caps;
 // W supplies the terrain + modifiers and gets the coins, best distance and secrets.
 // Upgrades are paid from P's home wallet; a plane with no home world (the Barnstormer)
 // is paid from the wallet of the world you are in.
 import { STAGES, PLANE_ORDER, stageBand, planeEntry } from './stages.js';
-import { getStage, setStage, isUnlocked, isPlaneUnlocked, checkUnlocks } from './save.js';
+import { getStage, setStage, isUnlocked, isPlaneUnlocked, checkUnlocks, flyersUnlocked } from './save.js';
 import { TRACKS, trackStats, nextCost, canBuyTrack, buyTrack, nextPart, canBuyPart, buyPart, applyRun, minLevel, maxLevel } from './economy.js';
 import { PARTS } from './config.js';
 import { applyGoals, gateTotal, beatsTheGame } from './goals.js';
@@ -67,7 +67,10 @@ export function creditRun(save, worldId, { distance, coins, landingBonus = 0, se
   let next = setStage(save, worldId, gates.length || completed ? applyGoals(run, gates, completed, gateTotal(worldId)) : run);
   const beatGame = beatsTheGame(save, next); // v1.2: the last ★ was Neon Void's
   if (beatGame) next = { ...next, gameComplete: true };
-  return { ...checkUnlocks(next), beatGame };
+  const r = checkUnlocks(next);
+  const had = flyersUnlocked(save.stages); // v1.4: a new ★ can earn a reward flyer (its banner rides newPlanes)
+  const newFlyers = flyersUnlocked(r.save.stages).filter((id) => !had.includes(id));
+  return { ...r, newPlanes: [...r.newPlanes, ...newFlyers], beatGame };
 }
 
 // Hangar strip: ELASTIC, PROPELLER, LEFT WING, RIGHT WING, TAIL — on the chosen plane's record.
