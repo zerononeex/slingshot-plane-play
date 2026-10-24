@@ -5,7 +5,7 @@
 // Plane decayMul scales the engine's speed loss, glideMul scales air drag. They were
 // tuned so the scripted pilot hits each stage's fresh/maxed targets (see BALANCE.md).
 // Every feature list is for the first lap; the layout repeats every `cycle` metres
-// (secrets only in the first lap).
+// (secrets at their own distance, once: 1–4 in the first lap, v1.0's secret 5 far out).
 
 export const DEFAULT_STAGE = 'plains';
 export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream'];
@@ -37,7 +37,7 @@ export const STAGES = {
     ...base,
     id: 'plains', name: 'Plains',
     plane: { name: 'Wooden Trainer', body: 0xff4fa3, wing: 0xffd23f, accent: 0x3fc5ff, wingScale: 1.15, floats: false,
-      caps: [30, 35, 40, 46, 52], decayMul: 1, glideMul: 1 },
+      caps: [30, 35, 40, 46, 52, 56, 60, 64, 68, 73], decayMul: 1, glideMul: 1, balloonMul: 0.55 },
     theme: { bits: [0x4fb34a, 0x9ad65a], sky: 0x9fdcff, fogNear: 90, fogFar: 400, hemiGround: 0x6f9a52, sun: 0xfff3d6,
       ground: { low: [0.5, 0.4, 0.28], grass: [0.42, 0.74, 0.32], high: [0.55, 0.5, 0.42], water: null },
       base: 0x7cc95a, rock: 0x8d7f6e, scenery: 'mixed', treesPerChunk: 14, rocksPerChunk: 4 },
@@ -81,7 +81,7 @@ export const STAGES = {
     id: 'canyon', name: 'Mountain Canyon', cycle: 2200,
     unlock: { after: 'plains', best: 500 },
     plane: { name: 'Canyon Cruiser', body: 0xd9622b, wing: 0xe8c48a, accent: 0x7a2a12, wingScale: 1.05, floats: false,
-      caps: [36, 42, 48, 55, 62], decayMul: 1.0, glideMul: 1.0 },
+      caps: [36, 42, 48, 55, 62, 66, 71, 76, 81, 87], decayMul: 1.0, glideMul: 1.0 },
     theme: { bits: [0xb0703a, 0x8d7f6e], sky: 0xf6b98a, fogNear: 80, fogFar: 380, hemiGround: 0xb5643a, sun: 0xffc48a,
       ground: { low: [0.85, 0.63, 0.4], grass: [0.82, 0.55, 0.33], high: [0.7, 0.33, 0.18], water: null },
       base: 0xb2532c, rock: 0xa8502e, scenery: 'pine', treesPerChunk: 5, rocksPerChunk: 8 },
@@ -138,7 +138,7 @@ export const STAGES = {
     id: 'city', name: 'City',
     unlock: { after: 'canyon', best: 1200 },
     plane: { name: 'City Hopper', body: 0xf4f4f4, wing: 0xe8262c, accent: 0x2b3a55, wingScale: 1.1, floats: false,
-      caps: [42, 48, 55, 63, 70], decayMul: 1.3, glideMul: 0.6 },
+      caps: [42, 48, 55, 63, 70, 75, 79, 85, 89, 95], decayMul: 1.3, glideMul: 0.6, balloonMul: 0.4 },
     theme: { bits: [0xffffff, 0xffe14d], sky: 0xffc98a, fogNear: 90, fogFar: 380, hemiGround: 0x8a7a6a, sun: 0xffd29a,
       ground: { low: [0.36, 0.37, 0.4], grass: [0.42, 0.43, 0.46], high: [0.79, 0.72, 0.6], water: null },
       base: 0x5d6068, rock: 0x9aa0aa, scenery: 'street', treesPerChunk: 6, rocksPerChunk: 0, windows: true },
@@ -197,7 +197,7 @@ export const STAGES = {
     id: 'snow', name: 'Snow',
     unlock: { after: 'city', best: 1600 },
     plane: { name: 'Snow Owl', body: 0xeef7ff, wing: 0x3f86e8, accent: 0x9fd8ff, wingScale: 1.4, floats: false,
-      caps: [48, 55, 63, 71, 79], decayMul: 1.6, glideMul: 0.3, noLiftCarry: 8 },
+      caps: [48, 55, 63, 71, 79, 82, 85, 89, 92, 96], decayMul: 1.6, glideMul: 0.3, noLiftCarry: 8 },
     theme: { bits: [0xffffff, 0xdff0ff], sky: 0xcfe8ff, fogNear: 80, fogFar: 360, hemiGround: 0xc9d8e8, sun: 0xffffff,
       ground: { low: [0.82, 0.86, 0.92], grass: [0.93, 0.96, 1.0], high: [1, 1, 1], water: null },
       base: 0xeef4fb, rock: 0x9fb3c8, scenery: 'snowpine', treesPerChunk: 14, rocksPerChunk: 3 },
@@ -244,7 +244,7 @@ export const STAGES = {
     id: 'desert', name: 'Desert',
     unlock: { after: 'snow', best: 2000 },
     plane: { name: 'Dune Hawk', body: 0xe2c27a, wing: 0xd4a017, accent: 0x8a5a1a, wingScale: 1.15, floats: false,
-      caps: [54, 62, 71, 80, 89], decayMul: 1.8, glideMul: 0.15, noLiftCarry: 9.5 },
+      caps: [54, 62, 71, 80, 89, 92, 95, 99, 102, 106], decayMul: 1.8, glideMul: 0.15, noLiftCarry: 9.5 },
     theme: { bits: [0xe8c98a, 0xd4a860], sky: 0xffe3a8, fogNear: 70, fogFar: 340, hemiGround: 0xd8b070, sun: 0xfff0c0,
       ground: { low: [0.82, 0.67, 0.42], grass: [0.91, 0.79, 0.54], high: [0.86, 0.7, 0.43], water: [0.2, 0.6, 0.75] },
       base: 0xe8c98a, rock: 0xb07a45, scenery: 'cactus', treesPerChunk: 6, rocksPerChunk: 5 },
@@ -293,7 +293,7 @@ export const STAGES = {
     id: 'ocean', name: 'Ocean Islands',
     unlock: { after: 'desert', best: 2400 },
     plane: { name: 'Sea Falcon', body: 0x1fa5a0, wing: 0xffffff, accent: 0x0d5c63, wingScale: 1.2, floats: true,
-      caps: [60, 69, 79, 89, 99], decayMul: 2.2, glideMul: 0.05, noLiftCarry: 10 },
+      caps: [60, 69, 79, 89, 99, 102, 105, 108, 111, 115], decayMul: 2.2, glideMul: 0.05, noLiftCarry: 10 },
     theme: { bits: [0xffffff, 0x9fd8ff], sky: 0x8fd3ff, fogNear: 90, fogFar: 400, hemiGround: 0x2f8fc6, sun: 0xffffff,
       ground: { low: [0.94, 0.86, 0.6], grass: [0.36, 0.75, 0.29], high: [0.55, 0.5, 0.42], water: [0.12, 0.56, 0.84] },
       base: 0x1f8fd6, rock: 0x9a8f80, scenery: 'palm', treesPerChunk: 8, rocksPerChunk: 2 },
@@ -343,7 +343,7 @@ STAGES.space = {
   // The STARSHIP (display name only — the id stays 'space'): a rocket ship with fins, an ion
   // exhaust instead of a propeller, and its own upgrade names (names.js).
   plane: { name: 'Starship', body: 0xf4f4f4, wing: 0xff7a1a, accent: 0xff9a3c, wingScale: 0.85, floats: false, exhaust: true, ship: true,
-    caps: [66, 76, 87, 98, 110], decayMul: 2.4, glideMul: 0.02, engineSound: 'hum' },
+    caps: [66, 76, 87, 98, 110, 113, 116, 118, 121, 124], decayMul: 2.4, glideMul: 0.02, engineSound: 'hum' },
   theme: { bits: [0xfff3b0, 0xff9a3c], sky: 0x0b1030, fogNear: 140, fogFar: 460, hemiGround: 0x3a3f52, sun: 0xf2f4ff,
     ground: { low: [0.33, 0.34, 0.38], grass: [0.55, 0.56, 0.6], high: [0.72, 0.72, 0.76], water: null },
     base: 0x5c5f68, rock: 0x8a8d96, scenery: 'none', treesPerChunk: 0, rocksPerChunk: 6, space: true },
@@ -397,7 +397,7 @@ STAGES.jetstream = {
   // The Sky Dart: no propeller (nose intake + afterburner flame). It needs speed: stalls at 16,
   // and its speed loss is × 0.8 when fast but × 1.3 below 20 m/s. decayMul/glideMul grid-tuned.
   plane: { name: 'Sky Dart', body: 0xe9eef5, wing: 0x2b6fd6, accent: 0xff5d2e, wingScale: 0.95, floats: false, jet: true,
-    caps: [84, 98, 113, 129, 146], decayMul: 2.6, glideMul: 0.02, noLiftCarry: 9, stallSpeed: 16, fastDecayMul: 0.8, slowDecayMul: 1.3, slowBelow: 20,
+    caps: [84, 98, 113, 129, 146, 150, 153, 157, 161, 165], decayMul: 2.6, glideMul: 0.02, noLiftCarry: 9, stallSpeed: 16, fastDecayMul: 0.8, slowDecayMul: 1.3, slowBelow: 20,
     engineSound: 'turbine' },
   theme: { bits: [0x9fb3c8, 0xdfe8f2], sky: 0x5f9bea, fogNear: 180, fogFar: 560, hemiGround: 0xdfe8f2, sun: 0xfff6e0,
     ground: { low: [0.86, 0.9, 0.97], grass: [0.93, 0.95, 0.99], high: [0.55, 0.57, 0.62], water: null },
@@ -448,11 +448,9 @@ STAGES.jetstream = {
   patterns: patterns(['gateLine', 'cloudDive']),
 };
 
-export function stageData(id) {
-  return STAGES[id] ?? null;
-}
-
 // Rubber band table for a stage: shared looks/momentum/prices, the stage plane's caps.
+// v1.0: caps run Lv1–10 (Lv1–5 frozen; Lv6–10 grid-trimmed per plane, see BALANCE.md "Level 10").
+// balloonMul = per-plane trim of the HELIUM BALLOONS' glide effect (default 1; Plains/City/Barnstormer glide most).
 export function stageBand(stage, bandRow) {
   return { ...bandRow, launchMax: stage.plane.caps[bandRow.level - 1] };
 }
@@ -466,7 +464,7 @@ export const EXTRA_PLANES = {
     id: 'biplane', name: 'Barnstormer', kind: 'Stunt biplane', unlock: { world: 'canyon' },
     banner: 'NEW PLANE: BARNSTORMER BIPLANE!',
     plane: { name: 'Barnstormer', body: 0xd8262c, wing: 0xfff1d6, accent: 0x2b3a55, wingScale: 1.0, floats: false, biplane: true,
-      caps: [34, 40, 47, 54, 62], decayMul: 1.05, glideMul: 1, liftMul: 1.15, stallSpeed: 8, deepPutter: true },
+      caps: [34, 40, 47, 54, 62, 66, 70, 75, 80, 85], decayMul: 1.05, glideMul: 1, liftMul: 1.15, stallSpeed: 8, deepPutter: true, balloonMul: 0.6 },
   },
 };
 export const EXTRA_PLANE_ORDER = ['biplane'];
@@ -623,6 +621,37 @@ const POCKETS = {
   space: pocket('nebula-pocket', 'NEBULA POCKET', 'nebula', 1, 920, 400, 8, [['pebbleRocks', 130, -3], ['astronaut', 290, 3]]),
   jetstream: pocket('storm-eye', 'EYE OF THE STORM', 'stormEye', -1, 160, 400, 8, [['highGoose', 120, 3], ['weatherBalloon', 300, -3]]),
 };
-for (const [id, p] of Object.entries(POCKETS)) STAGES[id].pockets = [p];
+// v1.0: a SECOND pocket per world (same pattern; its own name + look). Placed clear of pocket #1, the
+// world's features, secrets 1–3 and goal gates 1–10, with an occurrence at ≈ 50–75 % of the new
+// full-maxed corner (pockets are lap features, like everything else). Listed in BALANCE.md.
+const POCKETS2 = {
+  plains: pocket('sunflower-maze', 'SUNFLOWER MAZE', 'sunflowers', 1, 300, 400, 8, [['scarecrow', 140, 3], ['goose', 290, -3]]),
+  canyon: pocket('gold-mine', 'OLD GOLD MINE', 'goldMine', 1, 190, 400, 8, [['caveBats', 130, -2], ['vulture', 300, 2]]),
+  city: pocket('neon-alley', 'NEON ALLEY', 'neon', 1, 200, 350, 8, [['drone', 130, 3], ['pigeonFlock', 270, -3]]),
+  snow: pocket('crystal-glacier', 'CRYSTAL GLACIER', 'glacier', -1, 1410, 400, 8, [['penguinTrio', 130, 3], ['snowman', 290, -3]]),
+  desert: pocket('sandstone-temple', 'SANDSTONE TEMPLE', 'temple', 1, 120, 350, 8, [['camel', 130, -3], ['vulture', 270, 3]]),
+  ocean: pocket('shipwreck-bay', 'SHIPWRECK BAY', 'shipwreck', 1, 930, 400, 8, [['pelican', 130, -3], ['seagullFlock', 290, 3]]),
+  space: pocket('comet-trail', 'COMET TRAIL', 'comet', -1, 1430, 400, 8, [['satellite', 140, 3], ['astronaut', 290, -3]]),
+  jetstream: pocket('rainbow-bridge', 'RAINBOW BRIDGE', 'rainbow', 1, 210, 350, 8, [['skydiver', 130, -3], ['highGoose', 270, 3]]),
+};
+for (const [id, p] of Object.entries(POCKETS)) STAGES[id].pockets = [p, POCKETS2[id]];
+// v1.0: SECRETS 4–5. Secrets 1–3 stay exactly where they are. Secret 4 hides inside the SECOND pocket
+// (its first-lap lane); secret 5 floats high and far, past every v0.9-maxed flight — only the
+// Lv6–10 planes reach it. Listed in BALANCE.md.
+const SECRETS_45 = {
+  plains: [['plains-sunflower', 'Heart of the Sunflower Maze', 75, 4, 510, 14, 5], ['plains-sky', 'High above the far meadow', -10, 40, 3075, 15, 7]],
+  canyon: [['canyon-mine', 'Deep in the Old Gold Mine', 75, 4, 400, 14, 5], ['canyon-sky', 'Over the far canyon rim', -10, 40, 3195, 15, 7]],
+  city: [['city-neon', 'Under the brightest neon sign', 75, 4, 385, 14, 5], ['city-sky', 'Above the far skyline', -10, 40, 4340, 15, 7]],
+  snow: [['snow-glacier', 'Inside the Crystal Glacier', -69, 4, 1620, 14, 5], ['snow-sky', 'Up with the far snow clouds', -10, 40, 5170, 15, 7]],
+  desert: [['desert-temple', 'The Sandstone Temple altar', 75, 4, 305, 14, 5], ['desert-sky', 'High over the far dunes', -10, 40, 6290, 15, 7]],
+  ocean: [['ocean-wreck', 'The Shipwreck\'s treasure chest', 75, 4, 1140, 14, 5], ['ocean-sky', 'Far out with the high gulls', -10, 40, 7445, 15, 7]],
+  space: [['space-comet', 'Riding the Comet Trail', -69, 4, 1640, 14, 5], ['space-sky', 'The far, high star cluster', -10, 40, 8900, 15, 7]],
+  jetstream: [['jet-rainbow', 'Under the Rainbow Bridge', 75, 4, 395, 14, 5], ['jet-far', 'Top of the far jet stream', -10, 40, 15055, 15, 7]],
+};
+for (const [id, list] of Object.entries(SECRETS_45)) STAGES[id].secrets = [...STAGES[id].secrets, ...list.map(([sid, name, x, y, d, coins, radius]) => ({ id: sid, name, x, y, d, coins, radius }))];
+// v1.1 FAIRNESS RULE: secret 5 moves inside the world's completion zone where it was outside it
+// (or crowding the relocated goal). Same id, same stash: a found secret stays found.
+const SECRET5_V11 = { plains: { d: 1520, x: -10, y: 40 }, canyon: { d: 2340, x: -10, y: 40 }, city: { d: 3280, x: -10, y: 40 }, snow: { d: 3700, x: -10, y: 40 }, desert: { d: 4800, x: -10, y: 40 }, ocean: { d: 5460, x: -10, y: 40 }, space: { d: 8900, x: -10, y: 40 }, jetstream: { d: 13650, x: -10, y: 40 } };
+for (const [id, p] of Object.entries(SECRET5_V11)) Object.assign(STAGES[id].secrets[4], p);
 // The Hidden Canyon is TILT country: a slot inside it.
 STAGES.canyon.slots = [...STAGES.canyon.slots, { d: 1460, x: 72, gap: 2, wall: 2.5, h: 12, look: 'pillars', inPocket: true }];

@@ -4,6 +4,8 @@
 // validation/migration BEFORE anything is written; a bad code changes nothing.
 // v0.9: each world's goal gates[] + complete ride along (sparse, like the save); import cleans them
 // (known numbers, no duplicates, complete only as a real true with 10/10) and older codes read as none.
+// v1.0: same code format; the new ranges (levels to 10, fun lines 0–5, gates 1–20, 5 secrets) are
+// validated the same way, and a v0.9 code imports as exactly its state.
 import { validateSave } from './save.js';
 import { STAGES, STAGE_ORDER } from './stages.js';
 

@@ -8,13 +8,17 @@
 // record = { coins, band, engine, tank, ramp, magnet, wheels, eject,
 //            parts{leftWing,rightWing,tail}, paints{owned[], current}, best, secrets[],
 //            gates[]?, complete? }   (v0.9 STAGE GOALS, sparse: absent = no gates / not complete)
+//          + radar?, horn?, chute?, brakes?, balloons?  (v1.0 fun lines 1–5, sparse: absent = 0)
+// v1.0: the six level lines run to 10 (clamped), gates are 1–20, secrets follow each world's list (5);
+// no shape break — a v0.9 save opens as exactly its state (save-v10.test.mjs).
 //
 // Game code reads/writes progression ONLY through getStage(save, id) / setStage(save, id, rec).
 import { SAVE_KEY } from './config.js';
 import { STAGES, DEFAULT_STAGE, STAGE_ORDER, EXTRA_PLANES, EXTRA_PLANE_ORDER } from './stages.js';
 import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel, paintFits } from './economy.js';
 import { PAINTS } from './config.js';
-import { cleanGates, cleanComplete } from './goals.js';
+import { cleanGates, cleanComplete, gateTotal } from './goals.js';
+import { FUN_IDS, cleanFun } from './funlines.js';
 
 const MAX_COINS = 10_000_000;
 const MAX_BEST = 10_000_000;
@@ -143,9 +147,11 @@ export function validateRecord(raw, stageId = DEFAULT_STAGE) {
   rec.paints = cleanPaints(r.paints, stageId);
   rec.secrets = cleanSecrets(r.secrets, stageId);
   // v0.9 goal gates: known numbers, no duplicates; `complete` only as a real true with all 10 behind it.
-  const gates = STAGES[stageId] ? cleanGates(r.gates) : [];
+  const gates = STAGES[stageId] ? cleanGates(r.gates, gateTotal(stageId)) : [];
   if (gates.length) rec.gates = gates;
   if (cleanComplete(r.complete, gates)) rec.complete = true;
+  // v1.0 fun lines (radar, horn, chute, brakes, balloons): 0–5, sparse (absent = not bought).
+  for (const id of FUN_IDS) { const v = cleanFun(r[id]); if (v) rec[id] = v; }
   return rec;
 }
 

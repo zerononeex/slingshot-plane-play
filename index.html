@@ -112,8 +112,6 @@
   .unlock { background: #3ccf5a; color: #fff; border-radius: 16px; padding: 6px 14px; font-weight: 900; font-size: clamp(18px, 2.6vh, 26px); }
 
   /* Title + shop */
-  .shop-btn { background: #ff8a3d; box-shadow: 0 7px 0 #d9661b; }
-  .shop-btn:active { box-shadow: 0 2px 0 #d9661b; }
   /* UPGRADES: one screen, tinted by the selected world (--tint / --tint-dark set from JS). */
   #shop {
     --tint: #3ccf5a; --tint-dark: #24a33f; --tint-soft: #e6f9ea;
@@ -336,29 +334,29 @@
   /* (Card names, swatches, hangar chips and hints keep today's readable body type.) */
   h1, h2, .banner, .shop-title b, .shop-section, .hangar-label, .st-name, .speedo-read, .verdict, .newbest, .unlock, .puff-text, .bump-plus,
   .speed-label, .hud-top .chip, .xfer-label, .xfer-amount,
-  button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn),
+  button:is(.big, .alt, .danger, .small, .back-btn, .skill-btn, .boost-btn, .eject-btn),
   .panel > button, .btn-row > button, .pause-row > button, .home-sheet .sheet-row {
     font-family: var(--display); font-style: italic; text-transform: uppercase; letter-spacing: -0.02em;
   }
   h1, .puff-text, .speed-label, #hud .chip,
-  button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn),
+  button:is(.big, .alt, .danger, .small, .back-btn, .skill-btn, .boost-btn, .eject-btn),
   .panel > button, .btn-row > button, .pause-row > button, .home-sheet .sheet-row { text-shadow: var(--outline); }
   h1 { letter-spacing: -0.03em; }
   .skill-btn small { text-transform: none; font-style: normal; letter-spacing: 0; }
   /* Word buttons: angled ends (the cut reaches down over the 3D lip), a thin gold top edge, a faint diagonal sheen. */
   button { transition: transform 60ms ease-out, filter 60ms; }
-  button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane):not(.car-arrow),
+  button:is(.big, .alt, .danger, .small, .back-btn):not(.car-arrow),
   .panel > button, .btn-row > button, .pause-row > button, .home-sheet .sheet-row {
     position: relative; border-radius: 6px;
     clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% + 10px - var(--cut)), calc(100% - var(--cut)) calc(100% + 10px), 0 calc(100% + 10px), 0 var(--cut));
   }
   .big { --cut: 18px; }
-  button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn):not(.car-arrow)::before,
+  button:is(.big, .alt, .danger, .small, .back-btn, .skill-btn, .boost-btn, .eject-btn):not(.car-arrow)::before,
   .panel > button::before, .btn-row > button::before, .pause-row > button::before, .home-sheet .sheet-row::before {
     content: ""; position: absolute; left: var(--cut, 0); right: 0; top: 0; height: 2px; pointer-events: none;
     background: linear-gradient(90deg, rgba(255, 230, 140, 0.95), rgba(255, 255, 255, 0.5) 60%, rgba(255, 230, 140, 0));
   }
-  button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane, .skill-btn, .boost-btn, .eject-btn):not(.car-arrow)::after,
+  button:is(.big, .alt, .danger, .small, .back-btn, .skill-btn, .boost-btn, .eject-btn):not(.car-arrow)::after,
   .panel > button::after, .btn-row > button::after, .pause-row > button::after, .home-sheet .sheet-row::after {
     content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
     background: linear-gradient(115deg, rgba(255, 255, 255, 0.22) 0 28%, rgba(255, 255, 255, 0) 28% 46%, rgba(255, 255, 255, 0.1) 46% 52%, rgba(255, 255, 255, 0) 52%);
@@ -367,7 +365,7 @@
   .skill-btn::before { left: 10px; right: 10px; }
   .boost-btn::before, .eject-btn::before { display: none; }
   /* Press: a 60 ms squash (the existing 5 px press stays). */
-  button:is(.big, .alt, .shop-btn, .danger, .small, .back-btn, .change-plane):active,
+  button:is(.big, .alt, .danger, .small, .back-btn):active,
   .panel > button:active, .btn-row > button:active, .pause-row > button:active, .home-sheet .sheet-row:active { transform: translateY(5px) scale(1.02, 0.94); }
   button:disabled::after { opacity: 0.4; }
   /* Cards (carousel, Upgrades, hangar, planes): sharper corners, a gold top edge and a sheen. */
@@ -465,6 +463,9 @@
     font-family: var(--display); font-style: italic; letter-spacing: -0.02em; clip-path: polygon(10px 0, 100% 0, 100% calc(100% + 6px), 0 calc(100% + 6px), 0 10px); }
   .change-pill:active { transform: scale(0.96); box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.6); }
   /* Chips + FLY sit on one light dock; the tab bar is the dark floor. */
+  /* v1.0 LEVEL 10: ten pips wrap into two rows of five */
+  .chip-btn .pips { flex-wrap: wrap; justify-content: center; max-width: 52px; row-gap: 2px; }
+  .card .pips { flex-wrap: wrap; max-width: calc(5 * clamp(8px, min(1.4vh, 2.4vw), 14px) + 13px); row-gap: 2px; }
   #title.home .hangar-label { font-size: clamp(11px, 1.5vh, 14px); margin-bottom: 5px; }
   #title.home .hangar { width: 100%; border-radius: 22px 22px 0 0; padding: 8px 10px 6px; box-shadow: 0 -3px 0 rgba(0, 0, 0, 0.08); flex: none; }
   .fly-bar { flex: none; background: var(--panel); padding: 2px 10px 10px; }
@@ -535,6 +536,19 @@
   #btn-again { flex: 2 1 0; }
   #btn-home { flex: 1 1 0; }
   @media (orientation: landscape) and (max-height: 520px) { #results .panel { gap: 3px; padding: 7px 12px; } #results .msg, #results .verdict { line-height: 1.1; } #results .btn-row > button { min-height: 50px; } }
+  /* ---------- v1.0 FIVE FUN UPGRADES ---------- */
+  .skill-btn[data-fun="horn"] { background: #ff4fa3; box-shadow: 0 6px 0 #c22a76; }
+  .skill-btn[data-fun="brake"] { background: #e8262c; box-shadow: 0 6px 0 #a8161b; }
+  .skill-btn[data-fun="brake"].held { transform: translateY(4px); box-shadow: 0 2px 0 #a8161b; }
+  .skill-btn[data-fun="horn"].cool { opacity: 0.6; }
+  .radar-chip { position: absolute; left: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 64px); display: flex; align-items: center; gap: 4px; padding: 4px 10px;
+    border-radius: 4px 14px 4px 14px; background: rgba(14, 22, 40, 0.58); color: #fff; font-size: 22px; box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.55); pointer-events: none; }
+  .radar-chip.far .radar-dish { opacity: 0.45; filter: grayscale(0.6); }
+  .radar-chip.ping { box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.55), 0 0 14px 4px rgba(95, 255, 160, 0.85); }
+  .radar-arrow { font-style: normal; color: #5fffa0; font-size: 18px; display: inline-block; text-shadow: 0 0 6px rgba(95, 255, 160, 0.9); }
+  .fun-grid .card .icon { background: #fff0f8; }
+  /* v1.0: with the FUN UPGRADES section the Upgrades panel can outgrow a phone: it scrolls inside the screen */
+  #shop .shop-panel { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   @media (orientation: landscape) and (max-height: 520px) {
     .screen { gap: 1.4vh; }
     .panel { padding: 2vh 20px; gap: 1.4vh; }
@@ -568,7 +582,7 @@
       </div>
     </div>
     <div class="sheet-wrap" id="more-wrap" hidden>
-      <div class="home-sheet" id="more-sheet">
+      <div class="home-sheet">
         <div class="sheet-head"><b>MORE</b><button class="sheet-x" data-close aria-label="Close">✕</button></div>
         <div class="sheet-rows">
           <button id="btn-transfer" class="sheet-row">🏦 TRANSFER COINS</button>
@@ -611,6 +625,8 @@
   <div class="shop-stage"></div>
   <div class="shop-panel">
     <div class="shop-grid" id="shop-grid"></div>
+    <div class="shop-section" id="shop-sec-fun">FUN UPGRADES</div>
+    <div class="shop-grid fun-grid" id="fun-grid"></div>
     <div class="shop-section" id="shop-sec-parts">BUILD YOUR PLANE</div>
     <div class="shop-grid parts-grid" id="parts-grid"></div>
     <div class="shop-section" id="shop-sec-paints">PAINT JOBS</div>
@@ -625,6 +641,7 @@
     <button id="btn-pause" aria-label="Pause">❚❚</button>
   </div>
   <div id="banner" class="banner" hidden></div>
+  <div class="radar-chip" id="hud-radar" hidden><span class="radar-dish">📡</span><i class="radar-arrow" id="radar-arrow" hidden>▲</i></div>
   <div id="aim">
     <div class="aim-hint">
       <div class="arrow">▼</div>
@@ -633,7 +650,7 @@
     <div class="speedo" id="speedo">
       <svg viewBox="0 0 200 150" aria-hidden="true">
         <defs><filter id="speedo-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter></defs>
-        <circle class="speedo-rim" id="speedo-rim" cx="100" cy="100" r="92"></circle>
+        <circle class="speedo-rim" cx="100" cy="100" r="92"></circle>
         <g id="speedo-zones"></g>
         <g id="speedo-ticks"></g>
         <g id="speedo-needle"><g id="speedo-shake"><line x1="100" y1="100" x2="100" y2="22"></line><circle cx="100" cy="100" r="9"></circle><circle class="tip" cx="100" cy="24" r="4"></circle></g></g>
@@ -647,11 +664,14 @@
       <div class="bar"><div id="speed-fill"></div></div>
     </div>
     <button id="btn-eject" class="eject-btn" hidden>EJECT</button>
-    <div class="skills" id="skills">
+    <div class="skills">
       <button class="skill-btn" data-skill="tilt" hidden>TILT<small></small></button>
       <button class="skill-btn" data-skill="loop" hidden>LOOP</button>
       <button class="skill-btn" data-skill="roll" hidden>ROLL</button>
       <button class="skill-btn" data-skill="dive" hidden>DIVE<small>hold</small></button>
+      <!-- v1.0 fun lines: shown once owned (above the skills, so nothing below moves) -->
+      <button class="skill-btn fun-btn" data-fun="horn" id="btn-horn" hidden>HORN</button>
+      <button class="skill-btn fun-btn" data-fun="brake" id="btn-brake" hidden>BRAKE<small>hold</small></button>
     </div>
     <div class="puff-text" id="puff-text" hidden></div>
     <div class="bump-fx" id="bump-fx"><div class="bump-plus" id="bump-plus"></div></div>
@@ -698,7 +718,7 @@
   <div class="xs-cargo" id="xs-cargo"><div class="xs-c-body"></div><div class="xs-c-wing"></div><div class="xs-c-tail"></div><div class="xs-c-prop"></div></div>
   <div class="xs-row">
     <div class="xs-card" id="xs-from"><b></b><span class="xs-coins"><span class="coin-dot"></span><i>0</i></span></div>
-    <div class="banker" id="banker">
+    <div class="banker">
       <div class="bk-hat" id="bk-hat"><div class="bk-crown"></div><div class="bk-band"></div><div class="bk-brim"></div></div>
       <div class="bk-head"><div class="bk-glass bk-l"></div><div class="bk-glass bk-r"></div><div class="bk-bridge"></div><div class="bk-tache"></div></div>
       <div class="bk-body"><div class="bk-tie"></div></div>
@@ -746,7 +766,7 @@
     <div class="stat-row res-money">
       <div class="stat"><small>COINS</small><span class="coin-dot"></span><span id="res-coins">0</span></div>
       <div class="stat"><small>DIST BONUS</small>+<span id="res-bonus">0</span></div>
-      <div class="stat" id="res-landing-box"><small>LANDING</small>+<span id="res-landing">0</span></div>
+      <div class="stat"><small>LANDING</small>+<span id="res-landing">0</span></div>
       <div class="stat res-earned"><small>EARNED</small><span class="coin-dot"></span><span id="res-total">0</span></div>
     </div>
     <div class="res-wallet" id="res-wallet">🪙 TOTAL <b>0</b></div>

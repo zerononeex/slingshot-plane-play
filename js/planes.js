@@ -8,7 +8,7 @@ import { STAGES, PLANE_ORDER, stageBand, planeEntry } from './stages.js';
 import { getStage, setStage, isUnlocked, isPlaneUnlocked, checkUnlocks } from './save.js';
 import { TRACKS, trackStats, nextCost, canBuyTrack, buyTrack, nextPart, canBuyPart, buyPart, applyRun, minLevel, maxLevel } from './economy.js';
 import { PARTS } from './config.js';
-import { applyGoals } from './goals.js';
+import { applyGoals, gateTotal } from './goals.js';
 
 export const availablePlanes = (save) => PLANE_ORDER.filter((id) => isPlaneUnlocked(save, id));
 
@@ -64,7 +64,7 @@ export function flightSetup(save, worldId) {
 // v0.9: goal gates collected this flight join the world's collection; completing it pays the prize once.
 export function creditRun(save, worldId, { distance, coins, landingBonus = 0, secrets = [], gates = [], completed = false }) {
   const run = applyRun(getStage(save, worldId), distance, coins, landingBonus, secrets);
-  const next = setStage(save, worldId, gates.length || completed ? applyGoals(run, gates, completed) : run);
+  const next = setStage(save, worldId, gates.length || completed ? applyGoals(run, gates, completed, gateTotal(worldId)) : run);
   return checkUnlocks(next);
 }
 

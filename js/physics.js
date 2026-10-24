@@ -2,6 +2,7 @@
 // Coordinates: x = right, y = up, d = metres flown forward from the slingshot.
 import { WHEELS, LANDING, BOOST } from './config.js';
 import { SWING } from './pockets.js';
+import { FUN, brakeFloor } from './funlines.js';
 
 const DEG = Math.PI / 180;
 
@@ -107,13 +108,13 @@ export function partEffects(parts, pp) {
 // items that change the flight (wheels, band cap for the boost limit), the stage's
 // plane (decay/glide multipliers) and the stage's modifiers (soft snow, water).
 const STOCK_PLANE = { decayMul: 1, glideMul: 1 };
-export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null, plane = STOCK_PLANE, modifiers = {} } = {}) {
+export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null, plane = STOCK_PLANE, modifiers = {}, fun = null } = {}) {
   const e = effects ?? { sinkMul: 1, climbCostMul: 1, driftSpeed: 0, stallSpeed: null, stallSinkMul: 1, responseMul: 1 };
   const snow = modifiers.softSnow;
   const lowG = modifiers.lowGravity;
   const thin = modifiers.thinAir;           // Jetstream: drag × 0.5, lift × 0.85 for every plane
   const g = lowG ? lowG.gravityScale : 1;
-  return {
+  const P = {
     ...flight,
     gravity: flight.gravity * g,              // low gravity: climbing costs and diving gains soften
     gravityScale: g,
@@ -139,6 +140,13 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     boostThrust: modifiers.warp ? modifiers.warp.boostThrust : BOOST.thrust, // Space: the WARP TANK
     boostCap: (band ? band.launchMax : 30) + BOOST.capOverBand,
   };
+  // v1.0 fun lines that touch the flight (only when owned: everything else is exactly as before).
+  if (fun?.brakes) P.brakeDecel = FUN.brakes.decel[fun.brakes];
+  if (fun?.balloons) {
+    P.balloonSink = FUN.balloons.sink[fun.balloons] * (plane.balloonMul ?? 1); // per-plane trim (BALANCE.md)
+    P.bouncePop = P.bouncePop * (1 - 0.4 * P.balloonSink);                       // landings bounce a touch softer
+  }
+  return P;
 }
 
 export function launchSpeedFor(pull, launch, band) {
@@ -386,11 +394,18 @@ function stepAir(s, input, dt, P, env) {
   const wind = zone.push > 0 && s.speed < P.boostCap ? zone.push : 0;
   s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust + wind) * dt);
   if ((thrust > 0 || wind > 0) && s.speed > P.boostCap) s.speed = Math.max(P.boostCap, s.speed - (thrust + wind) * dt);
+  // v1.0 SPOILER BRAKES (held): strong drag, but never below stall + 2 m/s (it can't stall you out).
+  if (P.brakeDecel) {
+    s.braking = !!input.brake;
+    if (s.braking) { const floor = brakeFloor(P); if (s.speed > floor) s.speed = Math.max(floor, s.speed - P.brakeDecel * dt); }
+  }
 
   const xPrev = s.x, dPrev = s.d, yPrev = s.y;
   const forward = s.speed * Math.cos(s.pitch);
   // Updraft: the stall sink is cancelled and the air lifts you — at no speed cost.
   s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1)) + zone.lift - s.tiltT * SKILLS.tiltSink; // tilted: lift fades to a gentle sink
+  // v1.0 HELIUM BALLOONS: a gentler sink during unpowered glide only (not boosting, not climbing).
+  if (P.balloonSink && !s.boosting && s.vy < 0) s.vy *= 1 - P.balloonSink;
   const steer = s.tilted ? SKILLS.tiltSteer : 1;
   const rollDrift = s.rollT > 0 ? s.rollDir * SKILLS.rollDrift : 0;
   if (steerLateral(s, input, dt, P, steer, (P.driftSpeed ?? 0) + zone.gust + rollDrift) && env.edgeWalls) scrape(s, P); // cliff / building walls

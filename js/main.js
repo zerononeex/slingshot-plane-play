@@ -8,17 +8,22 @@ import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects, to
 import { stepPilot, tryEject, runDistance, runOver, pilotParams } from './pilot.js';
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
-import { stepCoins, reachSecrets, reachStashes } from './coins.js';
+import { stepCoins, reachSecrets, reachStashes, secretY } from './coins.js';
+import { FUN, FUN_IDS, funLevel, nextFunCost, canBuyFun, buyFun, radarReading, radarBlinkPeriod, hornShow, chuteSinkMul, chuteSteerMul, HORN_COOLDOWN } from './funlines.js';
 import { speedoReading, speedoZones, KMH } from './speedo.js';
 import {
   trackStats, nextCost, canBuyTrack, buyTrack, maxLevel, minLevel,
-  nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, applyRun, runPayout, newSecrets,
+  nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, runPayout, newSecrets,
 } from './economy.js';
-import { loadSave, writeSave, getStage, setStage, checkUnlocks, isUnlocked, selectStage, setPrefs } from './save.js';
-import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, HANGAR, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
+import { loadSave, writeSave, getStage, setStage, isUnlocked, selectStage, setPrefs } from './save.js';
+import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
 import { buildPlane } from './plane.js';
-import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, GATE_COUNT } from './goals.js';
+import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal } from './goals.js';
 import { createGoalView } from './goalview.js';
+import { shapesFor, createShapeRun, stepShapeRun, shapeY, shapeScale, SHAPES } from './shapes.js';
+import { createShapesView } from './shapesview.js';
+import { setPiecesFor } from './longrun.js';
+import { createSetPiecesView } from './setpieces.js';
 import { createWorld } from './world.js';
 import { createFx } from './fx.js';
 import { unlockAudio, sfx, audioCtx } from './audio.js';
@@ -85,6 +90,8 @@ const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 520);
 const world = createWorld(scene);
 const fx = createFx(scene);
 const goalView = createGoalView(scene); // v0.9 STAGE GOALS
+const shapesView = createShapesView(scene); // v1.0 BOOST SHAPES
+const setPiecesView = createSetPiecesView(scene); // v1.1 LONG STAGES
 let terrain = terrainFor(loadout());
 world.setStage(stage, terrain);
 
@@ -188,7 +195,7 @@ function updateCarousel() {
     b.querySelector('.st-plane').textContent = open ? st.plane.name : '';
     b.querySelector('.st-best').textContent = open ? `Best ${r.best} m` : '';
     b.querySelector('.st-secrets').textContent = open ? `Secrets ${r.secrets.length}/${st.secrets.length}` : '';
-    b.querySelector('.st-gates').textContent = open ? `⛳ ${gatesOf(r).length}/${GATE_COUNT}` : ''; // v0.9 goal gates
+    b.querySelector('.st-gates').textContent = open ? `⛳ ${gatesOf(r).length}/${gateTotal(id)}` : ''; // v0.9 goal gates
     b.classList.toggle('complete', open && isComplete(r));
     b.querySelector('.st-lock').textContent = open ? '' : lockLine(id);
   }
@@ -224,7 +231,7 @@ function renderWorlds() {
     b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span>';
     b.querySelector('.wt-name').textContent = open ? `${isComplete(r) ? '★ ' : ''}${st.name}` : `🔒 ${st.name}`;
     b.querySelector('.wt-sub').textContent = st.plane.name;
-    b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length} · ⛳ ${gatesOf(r).length}/${GATE_COUNT}` : lockLine(id);
+    b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length} · ⛳ ${gatesOf(r).length}/${gateTotal(id)}` : lockLine(id);
     if (open && isComplete(r)) b.insertAdjacentHTML('beforeend', '<span class="wt-done">★ COMPLETE</span>');
     b.addEventListener('click', () => {
       if (!open) { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); return; }
@@ -470,6 +477,21 @@ function refreshShop() {
     onBuy: () => purchase(buyEject(rec)),
   }));
 
+  // v1.0 FUN UPGRADES: five lines, 5 levels each (same purchase path, same wallet).
+  const fun = $('fun-grid');
+  fun.textContent = '';
+  $('shop-sec-fun').textContent = upgradeNames(planeId, stageId).fun;
+  for (const id of FUN_IDS) {
+    const lv = funLevel(rec, id), cost = nextFunCost(id, lv);
+    const state = cost === null ? 'maxed' : canBuyFun(rec, id) ? 'buyable' : 'poor';
+    fun.appendChild(card({
+      key: `fun:${id}`, icon: FUN[id].icon, name: upgradeNames(planeId, stageId)[id],
+      pips: pipsHtml(lv, 1, 5, state === 'buyable'), effect: funEffect(id, cost === null ? lv : lv + 1, cost !== null),
+      price: cost === null ? coinBtnMaxed : coinBtn(cost), state,
+      onBuy: () => purchase(buyFun(rec, id)),
+    }));
+  }
+
   const parts = $('parts-grid');
   parts.textContent = '';
   const nxt = nextPart(rec.parts);
@@ -507,6 +529,17 @@ function refreshShop() {
   applyLooks();
 }
 
+// What the next (or owned top) fun level does, in a kid's words.
+const HORN_WORDS = ['', 'Bike squeak', 'Car horn', 'Truck horn', 'Air horn + confetti', 'Musical klaxon + rainbow confetti'];
+function funEffect(id, lv, next) {
+  const pre = next ? '▸ ' : '';
+  if (id === 'radar') return `${pre}Beeps near secrets within ${FUN.radar.range[lv]} m${lv >= 5 ? ' + an arrow' : ''}`;
+  if (id === 'horn') return `${pre}HORN button: ${HORN_WORDS[lv]}`;
+  if (id === 'chute') return `${pre}Parachute sinks ${Math.round((1 - chuteSinkMul(lv)) * 100)}% slower, steers ×${chuteSteerMul(lv)}`;
+  if (id === 'brakes') return `${pre}BRAKE button: −${FUN.brakes.decel[lv]} m/s², never stalls`;
+  return `${pre}Glides sink ${Math.round(FUN.balloons.sink[lv] * 100)}% slower`;
+}
+
 // ---------- run state ----------
 let mode = 'title';      // title | shop | aim | fly | results
 let paused = false;
@@ -540,15 +573,46 @@ let goalRun = null, goalYs = [], goalTopY = 0, goalPrevD = 0;
 const goalEvents = [];
 function setupGoals() {
   const goals = goalsFor(stageId);
-  goalRun = createGoalRun(wrec);
+  goalRun = createGoalRun(wrec, gateTotal(stageId));
   goalPrevD = 0;
   if (!goals) { goalView.build(null); return; }
   goalYs = goals.gates.map((g) => gateY(terrain, g));
   goalTopY = gateY(terrain, goals.goal);
   goalView.build(goals, goalYs, goalTopY, goalRun.owned, goalRun.open);
+  setupShapes();
+}
+
+// v1.0 BOOST SHAPES: fly the shape, get the boost (once each per flight; chains within 6 s).
+let shapeRun = createShapeRun(), shapeYs = [];
+const shapeEvents = [];
+function setupShapes() {
+  const shapes = shapesFor(stageId);
+  shapeRun = createShapeRun();
+  shapeYs = shapes ? shapes.map((sh) => shapeY(terrain, sh)) : [];
+  shapesView.build(shapes, shapeYs, shapeScale(stageId));
+  if (setPiecesBuilt !== stageId) { // built once per world (the pieces never change within a world)
+    setPiecesView.build(setPiecesFor(stageId), (x, d) => terrain.surfaceAt(x, d, -Infinity));
+    setPiecesBuilt = stageId;
+  }
+}
+let setPiecesBuilt = null;
+function stepShapes(d0) {
+  const shapes = shapesFor(stageId);
+  if (!shapes) return;
+  shapeEvents.length = 0;
+  stepShapeRun(shapeRun, shapes, shapeYs, d0, flight.x, flight.y, flight.d, flight.time, !ejected && !flight.ended, shapeScale(stageId), shapeEvents);
+  for (const ev of shapeEvents) {
+    flight.speed += ev.gain; // pure velocity: an instant burst along the flight direction
+    shapesView.setUsed(ev.index);
+    plane.root.getWorldPosition(_v);
+    fx.sparkleBurst(_v.x, _v.y + 0.5, _v.z);
+    sfx.shapeBoost(ev.chain);
+    banner(ev.chain > 1 ? `BOOST CHAIN ×${ev.chain}! +${ev.gain}` : `BOOST! ${SHAPES[ev.kind].label} +${ev.gain}`, 1.6);
+  }
 }
 // Only the plane itself collects (not the eject glide, not after the flight ended).
 function stepGoals() {
+  stepShapes(goalPrevD);
   const goals = goalsFor(stageId);
   if (goals && goalRun) {
     goalEvents.length = 0;
@@ -563,7 +627,7 @@ function onGoalEvent(ev, goals) {
     goalView.setCollected(ev.n);
     fx.sparkleBurst(g.x, goalYs[i], -g.at);
     sfx.goalGate();
-    banner(`GOAL GATE ${ev.n} — ${ev.count}/10!`, 2.2);
+    banner(`GOAL GATE ${ev.n} — ${ev.count}/${goals.gates.length}!`, 2.2);
   } else if (ev.type === 'gateRepass') sfx.goalTick();
   else if (ev.type === 'goalOpen') { // the 10th gate: THE GOAL appears (burst at the goal + at the plane)
     goalView.showGoal(true);
@@ -602,7 +666,11 @@ function startRun() {
   newWorld();
   applyLooks();
   effects = partEffects(rec.parts, PART_PHYSICS);
-  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: pstage.plane, modifiers: stage.modifiers });
+  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: pstage.plane, modifiers: stage.modifiers,
+    fun: { brakes: funLevel(rec, 'brakes'), balloons: funLevel(rec, 'balloons') } }); // v1.0 fun lines (0 = not owned)
+  // MEGA CHUTE: the parachute reads the chute level of the record the ejector lives in (as today).
+  chutePilot = pilotParams(PILOT, stage.modifiers, { sinkMul: chuteSinkMul(funLevel(rec, 'chute')), steerMul: chuteSteerMul(funLevel(rec, 'chute')) });
+  brakeHeld = brakeKey = false; hornCool = 0; radarT = 0;
   // SKILLS: global, from the save; TILT also needs the flying plane's Left Wing.
   const skills = new Set(save.skills ?? []);
   params.canTilt = skills.has('tilt') && !!rec.parts.leftWing;
@@ -876,6 +944,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyL') useSkill('loop');
   if (e.code === 'KeyR') useSkill('roll');
   if (e.code === 'KeyF') diveKey = true;
+  if (e.code === 'KeyB') brakeKey = true;
+  if (e.code === 'KeyH') honk();
   if (e.code === 'Escape' || e.code === 'KeyP') setPaused(!paused);
 });
 window.addEventListener('keyup', (e) => {
@@ -883,16 +953,59 @@ window.addEventListener('keyup', (e) => {
   if (k && keys[k[0]] === k[1]) keys[k[0]] = 0;
   if (e.code === 'Space') boostKey = false;
   if (e.code === 'KeyF') diveKey = false;
+  if (e.code === 'KeyB') brakeKey = false;
 });
 
 // ---------- SKILLS ----------
 let diveHeld = false, diveKey = false, lastSteer = 1, puffTimer = 0;
+// ---------- v1.0 FUN LINES in flight ----------
+let brakeHeld = false, brakeKey = false, hornCool = 0, radarT = 0, chutePilot = PILOT;
+const radarFound = { has: (id) => wrec.secrets.includes(id) || reached.has(id) }; // found ever, or this flight
+const secretHeight = (s) => secretY(terrain, s);
+function honk() {
+  const lv = funLevel(rec, 'horn');
+  if (mode !== 'fly' || !flight || ejected || paused || !lv || hornCool > 0) return;
+  hornCool = HORN_COOLDOWN;
+  const show = hornShow(lv);
+  sfx.horn(show.sound);
+  plane.root.getWorldPosition(_v);
+  if (show.confetti === 'rainbow' || show.confetti === 'colour') fx.confetti(_v.x, _v.y, _v.z);
+  else fx.sparkleBurst(_v.x, _v.y + 0.5, _v.z);
+  plane.squashWheels();
+}
+function updateFun(dt) {
+  hornCool = Math.max(0, hornCool - dt);
+  $('btn-horn').classList.toggle('cool', hornCool > 0);
+  $('btn-brake').classList.toggle('held', !!input.brake);
+  plane.setSpoiler(!!flight?.braking);
+  // SECRET RADAR: blink + blip faster as the nearest unfound secret gets closer; silent when none remain.
+  const lv = funLevel(rec, 'radar'), chip = $('hud-radar');
+  const left = lv && stage.secrets.some((s) => !radarFound.has(s.id));
+  chip.hidden = !left;
+  if (!left) return;
+  const pos = ejected && pilot ? pilot : flight;
+  const r = radarReading(stage.secrets, radarFound, pos, lv, secretHeight);
+  chip.classList.toggle('far', !r);
+  $('radar-arrow').hidden = !(r && r.arrow !== undefined);
+  if (!r) { chip.classList.remove('ping'); return; }
+  if (r.arrow !== undefined) $('radar-arrow').style.transform = `rotate(${r.arrow}rad)`;
+  radarT += dt;
+  const period = radarBlinkPeriod(r.k);
+  if (radarT >= period) { radarT = 0; sfx.radarBlip(r.k); chip.classList.add('ping'); }
+  else if (radarT > period * 0.35) chip.classList.remove('ping');
+}
+$('btn-horn').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); unlockAudio(); honk(); });
+$('btn-brake').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); unlockAudio(); brakeHeld = true; $('btn-brake').setPointerCapture?.(e.pointerId); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) $('btn-brake').addEventListener(ev, () => { brakeHeld = false; });
 function showSkills(on) {
   const skills = new Set(save.skills ?? []);
   for (const b of document.querySelectorAll('.skill-btn')) {
     b.hidden = !on || !skills.has(b.dataset.skill);
     b.classList.remove('on', 'held', 'cool');
   }
+  // v1.0: HORN / BRAKE show once owned
+  $('btn-horn').hidden = !on || !funLevel(rec, 'horn');
+  $('btn-brake').hidden = !on || !funLevel(rec, 'brakes');
   const tilt = document.querySelector('.skill-btn[data-skill="tilt"]');
   tilt.classList.toggle('nowing', !params?.canTilt);
   tilt.querySelector('small').textContent = params?.canTilt ? '' : 'needs a wing';
@@ -1371,6 +1484,8 @@ function frame(now) {
     if (lo.magnet.sparkle && mode !== 'fly' && Math.random() < dt * 4) magnetSpark(0xffe14d);
     fx.update(dt);
     goalView.update(dt, clock);
+    shapesView.update(clock);
+    setPiecesView.update(Math.max(0, -plane.root.position.z), dt);
     speedFx(dt);
     if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $('banner').hidden = true;
     updateCamera(dt);
@@ -1391,7 +1506,7 @@ function animatePilot(dt) {
     pilotChuteT += dt;
     if (!pilot.landed) {
       pg.chute.visible = pilotChuteT > 0.25;
-      pg.chute.scale.setScalar(Math.min(1, Math.max(0.05, (pilotChuteT - 0.25) / 0.4)));
+      pg.chute.scale.setScalar(Math.min(1, Math.max(0.05, (pilotChuteT - 0.25) / 0.4)) * plane.chuteScale); // MEGA CHUTE: bigger per level
       for (const a of pg.arms) a.rotation.z = a.position.x > 0 ? 2.7 : -2.7;   // holding the lines
     } else {
       pg.chute.scale.setScalar(Math.max(0.01, pg.chute.scale.x - dt * 2));
@@ -1478,6 +1593,8 @@ function stepGame(dt) {
   input.y = pointerId === null ? keys.y : input.y;
   input.boost = (boostHeld || boostKey) && !ejected;
   input.dive = (diveHeld || diveKey) && !ejected;
+  input.brake = (brakeHeld || brakeKey) && !ejected; // v1.0 SPOILER BRAKES
+  updateFun(dt);
   if (Math.abs(input.x) > 0.25) lastSteer = Math.sign(input.x); // ROLL goes the way you last steered
   if (puffTimer > 0 && (puffTimer -= dt) <= 0) $('puff-text').hidden = true;
   flightSound.dive(!!flight.diving);
@@ -1491,7 +1608,7 @@ function stepGame(dt) {
       collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: pickupRadiusFor(flight, COINS.pickupRadius), speed: flight.speed });
     } else {
       const wasLanded = pilot.landed;
-      stepPilot(pilot, input, STEP, pilotParams(PILOT, stage.modifiers), terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
+      stepPilot(pilot, input, STEP, chutePilot, terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
       collect(pilot, { pickupRadius: PILOT.pickupRadius });
       if (pilot.landed && !wasLanded) {
         landingBonus += LANDING.pilot.bonus;

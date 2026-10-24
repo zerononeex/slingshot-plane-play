@@ -10,7 +10,8 @@ import { STAGES, DEFAULT_STAGE } from './stages.js';
 import { rng } from './rng.js';
 import { columnCap, fillSceneryChunk, newSceneryChunk } from './scenery.js';
 import { CAST, slowFor } from './bumpables.js';
-import { pocketRects, rectWeight, inRect } from './pockets.js';
+import { pocketRects, rectWeight } from './pockets.js';
+import { tailBumpablesFor } from './longrun.js';
 
 export const DECK = { start: -8, end: 1.5, halfWidth: 2.2 };
 
@@ -321,14 +322,16 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
   const diveGates = stage.diveGates.map((g, i) => ({ ...g, id: i, base: featuresAt(g.x, g.d, -Infinity) }));
   // BUMPABLES: a contact sphere each (never solid). bumpAt → { b, id } with the lap in the id.
-  const bumpables = [...stage.bumpables, ...pocketList.flatMap((p) => p.bumpables.map((b) => ({ ...b, pocket: p.index })))].map((b, i) => {
+  // v1.1 §4: the deep tail's own bumpables live in ONE lap only (tailLap), at their lap-local d.
+  const tail = tailBumpablesFor(stage.id).map((b) => ({ ...b, d: b.d % cycle, tailLap: Math.floor(b.d / cycle) }));
+  const bumpables = [...stage.bumpables, ...pocketList.flatMap((p) => p.bumpables.map((b) => ({ ...b, pocket: p.index }))), ...tail].map((b, i) => {
     const c = CAST[b.type];
     return { ...b, id: i, cast: c, r: c.r, slow: slowFor(b.type), cy: featuresAt(b.x, b.d, -Infinity) + (b.y ?? c.y) };
   });
   function bumpAt(x, y, d, radius = 0.6) {
     const lap = Math.floor(d / cycle), dl = local(d);
     for (const b of bumpables) {
-      if (Math.abs(b.d - dl) > b.r + radius) continue;
+      if (Math.abs(b.d - dl) > b.r + radius || (b.tailLap !== undefined && b.tailLap !== lap)) continue;
       if (Math.hypot(b.x - x, b.cy - y, b.d - dl) < b.r + radius) return { b, id: `${lap}:${b.id}`, lap };
     }
     return null;

@@ -439,7 +439,8 @@ export function createWorld(scene) {
     }
     // SUB-AREAS: a glowing PORTAL at the side of the corridor, an end-portal in the pocket lane,
     // the pocket's own decor along its sides (looks only), and the BONUS STASH sign.
-    const PORTAL = { mushrooms: 0xffd23f, slotCanyon: 0xff9a3c, garden: 0x7fff9a, aurora: 0x9fe6ff, oasis: 0x5fffd0, coral: 0xff7ab8, nebula: 0xc08aff, stormEye: 0xffd23f };
+    const PORTAL = { mushrooms: 0xffd23f, slotCanyon: 0xff9a3c, garden: 0x7fff9a, aurora: 0x9fe6ff, oasis: 0x5fffd0, coral: 0xff7ab8, nebula: 0xc08aff, stormEye: 0xffd23f,
+      sunflowers: 0xffe14d, goldMine: 0xffb020, neon: 0xff3fd0, glacier: 0xbff4ff, temple: 0xffc070, shipwreck: 0x5fd0ff, comet: 0x9fd8ff, rainbow: 0xff6ad5 }; // v1.0 second pockets
     for (const p of terrain.pockets ?? []) {
       const glow = new THREE.MeshBasicMaterial({ color: PORTAL[p.look] ?? 0xffd23f });
       const ringAt = (x, d, base) => {
@@ -464,6 +465,15 @@ export function createWorld(scene) {
         else if (p.look === 'coral') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 0), lam([0xff7ab8, 0xff9a3c, 0xb04ad1][i % 3])); c.scale.set(1, 1.6, 1); c.position.y = 0.8; y.add(c); if (i % 3 === 0) { const stack = new THREE.Mesh(new THREE.BoxGeometry(3, 18, 3), lam(0x8a7a6a)); stack.position.set(side * 3, 9, 0); y.add(stack); } }
         else if (p.look === 'nebula') { const n = new THREE.Mesh(new THREE.IcosahedronGeometry(3 + (i % 3), 1), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xb04ad1 : 0x19c3c3, transparent: true, opacity: 0.25, depthWrite: false })); n.position.y = 8; y.add(n); }
         else if (p.look === 'stormEye') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(4, 1), lam(0x4b5466, { emissive: 0x141821 })); c.position.y = 10 + (i % 3) * 3; y.add(c); }
+        // v1.0 SECOND POCKETS
+        else if (p.look === 'sunflowers') { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 5 + (i % 3), 6), lam(0x3f8a2a)); st.position.y = 2.6; y.add(st); const fl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.3, 12), lam(0xffc61a)); fl.rotation.x = Math.PI / 2; fl.position.y = 5.4 + (i % 3); y.add(fl); const mid = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.35, 10), lam(0x5a3a1a)); mid.rotation.x = Math.PI / 2; mid.position.set(0, 5.4 + (i % 3), 0.05); y.add(mid); }
+        else if (p.look === 'goldMine') { const beam = new THREE.Mesh(new THREE.BoxGeometry(0.6, 7, 0.6), lam(0x7a5230)); beam.position.y = 3.5; y.add(beam); const top = new THREE.Mesh(new THREE.BoxGeometry(4, 0.6, 0.6), lam(0x7a5230)); top.position.set(-side * 2, 7, 0); y.add(top); if (i % 2) { const nug = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 0), lam(0xffc61a, { emissive: 0x6a4a00 })); nug.position.set(-side * 1.5, 0.6, 1); y.add(nug); } const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffd27a })); lamp.position.set(-side * 1.2, 6.4, 0); y.add(lamp); }
+        else if (p.look === 'neon') { const sign = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.4, 4), new THREE.MeshBasicMaterial({ color: [0xff3fd0, 0x3fe0ff, 0xffe14d][i % 3] })); sign.position.y = 5 + (i % 2) * 3; y.add(sign); const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 12, 6), lam(0x2a2f45)); wall.position.set(side * 1.6, 6, 0); y.add(wall); }
+        else if (p.look === 'glacier') { const sp = new THREE.Mesh(new THREE.ConeGeometry(1.4, 7 + (i % 3) * 2, 5), lam(0xd8f6ff, { emissive: 0x1a4a6a })); sp.position.y = 3.5 + (i % 3); y.add(sp); }
+        else if (p.look === 'temple') { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 8, 10), lam(0xe2b97a)); col.position.y = 4; y.add(col); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.8, 2.6), lam(0xc99a5a)); cap.position.y = 8.4; y.add(cap); }
+        else if (p.look === 'shipwreck') { if (i % 3 === 0) { const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 9), lam(0x6b4423)); hull.rotation.z = side * 0.4; hull.position.y = 1; y.add(hull); const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 9, 6), lam(0x8a5a35)); mast.rotation.z = side * 0.5; mast.position.y = 4.5; y.add(mast); } else { const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8), lam(0x9a6b3a)); barrel.position.y = 0.6; y.add(barrel); } }
+        else if (p.look === 'comet') { const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4 + (i % 2), 0), lam(0xcfe6ff, { emissive: 0x1a3a6a })); ice.position.y = 7 + (i % 3) * 2; y.add(ice); const tail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 6), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.set(0, 7 + (i % 3) * 2, -3.5); y.add(tail); }
+        else if (p.look === 'rainbow') { const arc = new THREE.Mesh(new THREE.TorusGeometry(3, 0.35, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 9; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), lam(0xffffff)); puff.position.y = 8; y.add(puff); }
         else { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), lam(0xffb070, { emissive: 0x6a3a10 })); crystal.position.y = 1.2; y.add(crystal); }
         y.position.set(x, g0, -d);
         keep(y);
@@ -810,14 +820,18 @@ export function createWorld(scene) {
     bands[2].visible = bands[3].visible = look.doubleBands;
     for (const a of arms) a.scale.set(look.frameScale, 1, look.frameScale);
     for (const k of knobs) k.scale.setScalar(look.frameScale);
-    knobMat.color.setHex(look.level >= 5 ? 0xffc61a : 0xff5d5d);
+    knobMat.color.setHex(look.level >= 10 ? 0xffffff : look.level >= 6 ? look.color : look.level >= 5 ? 0xffc61a : 0xff5d5d);
+    bandRainbow = !!look.rainbow; // v1.0 Lv10: the bands shimmer through the rainbow
   }
+  let bandRainbow = false;
+  const _bandHsl = new THREE.Color();
 
   const _dir = new THREE.Vector3();
   const _end = new THREE.Vector3();
   const UP = new THREE.Vector3(0, 1, 0);
   // Stretch the bands from the fork tips to `p` (a world point).
   function setBands(p) {
+    if (bandRainbow) bandMat.color.copy(_bandHsl.setHSL((performance.now() / 4000) % 1, 0.9, 0.6));
     pouch.position.copy(p);
     bands.forEach((b, i) => {
       _end.copy(p).y += attachOffsets[i];
@@ -878,6 +892,7 @@ export function createWorld(scene) {
       if (mine) c.t += dt;
       else if (c.t >= 0) { c.t = -1; c.lap = -1; resetCritter(c.g); }
       animateCritter(c.g, c.b.cast.leave, mine ? c.t : -1, clockT, c.home);
+      if (c.b.tailLap !== undefined && c.b.tailLap !== lapShown) c.g.visible = false; // v1.1 deep tail: one lap only
     }
     clockT += dt;
     if (fogPulse > 0) {
@@ -942,7 +957,7 @@ export function createWorld(scene) {
   }
 
   // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
-  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a };
+  const POCKET_FOG = { nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
     if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }

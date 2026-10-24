@@ -34,7 +34,6 @@ export const CAST = {
 };
 export const BUMP_SLOW = 0.9, BIG_BUMP_SLOW = 0.85;
 export const slowFor = (type) => (CAST[type].big ? BIG_BUMP_SLOW : BUMP_SLOW);
-export const SET_PIECE_S = 1.2; // every set-piece plays 0.8–1.5 s
 
 // The results line: "Bumps: N (+M coins)" (null when there were none).
 export function bumpSummary(bumps) {

@@ -5,9 +5,11 @@
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 // The parachute in a world: low gravity makes the canopy sink slower (long, dreamy glides).
-export function pilotParams(PILOT, modifiers = {}) {
+// v1.0 MEGA CHUTE (level 0–5): sink × 0.9…0.5, steering × 1.06…1.3 (funlines.js).
+export function pilotParams(PILOT, modifiers = {}, chute = { sinkMul: 1, steerMul: 1 }) {
   const g = modifiers.lowGravity ? modifiers.lowGravity.gravityScale : 1;
-  return g === 1 ? PILOT : { ...PILOT, canopySink: PILOT.canopySink * g };
+  if (g === 1 && chute.sinkMul === 1 && chute.steerMul === 1) return PILOT;
+  return { ...PILOT, canopySink: PILOT.canopySink * g * chute.sinkMul, sideSpeed: PILOT.sideSpeed * chute.steerMul };
 }
 
 export function createPilot(flight, PILOT) {

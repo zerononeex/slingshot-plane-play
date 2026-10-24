@@ -2,6 +2,7 @@
 // magnet pull and pickup. The WORLD is fixed; only the coin patterns shuffle per flight.
 import { MAGNET_PULL_SPEED } from './config.js';
 import { rng } from './rng.js';
+import { setPiecesFor, setPieceCoins } from './longrun.js';
 
 export { rng };
 
@@ -279,6 +280,8 @@ export function featureCoins(stage, terrain, lap) {
     out.push({ x, y: terrain.groundAt(x, c.d, Infinity) + 3, d: c.d + off });
   }
   if (lap === 0) {
+    // v1.1 LONG STAGES: the long run's coin arcs, coin rings and hoop lines (absolute distances, once).
+    for (const c of setPieceCoins(setPiecesFor(stage.id), (x, d) => terrain.surfaceAt(x, d, -Infinity))) out.push(c);
     for (const s of stage.secrets) {
       const y = secretY(terrain, s);
       for (let i = 0; i < s.coins; i++) {
@@ -332,9 +335,8 @@ export function reachStashes(terrain, coins, pos, reached) {
 // Reaching a stash scoops up all of its coins at once.
 export function reachSecrets(stage, terrain, coins, pos, reached) {
   const found = [];
-  if (pos.d > stage.cycle) return found;
   for (const s of stage.secrets) {
-    if (reached.has(s.id)) continue;
+    if (reached.has(s.id) || Math.abs(pos.d - s.d) > s.radius) continue; // v1.0: each secret at its own distance (5 is far out)
     if (Math.hypot(pos.x - s.x, pos.y - secretY(terrain, s), pos.d - s.d) > s.radius) continue;
     reached.add(s.id);
     let got = 0;

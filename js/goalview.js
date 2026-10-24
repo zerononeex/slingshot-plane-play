@@ -1,9 +1,10 @@
-// v0.9 STAGE GOALS look: the 10 numbered GOAL GATES (thick violet rings with a bold number disc
+// v0.9 STAGE GOALS look (v1.0: 20 gates): the numbered GOAL GATES (thick violet rings with a bold number disc
 // on top; green + ✓ and ghosted once collected) and the golden GOAL arch (double-width ring with
-// a checker trim and a GOAL disc — absent until all 10 gates are flown). Visually nothing like
+// a checker trim and a GOAL disc — absent until all the world's gates (20; v1.1: 30 in Space + Jetstream) are flown, or the world is already complete). Visually nothing like
 // the DIVE skill's dive gates (posts + a low banner) or the loop rings (thin, in a vertical circle).
 // Canvas textures are drawn once at load; each world builds its meshes once; no per-frame allocation.
 import * as THREE from 'three';
+import { MAX_GATES } from './goals.js';
 
 const VIOLET = 0x8a4dff, GREEN = 0x3ccf5a, GOLD = 0xffc61a;
 
@@ -36,7 +37,7 @@ function checkerTexture() {
 }
 
 export function createGoalView(scene) {
-  const nums = Array.from({ length: 10 }, (_, i) => discTexture(String(i + 1), '#7a3df0', '#ffd23f', '#ffffff', i === 9 ? 56 : 66));
+  const nums = Array.from({ length: MAX_GATES }, (_, i) => discTexture(String(i + 1), '#7a3df0', '#ffd23f', '#ffffff', i >= 9 ? 56 : 66)); // v1.1: up to 30 gates
   const check = discTexture('✓', '#2fae4c', '#e8ffe9', '#ffffff', 72);
   const goalTex = discTexture('GOAL', '#ffb800', '#ffffff', '#1b2438', 36);
 
@@ -48,7 +49,7 @@ export function createGoalView(scene) {
   const doneMat = new THREE.MeshLambertMaterial({ color: GREEN, emissive: 0x145c25, transparent: true, opacity: 0.5, depthWrite: false });
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xe9ddff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
 
-  const gates = Array.from({ length: 10 }, () => {
+  const gates = Array.from({ length: MAX_GATES }, () => {
     const g = new THREE.Group();
     const ring = new THREE.Mesh(ringGeo, openMat);
     const glow = new THREE.Mesh(glowGeo, glowMat);

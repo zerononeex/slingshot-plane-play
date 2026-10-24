@@ -71,6 +71,13 @@ export const ENGINE = [
   { level: 3, decay: 0.66, cost: 80, propSpin: 1.5, cowl: 0x4fd1ff },
   { level: 4, decay: 0.54, cost: 150, propSpin: 1.8, cowl: 0xff8a3d },
   { level: 5, decay: 0.42, cost: 300, propSpin: 2.2, cowl: 0xffc61a },
+  // v1.0 LEVEL 10: Lv6–10 stacked on top (Lv1–5 frozen). Grid-trimmed from the × 0.93 starting curve
+  // to ≈ × 0.99 per level so the full-maxed corners land in the 1.25–1.40 band (BALANCE.md).
+  { level: 6, decay: 0.415, cost: 450, propSpin: 2.5, cowl: 0xe5e4e2 },
+  { level: 7, decay: 0.41, cost: 680, propSpin: 2.8, cowl: 0xb9f2ff },
+  { level: 8, decay: 0.405, cost: 1020, propSpin: 3.1, cowl: 0x9d7bff },
+  { level: 9, decay: 0.4, cost: 1530, propSpin: 3.4, cowl: 0xff6ad5 },
+  { level: 10, decay: 0.395, cost: 2300, propSpin: 3.8, cowl: 0xffffff, rainbow: true },
 ];
 
 // RUBBER BAND (was "Slingshot") = "a stronger launch". launchMax = m/s at full
@@ -82,6 +89,12 @@ export const BAND = [
   { level: 3, name: 'Blue',      launchMax: 40, momentum: 2.5, cost: 80, color: 0x2f7fe0, thickness: 1.3, doubleBands: true,  frameScale: 1.0 },
   { level: 4, name: 'Purple',    launchMax: 46, momentum: 3.0, cost: 150, color: 0x9b3fe0, thickness: 1.6, doubleBands: true,  frameScale: 1.2 },
   { level: 5, name: 'GOLD',      launchMax: 52, momentum: 3.5, cost: 300, color: 0xffc61a, thickness: 1.9, doubleBands: true,  frameScale: 1.6 },
+  // v1.0: past gold → platinum → rainbow. launchMax here is the stock line; each plane's own caps rule (stages.js).
+  { level: 6, name: 'PLATINUM',  launchMax: 56, momentum: 3.6, cost: 450,  color: 0xe5e4e2, thickness: 2.0, doubleBands: true,  frameScale: 1.7 },
+  { level: 7, name: 'DIAMOND',   launchMax: 60, momentum: 3.7, cost: 680,  color: 0xb9f2ff, thickness: 2.1, doubleBands: true,  frameScale: 1.8 },
+  { level: 8, name: 'COSMIC',    launchMax: 64, momentum: 3.8, cost: 1020, color: 0x9d7bff, thickness: 2.2, doubleBands: true,  frameScale: 1.9 },
+  { level: 9, name: 'PRISM',     launchMax: 68, momentum: 3.9, cost: 1530, color: 0xff6ad5, thickness: 2.3, doubleBands: true,  frameScale: 2.0 },
+  { level: 10, name: 'RAINBOW',  launchMax: 73, momentum: 4.0, cost: 2300, color: 0xff4fa3, thickness: 2.4, doubleBands: true,  frameScale: 2.1, rainbow: true },
 ];
 
 // FUEL TANK = the BOOST. Level 0 = no tank (no BOOST button). Refills free every flight.
@@ -93,6 +106,12 @@ export const TANK = [
   { level: 3, seconds: 6,   cost: 150, scale: 1.2 },
   { level: 4, seconds: 8,   cost: 300, scale: 1.4 },
   { level: 5, seconds: 10,  cost: 600, scale: 1.65 },
+  // v1.0: grid-trimmed from +1.5 s/level (17.5 s) to +0.6 s/level → 13 s at Lv10 (the band governs, BALANCE.md).
+  { level: 6, seconds: 10.6, cost: 900,  scale: 1.75 },
+  { level: 7, seconds: 11.2,   cost: 1350, scale: 1.85 },
+  { level: 8, seconds: 11.8, cost: 2030, scale: 1.95 },
+  { level: 9, seconds: 12.4,   cost: 3050, scale: 2.05 },
+  { level: 10, seconds: 13, cost: 4580, scale: 2.15 },
 ];
 export const BOOST = {
   thrust: 6,            // m/s² while the BOOST button is held
@@ -106,6 +125,12 @@ export const RAMP = [
   { level: 3, height: 3,   angleDeg: 4, cost: 80, rails: false },
   { level: 4, height: 4.5, angleDeg: 6, cost: 150, rails: true },
   { level: 5, height: 6,   angleDeg: 8, cost: 300, rails: true },
+  // v1.0: keeps rising modestly.
+  { level: 6, height: 6.8, angleDeg: 8.5, cost: 450,  rails: true },
+  { level: 7, height: 7.6, angleDeg: 9,   cost: 680,  rails: true },
+  { level: 8, height: 8.4, angleDeg: 9.5, cost: 1020, rails: true },
+  { level: 9, height: 9.2, angleDeg: 10,  cost: 1530, rails: true },
+  { level: 10, height: 10, angleDeg: 10.5, cost: 2300, rails: true },
 ];
 
 // COIN MAGNET: coins within `radius` drift to the plane. Level 0 = none.
@@ -117,6 +142,12 @@ export const MAGNET = [
   { level: 3, radius: 5.5, cost: 150, scale: 1.05, color: 0xff2a2a, tips: 0xffffff, glowTips: false, sparkle: false }, // big bright red
   { level: 4, radius: 7,   cost: 300, scale: 1.2,  color: 0xff2a2a, tips: 0xffffff, glowTips: true,  sparkle: false }, // glowing white tips
   { level: 5, radius: 9,   cost: 600, scale: 1.4,  color: 0xffc61a, tips: 0xfff3b0, glowTips: true,  sparkle: true },  // GOLD + sparkles
+  // v1.0: radius +15 % per level; the magnet keeps growing and recolours past gold.
+  { level: 6, radius: 10.4, cost: 900,  scale: 1.5,  color: 0xe5e4e2, tips: 0xffffff, glowTips: true, sparkle: true },  // platinum
+  { level: 7, radius: 11.9, cost: 1350, scale: 1.6,  color: 0x7fe3ff, tips: 0xffffff, glowTips: true, sparkle: true },  // diamond blue
+  { level: 8, radius: 13.7, cost: 2030, scale: 1.7,  color: 0x9d7bff, tips: 0xfff3b0, glowTips: true, sparkle: true },  // cosmic violet
+  { level: 9, radius: 15.7, cost: 3050, scale: 1.8,  color: 0xff6ad5, tips: 0xffffff, glowTips: true, sparkle: true },  // prism pink
+  { level: 10, radius: 18.1, cost: 4580, scale: 1.95, color: 0xffffff, tips: 0xffc61a, glowTips: true, sparkle: true, rainbow: true }, // rainbow
 ];
 export const MAGNET_PULL_SPEED = 22; // m/s (on top of the plane's own speed) a pulled coin flies at
 
@@ -128,6 +159,12 @@ export const WHEELS = [
   { level: 3, keep: 0.75, pop: 5,   cost: 80, scale: 1.1,  tire: 0xff7a1a, rim: 0xffffff, stripe: false }, // orange
   { level: 4, keep: 0.85, pop: 6,   cost: 150, scale: 1.25, tire: 0x222222, rim: 0xffffff, stripe: true },  // red-striped
   { level: 5, keep: 0.92, pop: 7.5, cost: 300, scale: 1.5,  tire: 0x222222, rim: 0xffc61a, stripe: true },  // big GOLD-rimmed
+  // v1.0: retention climbs to a 97 % cap; the wheels keep growing and recolouring.
+  { level: 6, keep: 0.93, pop: 8,   cost: 450,  scale: 1.55, tire: 0x222222, rim: 0xe5e4e2, stripe: true },  // platinum rims
+  { level: 7, keep: 0.94, pop: 8.5, cost: 680,  scale: 1.6,  tire: 0x1b2a4a, rim: 0x7fe3ff, stripe: true },  // diamond
+  { level: 8, keep: 0.95, pop: 9,   cost: 1020, scale: 1.65, tire: 0x2a1650, rim: 0x9d7bff, stripe: true },  // cosmic
+  { level: 9, keep: 0.96, pop: 9.5, cost: 1530, scale: 1.7,  tire: 0x3a1030, rim: 0xff6ad5, stripe: true },  // prism
+  { level: 10, keep: 0.97, pop: 10, cost: 2300, scale: 1.75, tire: 0x111111, rim: 0xffffff, stripe: true, rainbow: true }, // rainbow
 ];
 
 // EJECTOR SEAT: one-time buy. The parachuting pilot glides on.

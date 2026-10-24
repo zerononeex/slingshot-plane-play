@@ -83,6 +83,17 @@ export const sfx = {
   loopRing: () => notes([659, 784, 988, 784, 1319], 95), // happy jingle
   speedGate: (speed = 30) => { const f = 700 + Math.min(1, speed / 70) * 900; blip('sine', f, f, 0.35, 0.16); }, // clean ding, pitched by speed
   chaChing: () => { blip('square', 1900, 1500, 0.05, 0.06); setTimeout(() => notes([1568, 2093], 60, 'triangle', 0.12), 60); },
+  // v1.0 BOOST SHAPES: a rising whoosh, higher with every chain step
+  shapeBoost: (chain = 1) => { sweep(400 + 200 * chain, 2400 + 400 * chain, 900, 0.35, 0.09, 1.5); blip('triangle', 880 * (1 + 0.12 * (chain - 1)), 1320 * (1 + 0.12 * (chain - 1)), 0.18, 0.12); },
+  // v1.0 FUN LINES
+  radarBlip: (k = 0) => blip('sine', 1200 + 900 * k, 1200 + 900 * k, 0.05, 0.035),   // soft, higher when close
+  horn: (sound) => {
+    if (sound === 'squeak') { blip('sine', 1500, 2100, 0.12, 0.1); setTimeout(() => blip('sine', 1700, 2300, 0.1, 0.09), 120); }
+    else if (sound === 'car') { blip('square', 420, 420, 0.22, 0.08); blip('square', 530, 530, 0.22, 0.06); }
+    else if (sound === 'truck') { blip('sawtooth', 165, 160, 0.55, 0.1); blip('sawtooth', 208, 200, 0.55, 0.07); }
+    else if (sound === 'air') { blip('square', 233, 228, 0.7, 0.1); blip('sawtooth', 311, 305, 0.7, 0.08); blip('square', 466, 460, 0.7, 0.05); }
+    else if (sound === 'klaxon') notes([523, 659, 784, 1046, 784, 1046], 95, 'square', 0.09);
+  },
   // v0.9 STAGE GOALS
   goalGate: () => notes([1046, 1318, 1568, 2093], 65, 'triangle', 0.16),  // bright chime
   goalTick: () => blip('sine', 2093, 2093, 0.05, 0.03),                    // faint re-pass tick

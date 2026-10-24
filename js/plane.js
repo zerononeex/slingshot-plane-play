@@ -2,6 +2,7 @@
 // the build sandbox). Nose points along -Z. Every shop item is VISIBLE on the model
 // and its look shows its level (setLoadout).
 import * as THREE from 'three';
+import { funLevel } from './funlines.js';
 
 // v0.7 art pass: every plane material carries baked vertex colours (lighter on top, the colour
 // mid, deeper on the belly) so paint jobs still recolour through material.color.
@@ -234,6 +235,54 @@ export function buildPlane(tune) {
   seat.add(seatStripe);
   model.add(seat);
 
+  // v1.0 FUN LINES on the plane (VISIBILITY RULE: each level shows).
+  // SECRET RADAR: a radarDome + antenna behind the cockpit.
+  const radar = new THREE.Group();
+  const dishMat = metal(0xdfe6ee);
+  const radarDome = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), dishMat);
+  radar.add(radarDome);
+  const radarMast = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.45, 4), dishMat);
+  radarMast.position.y = 0.3; radar.add(radarMast);
+  const tipLamp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), new THREE.MeshBasicMaterial({ color: 0x5fffa0 }));
+  tipLamp.position.y = 0.54; radar.add(tipLamp);
+  radar.position.set(0, 0.38, 0.55);
+  radar.visible = false;
+  model.add(radar);
+  // PARTY HORN: a brass hornBell + a squeeze hornBulb on the fuselage's side.
+  const horn = new THREE.Group();
+  const hornMat = metal(0xffc61a);
+  const hornBell = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 10, 1, true), hornMat);
+  hornBell.rotation.x = -Math.PI / 2; hornBell.position.z = -0.16; horn.add(hornBell);
+  const hornBulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), lam(0xe8262c));
+  hornBulb.position.z = 0.1; horn.add(hornBulb);
+  horn.position.set(0.42, 0.12, -0.5);
+  horn.visible = false;
+  model.add(horn);
+  // SPOILER BRAKES: a tail spoiler that pops up while braking.
+  const spoiler = new THREE.Group();
+  const spoilerFlap = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.22), lam(0xe8262c));
+  spoilerFlap.position.z = -0.11; spoiler.add(spoilerFlap);
+  spoiler.position.set(0, 0.12, 1.2);
+  spoiler.visible = false;
+  model.add(spoiler);
+  let spoilerUp = 0, spoilerWant = 0;
+  // HELIUM BALLOONS: +1 tied to the tail per level (the Starship: glowing anti-grav orbs).
+  const BALLOON_COLS = [0xff4fa3, 0xffd23f, 0x3fc5ff, 0x5fe06a, 0xb06aff];
+  const balloons = BALLOON_COLS.map((c, i) => {
+    const b = new THREE.Group();
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), lam(c, { emissive: 0x000000 }));
+    ball.scale.y = 1.2; ball.position.y = 1.1 + (i % 2) * 0.25; b.add(ball);
+    const string = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1.0, 3), lam(0xffffff));
+    string.position.y = 0.5; b.add(string);
+    b.position.set((i - 2) * 0.16, 0.2, 1.05);
+    b.rotation.z = (i - 2) * 0.12;
+    b.visible = false;
+    model.add(b);
+    return { b, ball };
+  });
+  let chuteScale = 1;
+  const CHUTE_COLS = [0xff7a1a, 0xff4fa3, 0x3fc5ff, 0x5fe06a, 0xb06aff, 0xffc61a];
+
   // Wheels (always fitted; size/colour = BOUNCY WHEELS level). Wheel bottoms sit at y -0.6.
   const tireMat = lam(0x222222);
   const rimMat = metal(0x888888);
@@ -352,7 +401,7 @@ export function buildPlane(tune) {
   beam.visible = false;
   model.add(beam);
   let ship = false, beamT = 0, ionLevel = 1;
-  const ION = [0xffb06a, 0xc8e0ff, 0x9fd0ff, 0x6fb4ff, 0x3f7bff];
+  const ION = [0xffb06a, 0xc8e0ff, 0x9fd0ff, 0x6fb4ff, 0x3f7bff, 0x5a5cff, 0x7a4dff, 0x9d3dff, 0xc23dff, 0xff4fe0]; // v1.0: Lv6–10 push into violet
   root.rotation.order = 'YXZ'; // yaw, then pitch, then roll
 
   // Each stage flies its own plane: colours, wing size, floats.
@@ -418,10 +467,22 @@ export function buildPlane(tune) {
       w.userData.baseY = w.position.y;
     }
     seat.visible = !!rec.eject;
+    // v1.0 fun lines
+    const rl = funLevel(rec, 'radar'), hl = funLevel(rec, 'horn'), bl = funLevel(rec, 'brakes'), gl = funLevel(rec, 'balloons'), cl = funLevel(rec, 'chute');
+    radar.visible = rl > 0; radar.scale.setScalar(0.85 + 0.12 * rl); tipLamp.material.color.setHex(rl >= 5 ? 0xffc61a : 0x5fffa0);
+    horn.visible = hl > 0; horn.scale.setScalar(0.8 + 0.12 * hl); hornMat.color.setHex(hl >= 5 ? 0xff6ad5 : hl >= 4 ? 0xffffff : 0xffc61a);
+    spoiler.visible = bl > 0; spoilerFlap.scale.set(0.8 + 0.08 * bl, 1, 0.8 + 0.1 * bl);
+    balloons.forEach((o, i) => { o.b.visible = i < gl; o.ball.material.emissive.setHex(ship ? BALLOON_COLS[i] : 0x000000); o.ball.scale.setScalar(ship ? 0.8 : 1).y *= ship ? 1 : 1.2; });
+    chuteScale = 1 + 0.12 * cl;                                    // MEGA CHUTE: bigger…
+    pilot.chute.children[0].material.color.setHex(CHUTE_COLS[cl]);  // …and striped / recoloured per level
+    pilot.chute.children[1].material.color.setHex(cl >= 3 ? 0xffd23f : 0xffffff);
     bodyMat.color.setHex(paint.id === 'default' ? defaultBody : paint.color);
     rainbow = !!paint.rainbow;
     nebula = !!paint.nebula;
+    // v1.0 Lv10 rainbow sheen on the engine cowl, the magnet and the wheel rims.
+    gearSheen = [ENGINE_LV.rainbow ? cowlMat : null, MAGNET_LV.rainbow ? magMat : null, WHEELS_LV.rainbow ? rimMat : null].filter(Boolean);
   }
+  let gearSheen = [];
 
   let rainbow = false, nebula = false;
   let squash = 0;
@@ -438,6 +499,11 @@ export function buildPlane(tune) {
     if (jet) intakeGlowMat.opacity = flying ? Math.min(0.9, 0.2 + speed / 120) * (0.75 + 0.25 * Math.sin(t * (6 + speed * 0.2))) : 0.15;
     if (ship) { coreMat.opacity = 0.75 + Math.random() * 0.25; core.scale.set(1, 1, boosting ? 1.6 + Math.random() * 0.6 : 1); }
     if (rainbow) bodyMat.color.copy(_hsl.setHSL((t * (flying ? 0.12 : 0.08)) % 1, 0.85, 0.55));
+    // v1.0: the spoiler eases up/down; balloons bob
+    spoilerUp += (spoilerWant - spoilerUp) * Math.min(1, dt * 14);
+    spoiler.rotation.x = -spoilerUp * 1.1;
+    for (let i = 0; i < balloons.length; i++) if (balloons[i].b.visible) balloons[i].b.rotation.x = Math.sin(t * 2.2 + i) * 0.12 - (flying ? 0.35 : 0);
+    for (let i = 0; i < gearSheen.length; i++) gearSheen[i].color.copy(_hsl.setHSL((t * 0.15 + i * 0.33) % 1, 0.9, 0.62));
     if (nebula) bodyMat.color.copy(_hsl.setHSL(0.5 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.3)), 0.7, 0.5)); // swirling teal ↔ purple
     if (beamT > 0) { beamT = Math.max(0, beamT - dt); beamMat.opacity = 0.28 * Math.min(1, beamT / 0.15) * (0.8 + 0.2 * Math.sin(t * 30)); }
     beam.visible = beamT > 0;
@@ -490,14 +556,14 @@ export function buildPlane(tune) {
   }
   const roundel = canvasTex(128, 128), nameTex = canvasTex(512, 64), scorch = canvasTex(64, 32);
   const sideDecal = (tex, w, h, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), decalMat(tex.t)); m.position.set(x, y, z); m.rotation.y = ry; model.add(m); return m; };
-  const roundels = [-1, 1].map((sd) => sideDecal(roundel, 0.42, 0.42, sd * 0.33, 0.06, 0.52, sd * Math.PI / 2 + sd * 0.09));
+  for (const sd of [-1, 1]) sideDecal(roundel, 0.42, 0.42, sd * 0.33, 0.06, 0.52, sd * Math.PI / 2 + sd * 0.09);
   for (const sd of [-1, 1]) { // …and on both sides of the tail fin (shown with the TAIL part)
     const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), decalMat(roundel.t));
     m.position.set(sd * 0.05, 0.4, 1.0);
     m.rotation.y = sd * Math.PI / 2;
     tail.add(m);
   }
-  const names = [-1, 1].map((sd) => sideDecal(nameTex, 1.1, 0.14, sd * 0.4, 0.02, -0.2, sd * Math.PI / 2 + sd * 0.09));
+  for (const sd of [-1, 1]) sideDecal(nameTex, 1.1, 0.14, sd * 0.4, 0.02, -0.2, sd * Math.PI / 2 + sd * 0.09);
   const scorches = [-1, 1].map((sd) => sideDecal(scorch, 0.5, 0.2, sd * 0.25, 0, 0.98, sd * Math.PI / 2 + sd * 0.09));
   { // the scorch gradient is the same for every plane
     const g = scorch.g, gr = g.createLinearGradient(0, 0, 64, 0);
@@ -557,5 +623,6 @@ export function buildPlane(tune) {
   }
 
   bakeShading(model); // v0.7: the shaded, less-toy look (vertex colours, baked once)
-  return { root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
+  const setSpoiler = (on) => { spoilerWant = on ? 1 : 0; };
+  return { setSpoiler, get chuteScale() { return chuteScale; }, root, model, prop, propBlurFor, trailPoints, get trailLook() { return jet ? 'jet' : ship ? 'ship' : 'prop'; }, get accent() { return stripeMain.color.getHex(); }, setParts, setLoadout, setStagePlane, animate, squashWheels, pilot, seatPilot, magnet, tank, tractor, get isShip() { return ship; } };
 }

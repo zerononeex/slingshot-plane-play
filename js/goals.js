@@ -1,12 +1,14 @@
 // v0.9 STAGE GOALS (the son's idea, owner's ruling: gates only, no upgrade requirement).
-// Every world has 10 numbered GOAL GATES — a permanent collection, each checked off once ever —
-// and ONE GOAL that only appears once all 10 are flown. Fly through it = the world is TRULY
+// Every world has 20 numbered GOAL GATES (v1.0; 10 in v0.9) — a permanent collection, each checked off once ever —
+// and ONE GOAL that only appears once all 20 are flown (or the world is already complete). Fly through it = the world is TRULY
 // COMPLETE (a permanent ★, a one-time prize). Gates and the goal are fly-throughs: no colliders,
 // no physics effect. NOT the DIVE skill's dive gates (posts + banner, +15 per flight).
 // Pure data + maths (no DOM / three.js).
 import { FLIGHT } from './config.js';
 
-export const GATE_COUNT = 10;
+export const GATE_COUNT = 20;           // v1.0 (was 10 in v0.9)
+export const V09_GATES = 10;             // gates 1–10: the v0.9 collection, grandfathered
+export const MAX_GATES = 30;             // v1.1: Space + Jetstream carry 30 (the others keep 20)
 export const GOAL_PRIZE = 250;
 
 // ───────────────────────── placement (lap-free absolute distances) ─────────────────────────
@@ -137,6 +139,161 @@ GOALS.jetstream = {
   goal: { at: 11365, x: 0, height: 28, size: 13 },
 };
 
+// v1.0 LEVEL 10: gates 11–20 join each world (30 % → 92 % of the NEW full-maxed corner; one inside the
+// world's SECOND pocket). Gates 1–10 above are untouched. Numbers are identity, not order: a gate 11+
+// may sit between earlier gates. The GOAL moves out to ≈ 88 % of the new corner (v0.9 spot kept as v09Goal).
+const V10 = {
+  plains: {
+    gates: [
+      G(11, 1135, 6, 20, 5.5, 'mid'),
+      G(12, 1320, -10, 8, 5.5, 'mid'),
+      G(13, 1710, 0, 36, 5.5, 'high'),
+      G(14, 1980, 12, 14, 5.5, 'mid'),
+      G(15, 2250, -6, 42, 5.5, 'high'),
+      G(16, 2525, 72, 5, 4.5, 'inside the SUNFLOWER MAZE pocket', 'pocket2'),
+      G(17, 2785, 10, 28, 5.5, 'mid'),
+      G(18, 3055, 2, 46, 5.5, 'high'),
+      G(19, 3325, -4, 12, 5.5, 'mid'),
+      G(20, 3595, 10, 32, 5.5, 'high'),
+    ],
+    goal: { at: 3400, x: 0, height: 22, size: 9 },
+  },
+  canyon: {
+    gates: [
+      G(11, 1215, -12, 20, 5.5, 'mid'),
+      G(12, 1520, -10, 8, 5.5, 'mid'),
+      G(13, 1805, 0, 36, 5.5, 'high'),
+      G(14, 2085, 12, 14, 5.5, 'mid'),
+      G(15, 2360, -6, 42, 5.5, 'high'),
+      G(16, 2615, 72, 5, 4.5, 'inside the OLD GOLD MINE pocket', 'pocket2'),
+      G(17, 2935, -12, 28, 5.5, 'mid'),
+      G(18, 3220, -12, 46, 5.5, 'high'),
+      G(19, 3505, -10, 12, 5.5, 'mid'),
+      G(20, 3790, 10, 32, 5.5, 'high'),
+    ],
+    goal: { at: 3625, x: 0, height: 22, size: 9 },
+  },
+  city: {
+    gates: [
+      G(11, 1465, 12, 20, 5.5, 'mid'),
+      G(12, 1850, -10, 8, 5.5, 'mid'),
+      G(13, 2170, 8, 36, 5.5, 'high'),
+      G(14, 2400, 72, 5, 4.5, 'inside the NEON ALLEY pocket', 'pocket2'),
+      G(15, 2855, -6, 42, 5.5, 'high'),
+      G(16, 3175, -10, 7, 5.5, 'skimming low'),
+      G(17, 3535, -12, 28, 5.5, 'mid'),
+      G(18, 3880, 2, 46, 5.5, 'high'),
+      G(19, 4220, -10, 12, 5.5, 'mid'),
+      G(20, 4560, 10, 32, 5.5, 'high'),
+    ],
+    goal: { at: 4365, x: 0, height: 22, size: 9 },
+  },
+  snow: {
+    gates: [
+      G(11, 1835, -12, 20, 5.5, 'mid'),
+      G(12, 2255, -10, 8, 5.5, 'mid'),
+      G(13, 2680, 0, 36, 5.5, 'high'),
+      G(14, 3100, 12, 14, 5.5, 'mid'),
+      G(15, 3635, -72, 5, 4.5, 'inside the CRYSTAL GLACIER pocket', 'pocket2'),
+      G(16, 3945, 8, 7, 5.5, 'skimming low'),
+      G(17, 4365, -12, 28, 5.5, 'mid'),
+      G(18, 4785, 2, 46, 5.5, 'high'),
+      G(19, 5205, -4, 12, 5.5, 'mid'),
+      G(20, 5630, 8, 32, 5.5, 'high'),
+    ],
+    goal: { at: 5375, x: 0, height: 22, size: 9 },
+  },
+  desert: {
+    gates: [
+      G(11, 2205, 6, 20, 5.5, 'mid'),
+      G(12, 2710, -10, 8, 5.5, 'mid'),
+      G(13, 3220, 0, 36, 5.5, 'high'),
+      G(14, 3725, 12, 14, 5.5, 'mid'),
+      G(15, 4230, -6, 42, 5.5, 'high'),
+      G(16, 4735, 8, 7, 5.5, 'skimming low'),
+      G(17, 5245, -12, 28, 5.5, 'mid'),
+      G(18, 5750, 2, 46, 5.5, 'high'),
+      G(19, 6320, 72, 5, 4.5, 'inside the SANDSTONE TEMPLE pocket', 'pocket2'),
+      G(20, 6760, 10, 32, 5.5, 'high'),
+    ],
+    goal: { at: 6470, x: 0, height: 22, size: 9 },
+  },
+  ocean: {
+    gates: [
+      G(11, 2590, 6, 20, 5.5, 'mid'),
+      G(12, 3155, 72, 5, 4.5, 'inside the SHIPWRECK BAY pocket', 'pocket2'),
+      G(13, 3780, 0, 36, 5.5, 'high'),
+      G(14, 4375, 12, 14, 5.5, 'mid'),
+      G(15, 4965, -6, 42, 5.5, 'high'),
+      G(16, 5560, 8, 7, 5.5, 'skimming low'),
+      G(17, 6155, -12, 28, 5.5, 'mid'),
+      G(18, 6750, 2, 46, 5.5, 'high'),
+      G(19, 7345, -10, 12, 5.5, 'mid'),
+      G(20, 7940, 10, 32, 5.5, 'high'),
+    ],
+    goal: { at: 7595, x: 0, height: 22, size: 9 },
+  },
+  space: {
+    gates: [
+      G(11, 3085, 12, 20, 5.5, 'mid'),
+      G(12, 3655, -72, 5, 4.5, 'inside the COMET TRAIL pocket', 'pocket2'),
+      G(13, 4425, 0, 36, 5.5, 'high'),
+      G(14, 5125, -12, 14, 5.5, 'mid'),
+      G(15, 5820, -6, 42, 5.5, 'high'),
+      G(16, 6515, 8, 7, 5.5, 'skimming low'),
+      G(17, 7205, 10, 28, 5.5, 'mid'),
+      G(18, 7910, 2, 46, 5.5, 'high'),
+      G(19, 8605, -4, 12, 5.5, 'mid'),
+      G(20, 9325, 10, 32, 5.5, 'high'),
+    ],
+    goal: { at: 8890, x: 0, height: 22, size: 9 },
+  },
+  jetstream: {
+    gates: [
+      G(11, 5140, -12, 20, 9, 'mid'),
+      G(12, 6295, -10, 10.5, 9, 'skimming low'),
+      G(13, 7470, 0, 36, 9, 'high'),
+      G(14, 8645, 12, 14, 9, 'mid'),
+      G(15, 9855, -6, 42, 9, 'high'),
+      G(16, 11030, 8, 10.5, 9, 'skimming low'),
+      G(17, 12170, 10, 28, 9, 'mid'),
+      G(18, 13365, 2, 46, 9, 'high'),
+      G(19, 14410, 72, 7, 6, 'inside the RAINBOW BRIDGE pocket', 'pocket2'),
+      G(20, 15690, 10, 32, 9, 'high'),
+    ],
+    goal: { at: 15035, x: 0, height: 28, size: 13 },
+  },
+};
+for (const [id, x] of Object.entries(V10)) {
+  GOALS[id].gates.push(...x.gates);
+  GOALS[id].v09Goal = GOALS[id].goal;
+  GOALS[id].goal = x.goal;
+}
+
+// v1.1 FAIRNESS RULE: every gate and the goal re-spread inside the world's COMPLETION ZONE
+// (min(unique run, v1.0 FULL-maxed corner)). Positions move; identities never do — numbers, roles
+// (pocket / signature / pocket2) and sizes are kept, so collected state (stored by number) is untouched.
+// Regular gates run 5 % → 84 % of the zone in number order, the goal sits at 88 %; the special gates
+// sit exactly in their structures (lap occurrence nearest their slot). (v1.0 goal kept as v10Goal.)
+const V11 = {
+  plains: { goal: { at: 1760, x: 0, height: 22, size: 9 }, gates: { 1: [100, -12, 7, 'skimming low'], 2: [185, -8, 16, 'mid'], 3: [265, 6, 30, 'high'], 4: [1095, 20, 5, 'through ROCK TUNNEL #2'], 5: [1175, -72, 5, 'inside the MUSHROOM GROTTO pocket'], 6: [515, 0, 7, 'skimming low'], 7: [600, -6, 24, 'mid'], 8: [680, 4, 44, 'high'], 9: [765, 8, 14, 'mid'], 10: [850, -6, 34, 'high'], 11: [930, -6, 20, 'mid'], 12: [1015, -10, 8, 'mid'], 13: [1135, -10, 36, 'high'], 14: [1225, 14, 14, 'mid'], 15: [1305, -6, 42, 'high'], 16: [565, 72, 5, 'inside the SUNFLOWER MAZE pocket'], 17: [1410, 0, 28, 'mid'], 18: [1565, -6, 46, 'high'], 19: [1605, 0, 12, 'mid'], 20: [1680, 14, 32, 'high'] } },
+  canyon: { goal: { at: 2640, x: 0, height: 22, size: 9 }, gates: { 1: [150, 0, 7, 'skimming low'], 2: [275, 14, 16, 'mid'], 3: [820, 0, 7, 'under the NATURAL ROCK BRIDGE'], 4: [525, 14, 10, 'mid'], 5: [650, 14, 40, 'high'], 6: [1445, 72, 5, 'inside the HIDDEN CANYON pocket'], 7: [900, 0, 24, 'mid'], 8: [1025, 0, 44, 'high'], 9: [1150, -10, 14, 'mid'], 10: [1275, -6, 34, 'high'], 11: [1395, -12, 20, 'mid'], 12: [1520, -10, 8, 'mid'], 13: [1645, 14, 36, 'high'], 14: [1770, 12, 14, 'mid'], 15: [1895, 14, 42, 'high'], 16: [455, 72, 5, 'inside the OLD GOLD MINE pocket'], 17: [2145, -12, 28, 'mid'], 18: [2270, -12, 46, 'high'], 19: [2395, -10, 12, 'mid'], 20: [2520, 10, 32, 'high'] } },
+  city: { goal: { at: 3520, x: 0, height: 22, size: 9 }, gates: { 1: [200, -10, 16, 'mid'], 2: [365, -8, 16, 'mid'], 3: [535, 6, 30, 'high'], 4: [635, 14, 10, 'mid'], 5: [880, 10, 40, 'high'], 6: [1030, 14, 7, 'skimming low'], 7: [1165, -12, 24, 'mid'], 8: [395, -72, 5, 'inside the ROOFTOP GARDEN pocket'], 9: [700, -10, 5, 'under the stone bridge'], 10: [1705, -10, 34, 'high'], 11: [1865, -6, 20, 'mid'], 12: [2030, -10, 8, 'mid'], 13: [2195, -10, 36, 'high'], 14: [2400, 72, 5, 'inside the NEON ALLEY pocket'], 15: [2530, 6, 42, 'high'], 16: [2695, -14, 7, 'skimming low'], 17: [2875, -12, 28, 'mid'], 18: [3025, 2, 46, 'high'], 19: [3175, -10, 12, 'mid'], 20: [3360, 10, 32, 'high'] } },
+  snow: { goal: { at: 4400, x: 0, height: 22, size: 9 }, gates: { 1: [250, 14, 7, 'skimming low'], 2: [460, -8, 16, 'mid'], 3: [665, 14, 30, 'high'], 4: [1610, 20, 5, 'through ICE CAVE #2'], 5: [1080, 6, 40, 'high'], 6: [1290, 0, 7, 'skimming low'], 7: [2375, 72, 5, 'inside the AURORA CAVE pocket'], 8: [1705, 10, 44, 'high'], 9: [1915, 8, 14, 'mid'], 10: [2120, -6, 34, 'high'], 11: [2330, -12, 20, 'mid'], 12: [2535, -10, 8, 'mid'], 13: [2745, 0, 36, 'high'], 14: [2990, 12, 14, 'mid'], 15: [3635, -72, 5, 'inside the CRYSTAL GLACIER pocket'], 16: [3370, 8, 7, 'skimming low'], 17: [3575, -12, 28, 'mid'], 18: [3785, 2, 46, 'high'], 19: [3990, 6, 12, 'mid'], 20: [4200, 8, 32, 'high'] } },
+  desert: { goal: { at: 5280, x: 0, height: 22, size: 9 }, gates: { 1: [300, 0, 7, 'skimming low'], 2: [550, 10, 16, 'mid'], 3: [1235, 72, 5, 'inside the LOST OASIS pocket'], 4: [1050, -10, 10, 'mid'], 5: [1300, -4, 40, 'high'], 6: [1545, 0, 7, 'skimming low'], 7: [1795, -12, 24, 'mid'], 8: [3425, -20, 5, 'through the PYRAMID tunnel'], 9: [2295, 8, 14, 'mid'], 10: [2545, 10, 34, 'high'], 11: [2795, 14, 20, 'mid'], 12: [3045, -10, 8, 'mid'], 13: [3295, 0, 36, 'high'], 14: [3545, 14, 14, 'mid'], 15: [3795, -6, 42, 'high'], 16: [4040, 8, 7, 'skimming low'], 17: [4290, -12, 28, 'mid'], 18: [4540, 2, 46, 'high'], 19: [4330, 72, 5, 'inside the SANDSTONE TEMPLE pocket'], 20: [5040, -10, 32, 'high'] } },
+  ocean: { goal: { at: 6160, x: 0, height: 22, size: 9 }, gates: { 1: [350, 0, 7, 'skimming low'], 2: [650, 10, 16, 'mid'], 3: [950, -10, 30, 'high'], 4: [1225, 10, 10, 'mid'], 5: [1515, -4, 40, 'high'], 6: [1265, -72, 5, 'inside the CORAL COVE pocket'], 7: [2095, -12, 24, 'mid'], 8: [2385, 4, 44, 'high'], 9: [4560, -14, 6, 'through the ROCK SEA ARCH'], 10: [2970, 8, 34, 'high'], 11: [3260, 6, 20, 'mid'], 12: [3195, 72, 5, 'inside the SHIPWRECK BAY pocket'], 13: [3845, 0, 36, 'high'], 14: [4135, 14, 14, 'mid'], 15: [4425, -6, 42, 'high'], 16: [4715, 8, 7, 'skimming low'], 17: [5025, 10, 28, 'mid'], 18: [5300, -14, 46, 'high'], 19: [5590, -10, 12, 'mid'], 20: [5880, -6, 32, 'high'] } },
+  space: { goal: { at: 8800, x: 0, height: 22, size: 9 }, gates: { 1: [500, 0, 7, 'skimming low'], 2: [1125, 72, 5, 'inside the NEBULA POCKET pocket'], 3: [1045, 6, 30, 'high'], 4: [1325, 10, 10, 'mid'], 5: [1610, 14, 40, 'high'], 6: [1570, 8, 10, 'threading the ASTEROID RING TUNNEL'], 7: [2135, 14, 24, 'mid'], 8: [2405, 10, 44, 'high'], 9: [2680, 8, 14, 'mid'], 10: [2950, -6, 34, 'high'], 11: [3345, 12, 20, 'mid'], 12: [3655, -72, 5, 'inside the COMET TRAIL pocket'], 13: [3770, 10, 36, 'high'], 14: [4040, 14, 14, 'mid'], 15: [4315, -6, 42, 'high'], 16: [4585, 8, 7, 'skimming low'], 17: [4860, 10, 28, 'mid'], 18: [5120, -10, 46, 'high'], 19: [5405, 14, 12, 'mid'], 20: [5675, 10, 32, 'high'], 21: [5950, 0, 7, 'skimming low'], 22: [6220, 14, 16, 'mid'], 23: [6495, 0, 30, 'high'], 24: [6765, 0, 10, 'mid'], 25: [7040, 0, 40, 'high'], 26: [7320, 0, 24, 'mid'], 27: [7585, 0, 44, 'high'], 28: [7855, 14, 14, 'mid'], 29: [8130, 0, 34, 'high'], 30: [8400, 0, 20, 'mid'] } },
+  jetstream: { goal: { at: 15015, x: 0, height: 28, size: 13 }, gates: { 1: [865, 0, 10.5, 'skimming low'], 2: [1370, -8, 16, 'mid'], 3: [1785, 6, 30, 'high'], 4: [2230, -10, 10.5, 'skimming low'], 5: [2710, -4, 40, 'high'], 6: [3155, -14, 10.5, 'skimming low'], 7: [3675, 14, 24, 'mid'], 8: [4365, -72, 7, 'inside the EYE OF THE STORM pocket'], 9: [5480, 20, 5.5, 'through the CLOUD TUNNEL'], 10: [5035, -14, 34, 'high'], 11: [5530, -12, 20, 'mid'], 12: [5965, 10, 10.5, 'skimming low'], 13: [6430, 0, 36, 'high'], 14: [6915, 0, 14, 'mid'], 15: [7370, -6, 42, 'high'], 16: [7805, -14, 10.5, 'skimming low'], 17: [8290, -10, 28, 'mid'], 18: [8790, 2, 46, 'high'], 19: [8420, 72, 7, 'inside the RAINBOW BRIDGE pocket'], 20: [9685, 10, 32, 'high'], 21: [10150, 10, 10.5, 'skimming low'], 22: [10615, 0, 16, 'mid'], 23: [11080, 14, 30, 'high'], 24: [11545, 14, 10.5, 'skimming low'], 25: [12010, 0, 40, 'high'], 26: [12475, 0, 24, 'mid'], 27: [12920, 0, 44, 'high'], 28: [13405, 0, 14, 'mid'], 29: [13870, 6, 34, 'high'], 30: [14355, 0, 20, 'mid'] } },
+};
+for (const [id, x] of Object.entries(V11)) {
+  // v1.1 §3: the two longest worlds (Space, Jetstream) get gates 21–30 — regular gates, the world's own size
+  const size = id === 'jetstream' ? 9 : 5.5;
+  for (let n = GOALS[id].gates.length + 1; x.gates[n]; n++) GOALS[id].gates.push({ n, at: 0, x: 0, height: 0, size, note: '' });
+  for (const g of GOALS[id].gates) { const p = x.gates[g.n]; if (p) Object.assign(g, { at: p[0], x: p[1], height: p[2], note: g.special ? g.note : p[3] }); }
+  GOALS[id].v10Goal = GOALS[id].goal;
+  GOALS[id].goal = x.goal;
+}
+
 // ───────────────────────── geometry ─────────────────────────
 // The ring's centre height (absolute y). In a tunnel lane the floor is the lane floor.
 export const gateY = (terrain, g) => terrain.surfaceAt(g.x, g.at, -Infinity) + g.height;
@@ -177,23 +334,25 @@ export const crossesRing = (g, gy, d0, x1, y1, d1) => d0 < g.at && d1 >= g.at &&
 export const gatesOf = (rec) => (Array.isArray(rec?.gates) ? rec.gates : []);
 export const isComplete = (rec) => rec?.complete === true;
 
-// Save validation: known numbers only, no duplicates, sorted; `complete` must be a real `true`
-// AND have all 10 gates behind it (else it is dropped).
-export function cleanGates(raw) {
+// Save validation: known numbers only (1–the world's total; v1.1: 30 in Space + Jetstream), no duplicates, sorted; `complete` must be a real `true`
+// with at least the v0.9 ten behind it (else it is dropped).
+export function cleanGates(raw, total = GATE_COUNT) {
   if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= GATE_COUNT))].sort((a, b) => a - b);
+  return [...new Set(raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= total))].sort((a, b) => a - b);
 }
-export const cleanComplete = (raw, gates) => raw === true && gates.length === GATE_COUNT;
+// v1.0: a v0.9 completion (gates 1–10) stays complete forever; anything less is dropped.
+export const cleanComplete = (raw, gates) => raw === true && V09_GATES_DONE(gates);
+const V09_GATES_DONE = (gates) => Array.from({ length: V09_GATES }, (_, i) => i + 1).every((n) => gates.includes(n));
 
 // ───────────────────────── one flight ─────────────────────────
 // run = what this flight knows: the gates already owned, the ones collected now, whether the goal
 // is in the world, and whether the world was completed now.
-export function createGoalRun(rec) {
+export function createGoalRun(rec, total = GATE_COUNT) {
   const owned = gatesOf(rec);
-  return { owned: new Set(owned), fresh: [], open: owned.length >= GATE_COUNT, completeBefore: isComplete(rec), completedNow: false };
+  // v1.0: the goal is there at 20/20 (v1.1: at the world's own total) — or for a world already complete (a v0.9 star keeps its goal).
+  return { total, owned: new Set(owned), fresh: [], open: owned.length >= total || isComplete(rec), completeBefore: isComplete(rec), completedNow: false };
 }
 export const goalVisible = (run) => run.open;
-export const gateCount = (run) => run.owned.size;
 
 // Step the plane from (d0) to (x1, y1, d1). `flying` = the plane itself is being flown (not the
 // eject glide, not after the flight ended). ys = each gate's centre height; goalY = the goal's.
@@ -208,7 +367,7 @@ export function stepGoalRun(run, goals, ys, goalY, d0, x1, y1, d1, flying, out =
     run.owned.add(g.n);
     run.fresh.push(g.n);
     out.push({ type: 'gate', n: g.n, count: run.owned.size });
-    if (run.owned.size >= GATE_COUNT && !run.open) { run.open = true; out.push({ type: 'goalOpen' }); }
+    if (run.owned.size >= run.total && !run.open) { run.open = true; out.push({ type: 'goalOpen' }); }
   }
   if (run.open && crossesRing(goals.goal, goalY, d0, x1, y1, d1)) {
     if (!run.completeBefore && !run.completedNow) { run.completedNow = true; out.push({ type: 'complete' }); }
@@ -219,20 +378,23 @@ export function stepGoalRun(run, goals, ys, goalY, d0, x1, y1, d1, flying, out =
 
 // Credit a flight's goal progress to the FLOWN WORLD's record: new gates join the collection;
 // completing the world (first time only) adds the prize to its wallet.
-export function applyGoals(rec, freshGates = [], completed = false) {
-  const gates = cleanGates([...gatesOf(rec), ...freshGates]);
+export function applyGoals(rec, freshGates = [], completed = false, total = GATE_COUNT) {
+  const gates = cleanGates([...gatesOf(rec), ...freshGates], total);
   const out = { ...rec };
   if (gates.length) out.gates = gates;
-  if (completed && !isComplete(rec) && gates.length === GATE_COUNT) { out.complete = true; out.coins = rec.coins + GOAL_PRIZE; }
+  if (completed && !isComplete(rec) && gates.length === total) { out.complete = true; out.coins = rec.coins + GOAL_PRIZE; }
   return out;
 }
 
 // Results lines (null when nothing happened).
 export function goalLines(run) {
   return {
-    gates: run.fresh.length ? `Goal gates +${run.fresh.length} (${run.owned.size}/${GATE_COUNT})` : null,
+    gates: run.fresh.length ? `Goal gates +${run.fresh.length} (${run.owned.size}/${run.total})` : null,
     complete: run.completedNow ? `★ STAGE COMPLETE! +${GOAL_PRIZE}` : null,
   };
 }
 
 export const goalsFor = (stageId) => GOALS[stageId] ?? null;
+// v1.1: each world's own gate total, read from its data (20; Space + Jetstream 30). Every displayed
+// total and the goal's activation use this — never a fixed 20.
+export const gateTotal = (stageId) => GOALS[stageId]?.gates.length ?? GATE_COUNT;
