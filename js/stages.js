@@ -884,7 +884,7 @@ const DW0 = ARCS[0];
 STAGES.dragonwar = {
   ...base,
   id: 'dragonwar', name: 'Dragon War',
-  unlock: { after: 'neonvoid', best: 25000 },
+  unlock: { after: 'neonvoid', best: 20000 }, // 2026-10-25 owner playtest: 25,000 → 20,000 (66 % → 53 % of Neon Void's maxed corner)
   unlockBanner: 'NEW PLANE: SKY KNIGHT!',
   // The SKY KNIGHT: a steel-and-royal-blue war plane with gold trim and a gold pennant trail. Caps Lv1–5
   // locked; Lv6–10 ≈ +9 %/level (the Neon Void precedent: the fastest stage plane at every level).
