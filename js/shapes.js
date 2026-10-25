@@ -62,7 +62,7 @@ export function stepShapeRun(run, shapes, ys, d0, x1, y1, d1, t, flying, scale =
 }
 
 // World scale: Jetstream's frames are bigger (140 m/s passes).
-export const shapeScale = (stageId) => (stageId === 'jetstream' || stageId === 'neonvoid' || stageId === 'dragonwar' ? 1.6 : 1); // the fast worlds
+export const shapeScale = (stageId) => (stageId === 'jetstream' || stageId === 'neonvoid' || stageId === 'dragonwar' || stageId === 'starfox' ? 1.6 : 1); // the fast worlds
 // Centre height (absolute y): `height` metres above the floor there.
 export const shapeY = (terrain, sh) => terrain.surfaceAt(sh.x, sh.at, -Infinity) + sh.height;
 
@@ -185,6 +185,15 @@ SHAPE_SPOTS.dragonwar = [
   S(1265, 72, 11.2, 'rectangle', 'inside WAR CHEST VAULT'),
   S(40450, 0, 28, 'triangle', 'goal approach'),
   S(40505, 0, 28, 'rectangle', 'goal approach'),
+];
+// v1.6 Star Fox: one in each of its THREE pockets and two on the approach to the Fortress Gates (the goal);
+// its eight long-run frames (the high lines) come from the long-run set pieces below — thirteen in all.
+SHAPE_SPOTS.starfox = [
+  S(265, -72, 10, 'triangle', 'inside the WATERFALL HIDEOUT'),
+  S(1265, 72, 11.2, 'rectangle', 'inside the MINERS\' CACHE'),
+  S(1385, -72, 10, 'oval', 'inside the BURIED TOMB'),
+  S(60890, 0, 28, 'triangle', 'goal approach'),
+  S(60945, 0, 28, 'rectangle', 'goal approach'),
 ];
 // v1.1 FAIRNESS RULE: the two goal-approach frames follow the relocated goal.
 const APPROACH_V11 = { plains: [{ at: 1630, x: 0, height: 22 }, { at: 1685, x: -6, height: 26 }], canyon: [{ at: 2490, x: 0, height: 22 }, { at: 2565, x: 0, height: 22 }], city: [{ at: 3370, x: -12, height: 22 }, { at: 3445, x: 0, height: 22 }], snow: [{ at: 4270, x: 0, height: 22 }, { at: 4325, x: 0, height: 22 }], desert: [{ at: 5130, x: 0, height: 22 }, { at: 5205, x: -6, height: 22 }], ocean: [{ at: 6010, x: 0, height: 22 }, { at: 6085, x: 0, height: 22 }], space: [{ at: 8650, x: 0, height: 22 }, { at: 8725, x: 0, height: 22 }], jetstream: [{ at: 14865, x: 0, height: 28 }, { at: 14940, x: 0, height: 28 }] };

@@ -17,11 +17,16 @@
 import { createShotPool, fireShot, stepShots, shotTime, SHOTS, HIT } from './shooters.js';
 import { keyRingHit, createDoorStates, openByLoop, crossDoors, DOOR } from './loopdoors.js';
 import { MEGA_DATA } from './dragonwar.js';
+import { SF_MEGA } from './starfox.js';
+
+// Every mega-stage's data, by stage id (v1.5 Dragon War, v1.6 Star Fox).
+const ALL_MEGA = { ...MEGA_DATA, ...SF_MEGA };
 
 export const WEAVE_HALF = 30;     // weave rows + tilt walls span the corridor (±26) with a margin; pocket lanes (±72) pass
 export const POST_GAP = 16;       // posts 16 m apart in a row: the clear lines sit at offset + 8 + 16k
 export const POST_TOP = 90;       // above the 60 m ceiling: no flying over
-export const POST_R = { pine: 1.3, giantTree: 2.1, tower: 2.4, spire: 1.7, castleTower: 2.6 };
+export const POST_R = { pine: 1.3, giantTree: 2.1, tower: 2.4, spire: 1.7, castleTower: 2.6,
+  asteroid: 2.4, coral: 1.8, hullMast: 2.2, obelisk: 2.0, plasma: 1.7, redSpire: 2.4 }; // v1.6 Star Fox's posts
 export const TILT = { gap: 3, depth: 2, top: 90 };   // gap 3 m: wings out (half-span 1.6) never fit, knife-edge (0.3) does
 export const WILD_R = 3.4;
 export const GAP = { depth: 2 };                          // a hall gap wall's thickness
@@ -65,11 +70,22 @@ function build(data) {
   const doors = data.doors.map((d, i) => ({ ...d, id: i }));
   const BURST = { trebuchet: 1, rubble: 1, dragon: SHOTS.fireball.burst, archer: SHOTS.arrow.burst };
   const shooters = data.shooters.map((s, i) => ({ shots: s.kind === 'geyser' ? s.aims.length : BURST[s.kind], ...s, id: i }));
-  const hall = data.hall ? { ...data.hall, kind: 'hall' } : null;
-  const walls = hall ? [-1, 1].map((sx) => ({ kind: 'hallWall', side: sx, x: sx * hall.outer, cx: sx * hall.outer })) : [];
-  const facade = hall ? { kind: 'hallFacade', d: hall.d0, cx: 0, w: hall.door.half * 2, y0abs: hall.door.y0, x: 0 } : null;
+  // v1.6: any number of interiors (Dragon War has one: `hall`; Star Fox two: `halls`) and caves.
+  const halls = (data.halls ?? (data.hall ? [data.hall] : [])).map((h, i) => {
+    const o = { ...h, id: i, kind: 'hall' };
+    o.walls = [-1, 1].map((sx) => ({ kind: 'hallWall', side: sx, x: sx * o.outer, cx: sx * o.outer }));
+    o.facade = { kind: 'hallFacade', d: o.d0, cx: 0, w: o.door.half * 2, y0abs: o.door.y0, x: 0 };
+    return o;
+  });
+  const hall = halls[0] ?? null;
+  const hallAt = (d, before = 0) => { for (const h of halls) if (d > h.d0 - before && d <= h.d1) return h; return null; };
   const gaps = (data.gaps ?? []).map((g, i) => ({ ...g, id: i, kind: 'gapWall', cx: g.x, w: g.w, y0abs: g.y - g.h / 2 }));
-  const cave = data.cave ? { ...data.cave, kind: 'caveRock', w: 1, cx: (data.cave.lane[0] + data.cave.lane[1]) / 2 } : null;
+  const caves = (data.caves ?? (data.cave ? [data.cave] : [])).map((c, i) => ({ ...c, id: i, kind: 'caveRock', w: 1, cx: (c.lane[0] + c.lane[1]) / 2 }));
+  const cave = caves[0] ?? null;
+  const caveAt = (d, pad = 0) => { for (const c of caves) if (d > c.d0 - pad && d < c.d1 + pad) return c; return null; };
+  // v1.6 THE UNDERWATER SECTORS: physics flags on a span (sink × sink, + drift up, drag × drag), below the surface.
+  const water = (data.water ?? []).map((w, i) => ({ ...w, id: i }));
+  const waterAt = (y, d) => { for (const w of water) if (d >= w.d0 && d <= w.d1 && y < w.surface) return w; return null; };
   const wave = data.wave ?? null;
   const wild = data.wild.map((w, i) => ({ r: WILD_R, ...w, id: i, kind: 'wildDragon', cur: { x: w.x, y: w.y, d: w.d } }));
   const thermals = data.thermals.map((u, i) => ({ ...u, id: i }));
@@ -90,21 +106,24 @@ function build(data) {
     ...doors.flatMap((d) => [{ d: d.loopD, kind: 'loopKeys' }, { d: d.d, kind: 'loopDoor' }]),
     ...shooters.map((s) => ({ d: s.d, kind: s.kind })), ...wild.map((w) => ({ d: w.d, kind: 'wild' })),
     ...thermals.map((u) => ({ d: u.d, kind: 'thermal' })), ...lanes.map((l) => ({ d: l.d0, kind: 'windLane' })),
-    ...gaps.map((g) => ({ d: g.d, kind: `gap:${g.move}` })), ...(hall ? [{ d: hall.d0, kind: 'hall' }] : []),
-    ...(cave ? [{ d: cave.d0, kind: 'shelterCave' }] : []), ...(wave ? [{ d: wave.d, kind: 'lavaWave' }] : []),
+    ...gaps.map((g) => ({ d: g.d, kind: `gap:${g.move}` })), ...halls.map((h) => ({ d: h.d0, kind: 'hall' })),
+    ...caves.map((c) => ({ d: c.d0, kind: c.falls ? 'waterfallCave' : 'shelterCave' })), ...(wave ? [{ d: wave.d, kind: 'lavaWave' }] : []),
+    ...water.map((w) => ({ d: w.d0, kind: 'underwater' })),
   ].sort((a, b) => a.d - b.d);
-  const inHall = (d) => hall && d >= hall.d0 && d <= hall.d1;
-  const inCaveLane = (x, y, d) => cave && d >= cave.d0 && d <= cave.d1 && x >= cave.lane[0] && x <= cave.lane[1] && y < cave.roof;
+  const inHall = (d) => { const h = hallAt(d, 0.0001); return !!h && d >= h.d0; };
+  const inCaveLane = (x, y, d) => { const c = caveAt(d); return !!c && d >= c.d0 && d <= c.d1 && x >= c.lane[0] && x <= c.lane[1] && y < c.roof; };
 
   // The solid hit at (x, y, d) at flight time t, or null. span = the plane's half-width (wings).
   function hit(x, y, d, radius = 0.6, span = radius, t = 0) {
     if (y > POST_TOP + radius) return null;
-    if (hall && d > hall.d0 - 3 && d < hall.d1) { // THE HALL: the facade's doorway, then the side walls
-      if (Math.abs(d - hall.d0) < 1.5 + radius && Math.abs(x) <= hall.outer && !(Math.abs(x) + span < hall.door.half && y > hall.door.y0 + radius && y < hall.door.y1 - radius)) return facade;
-      if (d >= hall.d0 && Math.abs(x) + span > hall.half && Math.abs(x) <= hall.outer + radius && y > hall.floor - 1) return walls[x < 0 ? 0 : 1];
+    const hl = hallAt(d, 3);
+    if (hl && d < hl.d1) { // THE HALL: the facade's doorway, then the side walls
+      if (Math.abs(d - hl.d0) < 1.5 + radius && Math.abs(x) <= hl.outer && !(Math.abs(x) + span < hl.door.half && y > hl.door.y0 + radius && y < hl.door.y1 - radius)) return hl.facade;
+      if (d >= hl.d0 && Math.abs(x) + span > hl.half && Math.abs(x) <= hl.outer + radius && y > hl.floor - 1) return hl.walls[x < 0 ? 0 : 1];
     }
-    if (cave && d > cave.d0 - radius && d < cave.d1 + radius && x > cave.x0 - span && x < cave.x1 + span && y < cave.top) {
-      if (!(x - span > cave.lane[0] && x + span < cave.lane[1] && y < cave.roof + 1.5)) return cave; // the rock (the tunnel is clear)
+    const cv = caveAt(d, radius);
+    if (cv && x > cv.x0 - span && x < cv.x1 + span && y < cv.top) {
+      if (!(x - span > cv.lane[0] && x + span < cv.lane[1] && y < cv.roof + 1.5)) return cv; // the rock (the tunnel is clear)
     }
     const k = Math.floor(d / B);
     for (let kk = k - 1; kk <= k + 1; kk++) {
@@ -114,7 +133,7 @@ function build(data) {
           if (Math.abs(d - o.d) > o.posts[0].r + radius) continue;
           for (const p of o.posts) if (Math.abs(x - p.x) < p.r + span && Math.abs(d - p.d) < p.r + radius) return p;
         } else if (o.kind === 'gapWall') { // a hall gap wall: one opening, low (DIVE) or high (CLIMB)
-          if (Math.abs(d - o.d) > GAP.depth / 2 + radius || Math.abs(x) > hall.half + radius) continue;
+          if (Math.abs(d - o.d) > GAP.depth / 2 + radius || Math.abs(x) > (hallAt(o.d) ?? hall).half + radius) continue;
           if (Math.abs(x - o.x) + span < o.w / 2 && Math.abs(y - o.y) + radius < o.h / 2) continue;
           return o;
         } else if (o.kind === 'tiltWall') {
@@ -133,6 +152,7 @@ function build(data) {
 
   // Thermal lift + wind-lane push at a point (writes into the terrain's shared fx object).
   function effects(x, y, d, out) {
+    if (water.length) out.water = waterAt(y, d); // v1.6 underwater: the sector's flags (null outside)
     const list = fx.get(Math.floor(d / B));
     if (!list) return out;
     for (const o of list) {
@@ -143,20 +163,20 @@ function build(data) {
   }
 
   // THE HALL's raised stone floor (the terrain's ground there) and THE SHELTER's tunnel roof.
-  const floorAt = (x, d) => (inHall(d) && Math.abs(x) <= hall.outer ? hall.floor : -Infinity);
-  const ceilingAt = (x, d) => (cave && d >= cave.d0 && d <= cave.d1 && x >= cave.lane[0] - 1 && x <= cave.lane[1] + 1 ? cave.roof : Infinity);
+  const floorAt = (x, d) => { const h = hallAt(d, 0.0001); return h && d >= h.d0 && Math.abs(x) <= h.outer ? h.floor : -Infinity; };
+  const ceilingAt = (x, d) => { const c = caveAt(d); return c && d >= c.d0 && d <= c.d1 && x >= c.lane[0] - 1 && x <= c.lane[1] + 1 ? c.roof : Infinity; };
 
   // The next solid thing to line up for within `reach` m ahead (for the scripted pilot): a weave row's
   // clear line, a tilt slot, a hall gap's opening or the hall doorway → { kind, d, x, y | null }.
   function openingAhead(x, d, reach) {
-    if (hall && d < hall.d0 && hall.d0 - d <= reach && !gaps.some((g) => g.d > d && g.d < hall.d0) && !rows.some((r) => r.d > d && r.d < hall.d0)) return { kind: 'hallDoor', d: hall.d0, x: 0, y: hall.cruise };
+    for (const h of halls) if (d < h.d0 && h.d0 - d <= reach && !gaps.some((g) => g.d > d && g.d < h.d0) && !rows.some((r) => r.d > d && r.d < h.d0)) return { kind: 'hallDoor', d: h.d0, x: 0, y: h.cruise };
     for (let k = Math.floor(d / B); k <= Math.floor((d + reach) / B); k++) {
       const list = solid.get(k);
       if (!list) continue;
       let near = null;
       for (const o of list) if (o.kind !== 'wildDragon' && o.d > d - 1 && o.d <= d + reach && (!near || o.d < near.d)) near = o;
       if (near) return near.posts ? { kind: 'weave', d: near.d, x: weaveLine(near, x), y: null }
-        : near.kind === 'gapWall' ? { kind: 'gap', d: near.d, x: near.x, y: near.y } : { kind: 'tilt', d: near.d, x: near.x, y: near.hall ? hall.cruise - 4 : null };
+        : near.kind === 'gapWall' ? { kind: 'gap', d: near.d, x: near.x, y: near.y } : { kind: 'tilt', d: near.d, x: near.x, y: near.hall ? (hallAt(near.d) ?? hall).cruise - 4 : null };
     }
     return null;
   }
@@ -172,8 +192,8 @@ function build(data) {
 
   // The shelter tunnel within `reach` m (until its exit): { d (mouth), x, y }.
   function caveAhead(d, reach) {
-    if (!cave || d > cave.d1 || d < cave.d0 - reach) return null;
-    return { d: cave.d0, x: (cave.lane[0] + cave.lane[1]) / 2, y: cave.cruise };
+    for (const c of caves) if (d <= c.d1 && d >= c.d0 - reach) return { d: c.d0, x: (c.lane[0] + c.lane[1]) / 2, y: c.cruise, glide: !!c.clearApproach };
+    return null;
   }
 
   // Which door key ring a point is inside (during a loop): { door index, key } or null.
@@ -266,11 +286,14 @@ function build(data) {
   // A finished loop opens every door whose two keys it threaded.
   function loopDone(s, keys) { if (keys && keys.size) openByLoop(doors, (s.hz ??= createHazards()).doors, keys, s); }
 
+  // v1.6: a pocket's portal is shut inside an interior or a cave (the walls are in the way).
+  const noPortal = (d) => !!hallAt(d, 30) || !!caveAt(d, 30);
   return { rows, tilts, doors, shooters, wild, thermals, lanes, features, spectacles: data.spectacles ?? [], hall, gaps, cave, wave, golden: data.golden ?? null,
+    halls, caves, water, waterAt, hallAt, caveAt, noPortal, transitions: data.transitions ?? [], skin: data.skin ?? null, fortress: data.fortress ?? null,
     hit, effects, openingAhead, doorAhead, caveAhead, inHall, inCaveLane, floorAt, ceilingAt, keyRingAt, stepHazards, loopDone, createHazards, run: data.run };
 }
 
 export function megaRunFor(stageId) {
-  if (!(stageId in MEGA_DATA)) return null;
-  return (RUNS[stageId] ??= build(MEGA_DATA[stageId]));
+  if (!(stageId in ALL_MEGA)) return null;
+  return (RUNS[stageId] ??= build(ALL_MEGA[stageId]));
 }

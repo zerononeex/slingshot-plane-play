@@ -9,9 +9,10 @@
 
 import { FLYERS } from './flyers.js';
 import { ARCS, ARC_LEN, DW_LAP, zoneTint } from './dragonwar.js';
+import { SF_ARCS, SF_ARC_LEN, SF_BLEND, SF_LAP, sfZoneTint, TRANSITIONS } from './starfox.js';
 
 export const DEFAULT_STAGE = 'plains';
-export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid', 'dragonwar']; // v1.3: three new worlds before the finale; v1.5: the first mega-stage after it
+export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid', 'dragonwar', 'starfox']; // v1.3: three new worlds before the finale; v1.5: the first mega-stage after it; v1.6: Star Fox
 
 const range = (from, to, step) => { const a = []; for (let d = from; d <= to; d += step) a.push(d); return a; };
 const SHARED_PATTERNS = ['line', 'highArc', 'slalom', 'dive', 'stairs', 'wave', 'fork', 'ring'];
@@ -922,6 +923,54 @@ STAGES.dragonwar = {
     { id: 'dragonwar-loop', name: 'Top of the castle loop', x: 0, y: 32, d: 900, coins: 15, radius: 5 },
     { id: 'dragonwar-chest', name: 'Inside the War Chest Vault', x: 75, y: 4, d: 1450, coins: 14, radius: 5 },
     { id: 'dragonwar-sky', name: 'Above the last sky castle', x: -10, y: 40, d: 40000, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['ditchDip', 'craterDip']),
+};
+
+// ───────────────────────── S14 STAR FOX — the 70,000 m planet-hopping MEGA-STAGE (v1.6) ─────────────────────────
+// A Star Fox 64 love letter in seven 10,000 m arcs (starfox.js): green world → asteroid belt → ocean
+// world → the fleet → desert world → solar world → the boss world, with an ASCENT / DESCENT transition
+// zone at each boundary. The base lap repeats every 2,000 m (a loop ring, two dive gates, a station-
+// approach buoy course, three pockets); the authored 70,000 m run on top of it is the shared mega layer
+// (megarun.js) — the shooter system and Loop Doors reused unchanged, reskinned by stage data.
+const SF0 = SF_ARCS[0];
+STAGES.starfox = {
+  ...base,
+  id: 'starfox', name: 'Star Fox',
+  unlock: { after: 'dragonwar', best: 25000 },
+  unlockBanner: 'NEW PLANE: STARHOUND!',
+  // The STARHOUND: a white all-range fighter with blue blades and an orange stripe. Caps Lv1–5 locked;
+  // Lv6–10 ≈ +9 %/level (the v1.0 method: the fastest stage plane at every level).
+  plane: { name: 'Starhound', body: 0xf2f4f7, wing: 0x2f6fe8, accent: 0xff7a1a, wingScale: 1.05, floats: false, starhound: true,
+    caps: [102, 119, 137, 157, 178, 194, 212, 232, 253, 276], decayMul: 5, glideMul: 0.02, noLiftCarry: 22, stallSpeed: 16, trail: 'starhound' }, // tuned (BALANCE.md)
+  theme: { bits: [0xf2f4f7, 0x2f6fe8], sky: SF0.sky, fogNear: 150, fogFar: 500, hemiGround: SF0.hemi, sun: SF0.sun,
+    ground: { ...SF0.pal, water: null }, base: SF0.base, rock: SF0.rock, scenery: SF0.scenery.kind, treesPerChunk: SF0.scenery.trees, rocksPerChunk: SF0.scenery.rocks,
+    // the seven arcs, blended over the 600 m TRANSITION zones (±SF_BLEND about each boundary)
+    arcs: SF_ARCS, zoneTint: sfZoneTint, blend: SF_BLEND, transitions: TRANSITIONS },
+  ground: { style: 'rolling', center: 4, side: 14, arcs: SF_ARCS.map((a) => a.ground), arcLen: SF_ARC_LEN, blend: SF_BLEND },
+  flatStart: 60,
+  // rivers / lakes (the arc's colour: water, slick, lava) and a crater
+  ditches: [{ d: 520, depth: 3, halfLength: 9 }, { d: 1440, depth: 3, halfLength: 8 }],
+  pits: [{ x: -7, d: 770, depth: 4, radius: 8, rim: 1.5, crater: true }, { x: 8, d: 1760, depth: 4, radius: 8 }],
+  zones: [{ side: 'left', kind: 'riverFalls', from: 500, to: 540 }, { side: 'right', kind: 'cavern', from: 680, to: 810 }, { side: 'right', kind: 'riverFalls', from: 1420, to: 1460 }, { side: 'right', kind: 'slot', from: 1600, to: 1640 }],
+  caverns: [SF_LAP.cavern],
+  bridges: [SF_LAP.bridge],
+  slots: [SF_LAP.slot],
+  loopRings: [SF_LAP.loopRing],
+  diveGates: SF_LAP.diveGates,
+  courses: [{ id: 'starfox-approach', look: 'buoys', gates: SF_LAP.course.map((d, i) => gate(d, i % 2 ? 4 : -4)) }],
+  bumpables: [['satellite', 300, 13], ['drone', 560, -12], ['astronaut', 1000, 12], ['pebbleRocks', 1420, 10], ['satellite', 1880, -12]].map(([type, d, x]) => ({ type, d, x })),
+  pockets: [
+    pocket('waterfall-hideout', 'WATERFALL HIDEOUT', 'waterfallHideout', -1, 180, 400, 8, [['caveBats', 130, 3], ['drone', 300, -3]]),
+    pocket('miners-cache', 'MINERS\' CACHE', 'minersCache', 1, 1180, 400, 8, [['pebbleRocks', 130, -3], ['astronaut', 290, 3]]),
+    pocket('buried-tomb', 'BURIED TOMB', 'buriedTomb', -1, 1300, 400, 8, [['caveBats', 120, -3], ['desertRunner', 280, 3]]),
+  ],
+  secrets: [
+    { id: 'starfox-loop', name: 'Top of the station loop', x: 0, y: 32, d: 900, coins: 13, radius: 5 },
+    { id: 'starfox-hideout', name: 'Behind the hideout falls', x: -72, y: 4, d: 480, coins: 14, radius: 5 },
+    { id: 'starfox-buoys', name: 'High over the buoy course', x: 0, y: 26, d: 1530, coins: 15, radius: 5 },
+    { id: 'starfox-tomb', name: 'Deep in the Buried Tomb', x: -75, y: 4, d: 1600, coins: 14, radius: 5 },
+    { id: 'starfox-sky', name: 'Above the corona', x: -10, y: 42, d: 56600, coins: 15, radius: 7 },
   ],
   patterns: patterns(['ditchDip', 'craterDip']),
 };

@@ -59,6 +59,9 @@ export function sceneryX(stage, terrain, x, d) {
   }
   for (const z of stage.zones) if (dl > z.from - 10 && dl < z.to + 10 && Math.abs(x) > 6 && Math.abs(x) < 28 && (z.side === 'left') === (x < 0)) return x + Math.sign(x) * 30;
   if (d < 60 && Math.abs(x) < 10) return x + (x < 0 ? -12 : 12);
+  // v1.6 a mega-stage cave that asks for a clear run-in (Star Fox's waterfall caves are flown low).
+  const cv = terrain.mega?.caveAt(d, 560);
+  if (cv && cv.clearApproach && d < cv.d1 + 20 && x > cv.x0 - 10 && x < cv.x1 + 10) return cv.cx < 0 ? cv.x0 - 14 - Math.abs(x) * 0.1 : cv.x1 + 14 + Math.abs(x) * 0.1;
   return x;
 }
 

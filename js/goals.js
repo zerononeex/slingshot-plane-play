@@ -9,7 +9,7 @@ import { STAGE_ORDER } from './stages.js';
 
 export const GATE_COUNT = 20;           // v1.0 (was 10 in v0.9)
 export const V09_GATES = 10;             // gates 1–10: the v0.9 collection, grandfathered
-export const MAX_GATES = 60;             // v1.1: Space + Jetstream carry 30 (the others keep 20); v1.2 Neon Void 50; v1.5 Dragon War 60
+export const MAX_GATES = 70;             // v1.1: Space + Jetstream carry 30 (the others keep 20); v1.2 Neon Void 50; v1.5 Dragon War 60; v1.6 Star Fox 70
 export const GOAL_PRIZE = 250;
 
 // ───────────────────────── placement (lap-free absolute distances) ─────────────────────────
@@ -532,6 +532,90 @@ GOALS.dragonwar = {
     G(60, 39100, 0, 12, 9, 'skimming low'),
   ],
   goal: { at: 40560, x: 0, height: 28, size: 13 },
+};
+
+// ───────────────────────── v1.6 STAR FOX: 70 gates (the planet-hopping mega-stage) ─────────────────────────
+// Z = min(70,000, FULL corner 69,570) = 69,570 m. Regular gates run 5 % → 84 % of Z in number order
+// (jumbo rings, size 9 — 270 m/s passes): each ≥ 45 m clear of every weave row, wild flyer and mine,
+// clear of the tilt sectors' run-in, the loop doors' circles, the caves, THE DROP's splash curtain and
+// the interiors — except the one INSIDE THE GREAT PYRAMID (over its raised floor). Five underwater.
+// The specials sit in their structures: gate 4 in the WATERFALL HIDEOUT, gate 9 behind the falls INSIDE
+// THE WATERFALL CAVE (under its roof), gate 15 in the MINERS' CACHE, gate 50 in the BURIED TOMB and gate 70
+// on the FORTRESS APPROACH. The goal at 88 % of Z — THE FORTRESS GATES. (Authored with tools-side validation.)
+GOALS.starfox = {
+  gates: [
+    G(1, 3834, 0, 10.5, 9, 'skimming low'),
+    G(2, 4338, -8, 24, 9, 'mid'),
+    G(3, 5197, 6, 40, 9, 'high'),
+    G(4, 4405, -72, 7, 6, 'inside the WATERFALL HIDEOUT', 'pocket'),
+    G(5, 6055, 0, 16, 9, 'mid'),
+    G(6, 6859, 10, 34, 9, 'high'),
+    G(7, 7773, -6, 44, 9, 'high'),
+    G(8, 8632, 4, 20, 9, 'mid'),
+    G(9, 3730, -16, 5, 4, 'inside THE WATERFALL CAVE (behind the falls)', 'signature'),
+    G(10, 9420, -10, 30, 9, 'high'),
+    G(11, 10349, 0, 12, 9, 'skimming low'),
+    G(12, 11208, 8, 38, 9, 'high'),
+    G(13, 12067, -4, 26, 9, 'mid'),
+    G(14, 12860, 12, 44, 9, 'high'),
+    G(15, 15305, 72, 7, 6, 'inside the MINERS\' CACHE', 'pocket2'),
+    G(16, 13784, 0, 10.5, 9, 'skimming low'),
+    G(17, 14643, -8, 24, 9, 'mid'),
+    G(18, 15417, 6, 40, 9, 'high'),
+    G(19, 16385, 0, 16, 9, 'mid'),
+    G(20, 17219, 10, 34, 9, 'high'),
+    G(21, 18088, -6, 44, 9, 'high'),
+    G(22, 18857, 4, 20, 9, 'mid'),
+    G(23, 19795, -10, 30, 9, 'high'),
+    G(24, 20654, 0, 12, 9, 'skimming low'),
+    G(25, 21418, 8, 38, 9, 'high'),
+    G(26, 22372, -4, 26, 9, 'mid'),
+    G(27, 23230, 12, 44, 9, 'high'),
+    G(28, 24089, 0, 10.5, 9, 'skimming low'),
+    G(29, 25028, -8, 24, 9, 'mid (underwater)'),
+    G(30, 25792, 6, 40, 9, 'high (underwater)'),
+    G(31, 26665, 0, 16, 9, 'mid (underwater)'),
+    G(32, 27419, 10, 34, 9, 'high (underwater)'),
+    G(33, 28383, -6, 44, 9, 'high (underwater)'),
+    G(34, 29242, 4, 20, 9, 'mid'),
+    G(35, 30100, -10, 30, 9, 'high'),
+    G(36, 31029, 0, 12, 9, 'skimming low'),
+    G(37, 31818, 8, 38, 9, 'high'),
+    G(38, 32677, -4, 26, 9, 'mid'),
+    G(39, 33600, 12, 44, 9, 'high'),
+    G(40, 34394, 0, 10.5, 9, 'skimming low'),
+    G(41, 35253, -8, 24, 9, 'mid'),
+    G(42, 36112, 6, 40, 9, 'high'),
+    G(43, 37025, 0, 16, 9, 'mid'),
+    G(44, 37794, 10, 34, 9, 'high'),
+    G(45, 38688, -6, 44, 9, 'high'),
+    G(46, 39417, 4, 20, 9, 'mid'),
+    G(47, 40400, -10, 30, 9, 'high'),
+    G(48, 41264, 0, 12, 9, 'skimming low'),
+    G(49, 42123, 8, 38, 9, 'high'),
+    G(50, 45505, -72, 7, 6, 'inside the BURIED TOMB', 'pocket3'),
+    G(51, 43027, -4, 26, 9, 'mid'),
+    G(52, 44520, 0, 12, 9, 'inside THE GREAT PYRAMID'),
+    G(53, 45304, 0, 10.5, 9, 'skimming low'),
+    G(54, 45683, -8, 24, 9, 'mid'),
+    G(55, 46397, 6, 40, 9, 'high'),
+    G(56, 47275, 0, 16, 9, 'mid'),
+    G(57, 48134, 10, 34, 9, 'high'),
+    G(58, 49028, -6, 44, 9, 'high'),
+    G(59, 49852, 4, 20, 9, 'mid'),
+    G(60, 50710, -10, 30, 9, 'high'),
+    G(61, 51684, 0, 12, 9, 'skimming low'),
+    G(62, 52398, 8, 38, 9, 'high'),
+    G(63, 53267, -4, 26, 9, 'mid'),
+    G(64, 54145, 12, 44, 9, 'high'),
+    G(65, 55029, 0, 10.5, 9, 'skimming low'),
+    G(66, 55963, -8, 24, 9, 'mid'),
+    G(67, 56702, 6, 40, 9, 'high'),
+    G(68, 57600, 0, 16, 9, 'mid'),
+    G(69, 58399, 10, 34, 9, 'high'),
+    G(70, 60600, -4, 24, 9, 'on the FORTRESS APPROACH', 'approach'),
+  ],
+  goal: { at: 61000, x: 0, height: 28, size: 13 },
 };
 
 // ───────────────────────── geometry ─────────────────────────

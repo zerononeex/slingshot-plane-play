@@ -211,7 +211,7 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 
 }
 
 // Accept either a bare groundAt(x, d, y) function or a terrain object.
-const NO_FX = { lift: 0, push: 0, gust: 0, updraft: null };
+const NO_FX = { lift: 0, push: 0, gust: 0, updraft: null, water: null };
 function envOf(env) {
   if (typeof env === 'function') return { groundAt: env, ceilingAt: () => Infinity, hitTest: () => null };
   return env;
@@ -352,6 +352,10 @@ function stepAir(s, input, dt, P, env) {
   // Stage gimmicks at this spot: updraft lift, tailwind push, side gusts.
   const zone = env.effectsAt ? env.effectsAt(s.x, s.y, s.d) : NO_FX;
   const inUp = zone.lift > 0;
+  // v1.6 UNDERWATER (a mega-stage sector's flags, like the wind flags): sink × sink, a gentle upward
+  // drift, drag × drag. Null everywhere else, so no other world changes.
+  const wat = zone.water ?? null, sinkK = wat ? wat.sink : 1;
+  if (!!wat !== !!s.underwater) { s.underwater = !!wat; s.events.push(wat ? 'underwater' : 'surfaced'); }
   if (inUp && !s.inUpdraft) s.events.push('updraft');
   s.inUpdraft = inUp;
 
@@ -374,7 +378,7 @@ function stepAir(s, input, dt, P, env) {
     // The launch carry: while the band's push lasts (hold + momentum window) the dart rides its launch line.
     const carry = iy >= 0 && (s.holdLeft > 0 || s.momentumLeft > 0 || s.time < P.noLiftCarry);
     const tgt = carry ? Math.max(want, s.launchPitch) : s.stalled ? Math.min(want, target) : want;
-    const down = (P.gravity * Math.cos(s.pitch)) / Math.max(s.speed, 4) * dt;          // ballistic bend
+    const down = (P.gravity * sinkK * Math.cos(s.pitch)) / Math.max(s.speed, 4) * dt;  // ballistic bend
     const up = P.pitchRateDeg * P.noLiftRecoverRate * DEG * dt;                         // dive flattening
     const turnDown = iy < 0 || s.stalled ? Math.max(down, P.pitchRateDeg * DEG * dt) : down;
     s.pitch += clamp(tgt - s.pitch, -turnDown, up);
@@ -391,12 +395,12 @@ function stepAir(s, input, dt, P, env) {
   // Energy: diving (pitch < 0) adds speed, climbing removes it (wings make climbing cheaper).
   // Decay + drag bleed speed, except while band momentum lasts. Boost pushes, up to its cap.
   const sin = Math.sin(s.pitch);
-  const energy = -P.gravity * sin * (sin > 0 ? P.climbCostMul ?? 1 : 1) * (diving ? SKILLS.diveGravityMul : 1);
+  const energy = -P.gravity * sinkK * sin * (sin > 0 ? P.climbCostMul ?? 1 : 1) * (diving ? SKILLS.diveGravityMul : 1);
   const carrying = s.holdLeft > 0 || s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry);
   const upBleed = (P.lift ?? 1) <= 0 && iy > 0 && !carrying ? P.noLiftUpBleed * iy : 0; // nose up with no wings = drag
   const pushed = s.momentumLeft > 0 || ((P.lift ?? 1) <= 0 && s.time < P.noLiftCarry); // band push: no decay/drag
   const decay = P.decay * (s.speed < (P.slowBelow ?? 0) ? P.slowDecayMul ?? 1 : P.fastDecayMul ?? 1);
-  const bleed = (pushed || s.rollT > 0 ? 0 : decay + P.drag * s.speed * s.speed) + upBleed; // a ROLL pauses decay + drag
+  const bleed = (pushed || s.rollT > 0 ? 0 : (decay + P.drag * s.speed * s.speed) * (wat ? wat.drag : 1)) + upBleed; // a ROLL pauses decay + drag (v1.6: water is thick)
   let thrust = 0;
   if (input.boost && s.fuel > 0) {
     s.boosting = true;
@@ -416,7 +420,7 @@ function stepAir(s, input, dt, P, env) {
   const xPrev = s.x, dPrev = s.d, yPrev = s.y;
   const forward = s.speed * Math.cos(s.pitch);
   // Updraft: the stall sink is cancelled and the air lifts you — at no speed cost.
-  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1)) + zone.lift - s.tiltT * SKILLS.tiltSink; // tilted: lift fades to a gentle sink
+  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1) * sinkK) + zone.lift - s.tiltT * SKILLS.tiltSink * sinkK + (wat ? wat.drift : 0); // tilted: lift fades to a gentle sink
   // v1.0 HELIUM BALLOONS: a gentler sink during unpowered glide only (not boosting, not climbing).
   if (P.balloonSink && !s.boosting && s.vy < 0) s.vy *= 1 - P.balloonSink;
   const steer = s.tilted ? SKILLS.tiltSteer : 1;

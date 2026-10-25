@@ -47,6 +47,9 @@ const COLUMN_LOOK = {
   basalt: { body: 0x2a2628, cap: 0x3a3436 }, // v1.3 Volcano
 };
 
+// v1.6 Star Fox's pockets wear the classic pocket looks (the falls grotto, the gold mine, the temple).
+const POCKET_LOOK = { waterfallHideout: 'grotto', minersCache: 'goldMine', buriedTomb: 'temple' };
+
 export function createWorld(scene) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0x6f9a52, 1.6);
   scene.add(hemi);
@@ -111,6 +114,10 @@ export function createWorld(scene) {
       _h.setHex(th.sky).lerp(_k.setHex(0xffffff), 0.28);           // horizon: lighter
       _z.setHex(th.sky).multiplyScalar(0.82);                        // zenith: a deeper version of the sky
       _w.copy(_h).lerp(_k.setHex(0xfff0d8), 0.4);                    // near-ground haze: warm
+      if (th.spaceK) { // v1.6 Star Fox: a surface sky lerping into a space sky (the ASCENT / DESCENT zones)
+        const q = th.spaceK;
+        _h.lerp(_k.setHex(th.sky), q); _z.lerp(_k.setHex(0x03050f), q); _w.lerp(_k.setHex(0x1a2040), q);
+      }
     }
     const pos = domeGeo.attributes.position, col = domeGeo.attributes.color;
     for (let i = 0; i < pos.count; i++) {
@@ -136,7 +143,8 @@ export function createWorld(scene) {
   farLayer.frustumCulled = false;
   scene.add(farLayer);
   const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks', volcano: 'peaks', skyislands: 'islands',
-    snowfields: 'peaks', deepforest: 'hills', warplains: 'castles', firelands: 'peaks', skycastles: 'islands' }; // v1.5: Dragon War's arcs
+    snowfields: 'peaks', deepforest: 'hills', warplains: 'castles', firelands: 'peaks', skycastles: 'islands', // v1.5: Dragon War's arcs
+    greenworld: 'hills', asteroids: 'rims', oceanworld: 'islands', fleet: 'rims', desertworld: 'dunes', solarworld: 'peaks', bossworld: 'castles' }; // v1.6: Star Fox's
   function profile(style, a) {
     const s1 = Math.sin(a * 3 + 1.3), s2 = Math.sin(a * 7 + 0.4), s3 = Math.sin(a * 17 + 2.2);
     switch (style) {
@@ -484,30 +492,32 @@ export function createWorld(scene) {
       // Decor along both sides of the lane.
       for (let d = p.start + 10, i = 0; d < p.end - 10; d += 34, i++) for (const side of [-1, 1]) {
         const x = p.cx + side * (p.half + 2.5 + (i % 2) * 2), g0 = terrain.surfaceAt(x, d, -Infinity), y = new THREE.Group();
-        if (p.look === 'mushrooms') { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 4 + (i % 3), 7), lam(0xf2e6d0)); st.position.y = 2; y.add(st); const cap = new THREE.Mesh(new THREE.SphereGeometry(2.6, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), lam(i % 2 ? 0xe8262c : 0xb04ad1)); cap.position.y = 4 + (i % 3); y.add(cap); const fly = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 3), new THREE.MeshBasicMaterial({ color: 0xfff6a0 })); fly.position.set(-side * 2, 6, 3); y.add(fly); }
-        else if (p.look === 'garden') { const pl = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 2.4), lam(0x8a5a35)); pl.position.y = 0.6; y.add(pl); const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), lam(0x3fae4a)); bush.position.y = 2; y.add(bush); }
-        else if (p.look === 'aurora') { const ice = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), lam(0xbfe6ff, { emissive: 0x2a6a8a })); ice.position.y = 1.6; y.add(ice); if (side > 0) { const rib = new THREE.Mesh(new THREE.PlaneGeometry(2 * p.half + 8, 5), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x6fffb0 : 0xb08aff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); rib.position.set(-side * (p.half + 3), 16, 0); rib.rotation.x = -0.4; y.add(rib); } }
-        else if (p.look === 'oasis') { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 6, 6), lam(0x9a7046)); tr.position.y = 3; y.add(tr); const fr = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), lam(0x3fae4a)); fr.scale.set(2.4, 0.6, 2.4); fr.position.y = 6.2; y.add(fr); }
-        else if (p.look === 'coral') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 0), lam([0xff7ab8, 0xff9a3c, 0xb04ad1][i % 3])); c.scale.set(1, 1.6, 1); c.position.y = 0.8; y.add(c); if (i % 3 === 0) { const stack = new THREE.Mesh(new THREE.BoxGeometry(3, 18, 3), lam(0x8a7a6a)); stack.position.set(side * 3, 9, 0); y.add(stack); } }
-        else if (p.look === 'nebula') { const n = new THREE.Mesh(new THREE.IcosahedronGeometry(3 + (i % 3), 1), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xb04ad1 : 0x19c3c3, transparent: true, opacity: 0.25, depthWrite: false })); n.position.y = 8; y.add(n); }
-        else if (p.look === 'stormEye') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(4, 1), lam(0x4b5466, { emissive: 0x141821 })); c.position.y = 10 + (i % 3) * 3; y.add(c); }
+        const look = POCKET_LOOK[p.look] ?? p.look; // v1.6 Star Fox's pockets wear the classic looks —
+        if (POCKET_LOOK[p.look] && (i % 2 || side > 0)) continue; // sparsely (three pockets on a mega-stage: the draw-call budget)
+        if (look === 'mushrooms') { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 4 + (i % 3), 7), lam(0xf2e6d0)); st.position.y = 2; y.add(st); const cap = new THREE.Mesh(new THREE.SphereGeometry(2.6, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), lam(i % 2 ? 0xe8262c : 0xb04ad1)); cap.position.y = 4 + (i % 3); y.add(cap); const fly = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 3), new THREE.MeshBasicMaterial({ color: 0xfff6a0 })); fly.position.set(-side * 2, 6, 3); y.add(fly); }
+        else if (look === 'garden') { const pl = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 2.4), lam(0x8a5a35)); pl.position.y = 0.6; y.add(pl); const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), lam(0x3fae4a)); bush.position.y = 2; y.add(bush); }
+        else if (look === 'aurora') { const ice = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), lam(0xbfe6ff, { emissive: 0x2a6a8a })); ice.position.y = 1.6; y.add(ice); if (side > 0) { const rib = new THREE.Mesh(new THREE.PlaneGeometry(2 * p.half + 8, 5), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x6fffb0 : 0xb08aff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); rib.position.set(-side * (p.half + 3), 16, 0); rib.rotation.x = -0.4; y.add(rib); } }
+        else if (look === 'oasis') { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 6, 6), lam(0x9a7046)); tr.position.y = 3; y.add(tr); const fr = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), lam(0x3fae4a)); fr.scale.set(2.4, 0.6, 2.4); fr.position.y = 6.2; y.add(fr); }
+        else if (look === 'coral') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 0), lam([0xff7ab8, 0xff9a3c, 0xb04ad1][i % 3])); c.scale.set(1, 1.6, 1); c.position.y = 0.8; y.add(c); if (i % 3 === 0) { const stack = new THREE.Mesh(new THREE.BoxGeometry(3, 18, 3), lam(0x8a7a6a)); stack.position.set(side * 3, 9, 0); y.add(stack); } }
+        else if (look === 'nebula') { const n = new THREE.Mesh(new THREE.IcosahedronGeometry(3 + (i % 3), 1), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xb04ad1 : 0x19c3c3, transparent: true, opacity: 0.25, depthWrite: false })); n.position.y = 8; y.add(n); }
+        else if (look === 'stormEye') { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(4, 1), lam(0x4b5466, { emissive: 0x141821 })); c.position.y = 10 + (i % 3) * 3; y.add(c); }
         // v1.0 SECOND POCKETS
-        else if (p.look === 'sunflowers') { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 5 + (i % 3), 6), lam(0x3f8a2a)); st.position.y = 2.6; y.add(st); const fl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.3, 12), lam(0xffc61a)); fl.rotation.x = Math.PI / 2; fl.position.y = 5.4 + (i % 3); y.add(fl); const mid = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.35, 10), lam(0x5a3a1a)); mid.rotation.x = Math.PI / 2; mid.position.set(0, 5.4 + (i % 3), 0.05); y.add(mid); }
-        else if (p.look === 'goldMine') { const beam = new THREE.Mesh(new THREE.BoxGeometry(0.6, 7, 0.6), lam(0x7a5230)); beam.position.y = 3.5; y.add(beam); const top = new THREE.Mesh(new THREE.BoxGeometry(4, 0.6, 0.6), lam(0x7a5230)); top.position.set(-side * 2, 7, 0); y.add(top); if (i % 2) { const nug = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 0), lam(0xffc61a, { emissive: 0x6a4a00 })); nug.position.set(-side * 1.5, 0.6, 1); y.add(nug); } const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffd27a })); lamp.position.set(-side * 1.2, 6.4, 0); y.add(lamp); }
-        else if (p.look === 'neon') { const sign = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.4, 4), new THREE.MeshBasicMaterial({ color: [0xff3fd0, 0x3fe0ff, 0xffe14d][i % 3] })); sign.position.y = 5 + (i % 2) * 3; y.add(sign); const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 12, 6), lam(0x2a2f45)); wall.position.set(side * 1.6, 6, 0); y.add(wall); }
-        else if (p.look === 'glacier') { const sp = new THREE.Mesh(new THREE.ConeGeometry(1.4, 7 + (i % 3) * 2, 5), lam(0xd8f6ff, { emissive: 0x1a4a6a })); sp.position.y = 3.5 + (i % 3); y.add(sp); }
-        else if (p.look === 'temple') { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 8, 10), lam(0xe2b97a)); col.position.y = 4; y.add(col); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.8, 2.6), lam(0xc99a5a)); cap.position.y = 8.4; y.add(cap); }
-        else if (p.look === 'shipwreck') { if (i % 3 === 0) { const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 9), lam(0x6b4423)); hull.rotation.z = side * 0.4; hull.position.y = 1; y.add(hull); const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 9, 6), lam(0x8a5a35)); mast.rotation.z = side * 0.5; mast.position.y = 4.5; y.add(mast); } else { const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8), lam(0x9a6b3a)); barrel.position.y = 0.6; y.add(barrel); } }
-        else if (p.look === 'comet') { const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4 + (i % 2), 0), lam(0xcfe6ff, { emissive: 0x1a3a6a })); ice.position.y = 7 + (i % 3) * 2; y.add(ice); const tail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 6), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.set(0, 7 + (i % 3) * 2, -3.5); y.add(tail); }
-        else if (p.look === 'rainbow') { const arc = new THREE.Mesh(new THREE.TorusGeometry(3, 0.35, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 9; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), lam(0xffffff)); puff.position.y = 8; y.add(puff); }
-        else if (p.look === 'lavaTube') { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6 + (i % 2), 0), lam(0x3a2a28)); r.position.y = 1.2; y.add(r); if (i % 2 === 0) { const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff6a1a })); glow.position.set(-side * 1.4, 0.5, 0); y.add(glow); } }
-        else if (p.look === 'magmaVault') { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.4, 0), new THREE.MeshBasicMaterial({ color: [0xff8a1a, 0xffc61a, 0xff4a1a][i % 3] })); crystal.scale.set(1, 2, 1); crystal.position.y = 2.6 + (i % 2); y.add(crystal); const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, 2.2), lam(0x2a2628)); base.position.y = 0.5; y.add(base); }
-        else if (p.look === 'templeRuins') { const col = new THREE.Mesh(new THREE.BoxGeometry(1.6, 5 + (i % 3) * 2, 1.6), lam(0x9a9070)); col.position.y = 2.5 + (i % 3); y.add(col); const vine = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.2, 1.7), lam(0x3f9a3a)); vine.position.y = 5 + (i % 3) * 2; y.add(vine); }
-        else if (p.look === 'parrotHollow') { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 9, 6), lam(0x6b4423)); tr.position.y = 4.5; y.add(tr); const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 0), lam(0x2f8a3a)); crown.position.y = 9.5; y.add(crown); const bird = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({ color: [0xff3030, 0x2fa8ff, 0xffd23f][i % 3] })); bird.position.set(-side * 1.2, 7, 0); y.add(bird); }
-        else if (p.look === 'grotto') { const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.8, 0), lam(0x8a7a6a)); rock.position.y = 1.4; y.add(rock); if (i % 2 === 0) { const fall = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 10), new THREE.MeshBasicMaterial({ color: 0x9fe0ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide })); fall.position.set(0, 6, 0); y.add(fall); } }
-        else if (p.look === 'rainbowRoof') { const arc = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.3, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 8; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 1), lam(0xffffff)); puff.position.y = 1.2; y.add(puff); }
-        else if (p.look === 'gridCore') { const c = new THREE.Mesh(new THREE.BoxGeometry(2.4, 6 + (i % 3) * 2, 2.4), lam(0x0a0a18)); c.position.y = 3 + (i % 3); y.add(c); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 2.6), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); cap.position.y = 6.2 + (i % 3) * 2; y.add(cap); }
-        else if (p.look === 'prism') { const pr = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), new THREE.MeshBasicMaterial({ color: [0xff2bd6, 0x00e5ff, 0xffe14d][i % 3], transparent: true, opacity: 0.7 })); pr.scale.set(1, 2.4, 1); pr.position.y = 5 + (i % 2) * 3; y.add(pr); }
+        else if (look === 'sunflowers') { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 5 + (i % 3), 6), lam(0x3f8a2a)); st.position.y = 2.6; y.add(st); const fl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.3, 12), lam(0xffc61a)); fl.rotation.x = Math.PI / 2; fl.position.y = 5.4 + (i % 3); y.add(fl); const mid = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.35, 10), lam(0x5a3a1a)); mid.rotation.x = Math.PI / 2; mid.position.set(0, 5.4 + (i % 3), 0.05); y.add(mid); }
+        else if (look === 'goldMine') { const beam = new THREE.Mesh(new THREE.BoxGeometry(0.6, 7, 0.6), lam(0x7a5230)); beam.position.y = 3.5; y.add(beam); const top = new THREE.Mesh(new THREE.BoxGeometry(4, 0.6, 0.6), lam(0x7a5230)); top.position.set(-side * 2, 7, 0); y.add(top); if (i % 2) { const nug = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 0), lam(0xffc61a, { emissive: 0x6a4a00 })); nug.position.set(-side * 1.5, 0.6, 1); y.add(nug); } const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffd27a })); lamp.position.set(-side * 1.2, 6.4, 0); y.add(lamp); }
+        else if (look === 'neon') { const sign = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.4, 4), new THREE.MeshBasicMaterial({ color: [0xff3fd0, 0x3fe0ff, 0xffe14d][i % 3] })); sign.position.y = 5 + (i % 2) * 3; y.add(sign); const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 12, 6), lam(0x2a2f45)); wall.position.set(side * 1.6, 6, 0); y.add(wall); }
+        else if (look === 'glacier') { const sp = new THREE.Mesh(new THREE.ConeGeometry(1.4, 7 + (i % 3) * 2, 5), lam(0xd8f6ff, { emissive: 0x1a4a6a })); sp.position.y = 3.5 + (i % 3); y.add(sp); }
+        else if (look === 'temple') { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 8, 10), lam(0xe2b97a)); col.position.y = 4; y.add(col); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.8, 2.6), lam(0xc99a5a)); cap.position.y = 8.4; y.add(cap); }
+        else if (look === 'shipwreck') { if (i % 3 === 0) { const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 9), lam(0x6b4423)); hull.rotation.z = side * 0.4; hull.position.y = 1; y.add(hull); const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 9, 6), lam(0x8a5a35)); mast.rotation.z = side * 0.5; mast.position.y = 4.5; y.add(mast); } else { const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8), lam(0x9a6b3a)); barrel.position.y = 0.6; y.add(barrel); } }
+        else if (look === 'comet') { const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4 + (i % 2), 0), lam(0xcfe6ff, { emissive: 0x1a3a6a })); ice.position.y = 7 + (i % 3) * 2; y.add(ice); const tail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 6), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.set(0, 7 + (i % 3) * 2, -3.5); y.add(tail); }
+        else if (look === 'rainbow') { const arc = new THREE.Mesh(new THREE.TorusGeometry(3, 0.35, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 9; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), lam(0xffffff)); puff.position.y = 8; y.add(puff); }
+        else if (look === 'lavaTube') { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6 + (i % 2), 0), lam(0x3a2a28)); r.position.y = 1.2; y.add(r); if (i % 2 === 0) { const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff6a1a })); glow.position.set(-side * 1.4, 0.5, 0); y.add(glow); } }
+        else if (look === 'magmaVault') { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.4, 0), new THREE.MeshBasicMaterial({ color: [0xff8a1a, 0xffc61a, 0xff4a1a][i % 3] })); crystal.scale.set(1, 2, 1); crystal.position.y = 2.6 + (i % 2); y.add(crystal); const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, 2.2), lam(0x2a2628)); base.position.y = 0.5; y.add(base); }
+        else if (look === 'templeRuins') { const col = new THREE.Mesh(new THREE.BoxGeometry(1.6, 5 + (i % 3) * 2, 1.6), lam(0x9a9070)); col.position.y = 2.5 + (i % 3); y.add(col); const vine = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.2, 1.7), lam(0x3f9a3a)); vine.position.y = 5 + (i % 3) * 2; y.add(vine); }
+        else if (look === 'parrotHollow') { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 9, 6), lam(0x6b4423)); tr.position.y = 4.5; y.add(tr); const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 0), lam(0x2f8a3a)); crown.position.y = 9.5; y.add(crown); const bird = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({ color: [0xff3030, 0x2fa8ff, 0xffd23f][i % 3] })); bird.position.set(-side * 1.2, 7, 0); y.add(bird); }
+        else if (look === 'grotto') { const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.8, 0), lam(0x8a7a6a)); rock.position.y = 1.4; y.add(rock); if (i % 2 === 0) { const fall = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 10), new THREE.MeshBasicMaterial({ color: 0x9fe0ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide })); fall.position.set(0, 6, 0); y.add(fall); } }
+        else if (look === 'rainbowRoof') { const arc = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.3, 6, 18, Math.PI), new THREE.MeshBasicMaterial({ color: [0xff4f4f, 0xffa23f, 0xffe14d, 0x5fe06a, 0x4fb0ff, 0xb06aff][i % 6] })); arc.position.y = 8; arc.rotation.y = Math.PI / 2; y.add(arc); const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 1), lam(0xffffff)); puff.position.y = 1.2; y.add(puff); }
+        else if (look === 'gridCore') { const c = new THREE.Mesh(new THREE.BoxGeometry(2.4, 6 + (i % 3) * 2, 2.4), lam(0x0a0a18)); c.position.y = 3 + (i % 3); y.add(c); const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 2.6), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); cap.position.y = 6.2 + (i % 3) * 2; y.add(cap); }
+        else if (look === 'prism') { const pr = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), new THREE.MeshBasicMaterial({ color: [0xff2bd6, 0x00e5ff, 0xffe14d][i % 3], transparent: true, opacity: 0.7 })); pr.scale.set(1, 2.4, 1); pr.position.y = 5 + (i % 2) * 3; y.add(pr); }
         else { const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), lam(0xffb070, { emissive: 0x6a3a10 })); crystal.position.y = 1.2; y.add(crystal); }
         y.position.set(x, g0, -d);
         keep(y);
@@ -653,8 +663,9 @@ export function createWorld(scene) {
   function arcPair(d) {
     const A = theme.arcs, L = A[0].to - A[0].from, i = Math.max(0, Math.min(A.length - 1, Math.floor(d / L))), into = d - i * L;
     _arcK.a = A[i]; _arcK.b = A[i]; _arcK.k = 0; _arcK.i = i;
-    if (into < 250 && i > 0) { _arcK.b = A[i - 1]; _arcK.k = 0.5 - into / 500; }
-    else if (L - into < 250 && i < A.length - 1) { _arcK.b = A[i + 1]; _arcK.k = 0.5 - (L - into) / 500; }
+    const BL = theme.blend ?? 250; // v1.6: Star Fox's transition zones (±300 m)
+    if (into < BL && i > 0) { _arcK.b = A[i - 1]; _arcK.k = 0.5 - into / (2 * BL); }
+    else if (L - into < BL && i < A.length - 1) { _arcK.b = A[i + 1]; _arcK.k = 0.5 - (L - into) / (2 * BL); }
     return _arcK;
   }
   const PAL_KEYS = ['low', 'grass', 'high'], _tint = [0, 0];
@@ -1067,15 +1078,38 @@ export function createWorld(scene) {
   let arcKey = -1, arcNow = -1;
   const _skyTh = { sky: 0 }, _l1 = new THREE.Color(), _l2 = new THREE.Color();
   const lerpHex = (out, h1, h2, k) => out.setHex(h1).lerp(_l2.setHex(h2), k);
-  const PARTICLES = { snow: [0.7, 1, 0.9], leaves: [0.6, 0.6, 0.9], ash: [0.45, 0.35, 0.7], embers: [0.6, 1, 0.85], motes: [0.5, 0.3, 0.6] }; // size, speed, opacity
+  const PARTICLES = { snow: [0.7, 1, 0.9], leaves: [0.6, 0.6, 0.9], ash: [0.45, 0.35, 0.7], embers: [0.6, 1, 0.85], motes: [0.5, 0.3, 0.6],
+    stardust: [0.45, 0.5, 0.9], bubbles: [0.6, 0.8, 0.75], sand: [0.5, 1.4, 0.7], wisps: [0.8, 4, 0.75], reentry: [0.7, 5, 0.95] }; // size, speed, opacity (v1.6: Star Fox's)
+  // v1.6 the TRANSITION zones' particles: air wisps rushing past on the way up, re-entry glow on the way down.
+  const TRANSIT = { ascent: { kind: 'wisps', color: 0xffffff, dir: -1 }, descent: { kind: 'reentry', color: 0xff8a3a, dir: -1 } };
+  const _uw = new THREE.Color(0x0a4a7a);
+  // the under-water blend at the plane (0 → 1 over 80 m inside a sector's ends)
+  function waterK(planeD) {
+    const W = terrain.mega?.water;
+    if (!W) return 0;
+    for (const w of W) if (planeD > w.d0 && planeD < w.d1) return Math.min(1, (planeD - w.d0) / 80, (w.d1 - planeD) / 80);
+    return 0;
+  }
   function applyArcLook(planeD) {
     const { a, b, k, i } = arcPair(Math.max(0, planeD));
-    const key = i * 100 + Math.round(k * 20) * (a === b ? 0 : b.from > a.from ? 1 : -1);
+    const tr = theme.transitions ? theme.transitions.find((t) => planeD >= t.d0 && planeD <= t.d1) ?? null : null;
+    const tq = tr ? (planeD < tr.d ? 1 : 2) : 0, wk = Math.round(waterK(planeD) * 10) / 10;
+    const key = i * 100 + Math.round(k * 20) * (a === b ? 0 : b.from > a.from ? 1 : -1) + tq * 100000 + wk * 1e6;
     if (key !== arcKey) {
       arcKey = key;
       _skyTh.sky = lerpHex(_l1, a.sky, b.sky, k).getHex();
+      _skyTh.spaceK = (a.space ? 1 - k : 0) + (b.space ? k : 0);
       const horizon = paintSky(_skyTh);
+      if (wk > 0) horizon.lerp(_uw, wk); // v1.6 underwater: the deep blue closes in
       scene.background.copy(horizon); scene.fog.color.copy(horizon);
+      scene.fog.near = theme.fogNear + (20 - theme.fogNear) * wk; scene.fog.far = theme.fogFar + (240 - theme.fogFar) * wk;
+      // v1.6 the space arcs: the starfield (fading in through an ASCENT) and the planet left behind
+      if (theme.arcs.some((x) => x.space)) {
+        spaceSky.visible = _skyTh.spaceK > 0.05;
+        const pl = (_skyTh.spaceK > 0.5 ? (a.space ? a : b) : null)?.planet;
+        earth.visible = !!pl;
+        if (pl) { earth.material.color.setHex(pl[0]); land.material.color.setHex(pl[1]); }
+      }
       hemi.groundColor.copy(lerpHex(_l1, a.hemi, b.hemi, k));
       sun.color.copy(lerpHex(_l1, a.sun, b.sun, k));
       cloudMat.color.copy(lerpHex(_l1, a.cloud, b.cloud, k));
@@ -1086,16 +1120,17 @@ export function createWorld(scene) {
         buildFar(stage, horizon, near);
         rockMatSmall.color.setHex(near.rock);
         coneMat.color.setHex(near.scenery.cone); ballMat.color.setHex(near.scenery.ball); trunkMat.color.setHex(near.scenery.trunk);
-        const pk = PARTICLES[near.particles.kind] ?? PARTICLES.snow;
-        embers.material.color.setHex(near.particles.color); embers.material.size = pk[0]; embers.material.opacity = pk[2];
-        emberDir = near.particles.dir; emberSpeed = pk[1];
         updraftRings.material.color.setHex(near.lava ? 0xffa060 : 0xffffff);
       }
+      const part = tr && (tr.kind === 'descent' || planeD < tr.d) ? TRANSIT[tr.kind] : near.particles; // v1.6: a transition's own particles
+      const pk = PARTICLES[part.kind] ?? PARTICLES.snow;
+      embers.material.color.setHex(part.color); embers.material.size = pk[0]; embers.material.opacity = pk[2];
+      emberDir = part.dir; emberSpeed = pk[1];
     }
   }
 
   // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
-  const POCKET_FOG = { dragonRoost: 0x5a2a18, warChest: 0x4a3a18, nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
+  const POCKET_FOG = { waterfallHideout: 0x3a6a7a, minersCache: 0x2a2436, buriedTomb: 0x6a4a1a, dragonRoost: 0x5a2a18, warChest: 0x4a3a18, nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
     if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }
@@ -1130,6 +1165,7 @@ export function createWorld(scene) {
     ballMat.color.setHex(sc === 'cactus' ? 0x4fb35a : sc === 'palm' ? 0x3fae4a : 0x51b848);
     trunkMat.color.setHex(sc === 'cactus' ? 0x3f9a4a : sc === 'palm' ? 0x9a7046 : 0x8a5a35);
     spaceSky.visible = !!theme.space;
+    earth.visible = true; earth.material.color.setHex(0x3f86e8); land.material.color.setHex(0x4fb35a); // v1.6: Star Fox recolours / hides it
     coinMesh = theme.space ? starCoins : roundCoins;
     for (const m of [roundCoins, starCoins]) { for (let i = 0; i < WORLD.coinSlots; i++) m.setMatrixAt(i, ZERO); m.instanceMatrix.needsUpdate = true; }
     // Space: the CATAPULT RAIL on a moon LAUNCH PAD (metal + glowing energy bands).

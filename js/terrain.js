@@ -99,8 +99,9 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   function arcShape(d) {
     const A = G.arcs, L = G.arcLen, i = Math.max(0, Math.min(A.length - 1, Math.floor(d / L))), a = A[i], into = d - i * L;
     let b = a, k = 0;
-    if (into < 250 && i > 0) { b = A[i - 1]; k = 0.5 - into / 500; }
-    else if (L - into < 250 && i < A.length - 1) { b = A[i + 1]; k = 0.5 - (L - into) / 500; }
+    const BL = G.blend ?? 250; // v1.6: Star Fox's transition zones blend over ±300 m
+    if (into < BL && i > 0) { b = A[i - 1]; k = 0.5 - into / (2 * BL); }
+    else if (L - into < BL && i < A.length - 1) { b = A[i + 1]; k = 0.5 - (L - into) / (2 * BL); }
     _arc.center = a.center + (b.center - a.center) * k;
     _arc.side = a.side + (b.side - a.side) * k;
     _arc.peaks = (a.peaks ?? 0) + ((b.peaks ?? 0) - (a.peaks ?? 0)) * k;
@@ -421,7 +422,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   }
 
   // Gimmick forces at a point (one shared result object — no allocation per step).
-  const fx = { lift: 0, push: 0, pushMin: 0, gust: 0, updraft: null };
+  const fx = { lift: 0, push: 0, pushMin: 0, gust: 0, updraft: null, water: null };
   function effectsAt(x, y, d) {
     const dl = local(d);
     fx.lift = 0; fx.push = 0; fx.pushMin = 0; fx.gust = 0; fx.updraft = null;
@@ -444,7 +445,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     for (const g of gates) if (a0 < g.d && a1 >= g.d && Math.abs(x1 - g.x) < g.w / 2 - 1 && y1 < g.base + g.h) out.push({ type: 'gate', id: `${lap}:${g.id}` });
     for (const sl of slots) if (a0 < sl.d && a1 >= sl.d && Math.abs(x1 - sl.x) < sl.gap / 2 && y1 < sl.base + sl.h) out.push({ type: 'slot', id: `${lap}:${sl.id}` });
     for (const g of diveGates) if (a0 < g.d && a1 >= g.d && Math.abs(x1 - g.x) < g.w / 2 - 0.5 && y1 < g.base + g.h) out.push({ type: 'diveGate', id: `${lap}:${g.id}` });
-    for (const p of pocketList) if (a0 < p.portal.d && a1 >= p.portal.d && Math.abs(x1 - p.portal.x) < p.portal.w / 2 && y1 < p.portalBase + p.portal.h) out.push({ type: 'portal', id: `${lap}:${p.index}`, pocket: p.index, lap });
+    if (!mega?.noPortal(d1)) for (const p of pocketList) if (a0 < p.portal.d && a1 >= p.portal.d && Math.abs(x1 - p.portal.x) < p.portal.w / 2 && y1 < p.portalBase + p.portal.h) out.push({ type: 'portal', id: `${lap}:${p.index}`, pocket: p.index, lap });
     for (const c of courses) for (const g of c.gates) if (a0 < g.d && a1 >= g.d && Math.abs(x1 - g.x) < g.w / 2 - 0.3 && y1 < g.base + g.h) out.push({ type: 'courseGate', id: `${lap}:${c.index}.${g.k}`, course: c.index, k: g.k, lap });
     return out;
   }

@@ -3,6 +3,7 @@
 // Built once per world (absolute positions); only the pieces near the plane are shown.
 import * as THREE from 'three';
 import { neonify } from './neonlook.js';
+import { starFoxLandmark } from './sflandmarks.js';
 
 const lam = (color, extra) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const basic = (color, extra) => new THREE.MeshBasicMaterial({ color, ...extra });
@@ -62,7 +63,7 @@ function landmark(look, k) {
     case 'neonTower': add(new THREE.BoxGeometry(3, 30, 3), lam(0x0a0a18), 0, 15); add(new THREE.TorusGeometry(3.4, 0.25, 6, 24), basic(0xff2bd6), 0, 31).rotation.x = Math.PI / 2; break;
     case 'prismCube': { const c = add(new THREE.BoxGeometry(8, 8, 8), lam(0x0a0a18), 0, 18); c.rotation.set(0.6, 0.8, 0); c.userData.spin = true; break; }
     default:
-      if (!dragonWarLandmark(look, add)) add(new THREE.OctahedronGeometry(2, 0), lam(0xffd23f), 0, 3);
+      if (!dragonWarLandmark(look, add) && !starFoxLandmark(look, add)) add(new THREE.OctahedronGeometry(2, 0), lam(0xffd23f), 0, 3); // v1.6: + Star Fox's (sflandmarks.js)
   }
   g.scale.setScalar(k);
   return g;
