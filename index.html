@@ -255,7 +255,10 @@
   .res-bumps { opacity: 0.8; font-weight: 800; margin: 0; }
   .puff-text { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); color: #fff; font-weight: 900; font-size: clamp(22px, 3.6vh, 34px);
     text-shadow: 0 3px 0 rgba(0,0,0,0.35); pointer-events: none; animation: pop 0.3s ease-out; }
-  .eject-btn { left: max(16px, env(safe-area-inset-left)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px); width: 96px; height: 96px; background: #e8262c; box-shadow: 0 7px 0 #a8161b; font-size: 20px; border: 5px solid #ffd400; }
+  /* EJECT (owner playtest 2026-10-25: out from under little thumbs): the TOP RIGHT, above the skills column
+     (BRAKE is its top), centred on it and tucked under the pause button. On a short screen a full column
+     reaches up there, so EJECT steps left of the column instead — always clear of the top bar and every button. */
+  .eject-btn { right: calc(max(16px, env(safe-area-inset-right)) + 10px); top: calc(max(12px, env(safe-area-inset-top)) + 76px); width: 96px; height: 96px; background: #e8262c; box-shadow: 0 7px 0 #a8161b; font-size: 20px; border: 5px solid #ffd400; }
   .banner {
     position: absolute; left: 50%; top: 15vh; transform: translateX(-50%); white-space: nowrap;
     background: var(--gold); color: var(--ink); font-weight: 900; font-size: clamp(22px, 4vh, 40px);
@@ -264,6 +267,7 @@
   @keyframes pop { 0% { transform: translateX(-50%) scale(0.4); } 80% { transform: translateX(-50%) scale(1.1); } 100% { transform: translateX(-50%) scale(1); } }
   .verdict { margin: 0; font-weight: 900; font-size: clamp(20px, 3vh, 30px); color: #e59f00; }
 
+  @media (max-height: 799px) { .eject-btn { right: calc(max(16px, env(safe-area-inset-right)) + 126px); } }
   /* HUD */
   #hud { pointer-events: none; }
   .hud-top {
