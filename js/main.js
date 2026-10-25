@@ -16,8 +16,10 @@ import {
   nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, runPayout, newSecrets,
 } from './economy.js';
 import { loadSave, writeSave, getStage, setStage, isUnlocked, selectStage, setPrefs } from './save.js';
-import { availablePlanes, planeFor, choosePlane, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
+import { planeFor, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
 import { buildPlane } from './plane.js';
+import { createTurntable } from './hangarview.js';
+import { createHangar } from './hangar.js';
 import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal, BEAT_LINE } from './goals.js';
 import { createGoalView } from './goalview.js';
 import { shapesFor, createShapeRun, stepShapeRun, shapeY, shapeScale, SHAPES } from './shapes.js';
@@ -70,15 +72,17 @@ function commit(next) {
   writeSave(save);
   reloadRecords();
 }
-const loadout = () => ({
-  band: statsFor('band', rec.band),
-  engine: trackStats('engine', rec.engine),
-  tank: trackStats('tank', rec.tank),
-  ramp: trackStats('ramp', rec.ramp),
-  magnet: trackStats('magnet', rec.magnet),
-  wheels: trackStats('wheels', rec.wheels),
-  paint: PAINTS.find((p) => p.id === rec.paints.current) ?? PAINTS[0],
+// A plane's loadout from its record (v1.8: the Hangar dresses any plane with it; the flight uses the flying one's).
+const loadoutFor = (r, entry) => ({
+  band: stageBand(entry, trackStats('band', r.band)),
+  engine: trackStats('engine', r.engine),
+  tank: trackStats('tank', r.tank),
+  ramp: trackStats('ramp', r.ramp),
+  magnet: trackStats('magnet', r.magnet),
+  wheels: trackStats('wheels', r.wheels),
+  paint: PAINTS.find((p) => p.id === r.paints.current) ?? PAINTS[0],
 });
+const loadout = () => loadoutFor(rec, pstage);
 const deckExtra = (ramp) => (ramp.level - 1) * 1.5;
 const terrainFor = (lo) => makeTerrain(stage, { deckHeight: LAUNCH.deckHeight + lo.ramp.height, deckExtra: deckExtra(lo.ramp) });
 
@@ -101,6 +105,10 @@ world.setStage(stage, terrain);
 
 const plane = buildPlane(PLANE_TUNE);
 plane.setStagePlane(pstage.plane);
+// v1.8 THE HANGAR's turntable (its own small scene; the flying plane's shared materials are never disposed by it)
+const keepShared = new Set();
+plane.root.traverse((o) => { for (const m of [].concat(o.material ?? [])) { keepShared.add(m); if (m.map) keepShared.add(m.map); } });
+const turntable = createTurntable(PLANE_TUNE, keepShared);
 scene.add(plane.root);
 
 // Fake blob shadow.
@@ -334,29 +342,54 @@ function applyWorldAndPlane() {
   snapCamera();
 }
 
-// CHANGE PLANE: every unlocked plane; picking one flies it in this world (remembered per world).
-function openPlanes() {
-  mode = 'planes';
-  const list = $('plane-list');
-  list.textContent = '';
-  for (const id of availablePlanes(save)) {
-    const st = planeEntry(id);
-    const b = document.createElement('button');
-    b.className = `plane-card${id === planeId ? ' selected' : ''}`;
-    b.dataset.plane = id;
-    const home = id === stageId ? 'This world\'s own plane' : st.home ? `From ${st.name} · flies with its own upgrades` : `${st.name} · its own upgrades, paid from the world you fly`;
-    b.innerHTML = `<span class="pc-swatch" style="background:linear-gradient(90deg, ${hex(st.plane.body)} 50%, ${hex(st.plane.wing)} 50%)"></span>
-      <span class="pc-name">${st.plane.name}${id === stageId ? ' ★' : ''}</span><span class="pc-home">${home}</span>`;
-    b.addEventListener('click', () => {
-      save = choosePlane(save, stageId, id);
-      writeSave(save);
-      mode = 'title';
-      showScreen('title');
-      applyWorldAndPlane();
-    });
-    list.appendChild(b);
+
+// ---------- v1.8 THE HANGAR (the plane showroom) ----------
+// The previewed plane turns on the turntable (its real model, dressed as its record is); nothing is written
+// until FLY THIS PLANE. Opened from Home's ✈ CHANGE pill; it closes back to Home.
+function hangarShow(id) {
+  if (!id) { turntable.show(null); return; }
+  const entry = planeEntry(id), r = getStage(save, id), l = loadoutFor(r, entry);
+  turntable.show(id, entry.plane, r, { ENGINE_LV: l.engine, TANK_LV: l.tank, MAGNET_LV: l.magnet, WHEELS_LV: l.wheels, paint: l.paint });
+}
+let hangar = null;
+function openHangar() {
+  mode = 'hangar';
+  turntable.setBackdrop(stage.theme.sky, stage.theme.base);
+  // previews never write: the controller gets a writer, but only FLY THIS PLANE calls it
+  hangar = createHangar({ save, worldId: stageId, turntable: { show: hangarShow }, write: (next) => { save = next; writeSave(save); } });
+  renderShowroom();
+  showScreen('showroom');
+  requestAnimationFrame(() => $('sr-lineup').querySelector('.previewed')?.scrollIntoView({ inline: 'center', block: 'nearest' }));
+}
+// The status (name · level + top speed in this world · CURRENT / READY / what unlocks it) and the lineup.
+function renderShowroom() {
+  const st = hangar.status();
+  $('sr-name').textContent = st.name;
+  $('sr-stats').textContent = `Lv ${st.level} · top speed ${Math.round(st.topSpeed * KMH)} km/h in ${stage.name}`;
+  const chip = $('sr-state');
+  chip.className = `sr-state ${st.state}`;
+  chip.textContent = st.state === 'current' ? 'CURRENT' : st.state === 'ready' ? 'READY' : `🔒 ${st.requirement}`;
+  const fly = $('btn-sr-fly');
+  fly.classList.toggle('locked', st.state === 'locked');
+  fly.textContent = st.state === 'locked' ? `WIN ${st.requirement.toUpperCase()} TO UNLOCK` : 'FLY THIS PLANE';
+  const box = $('sr-lineup');
+  box.textContent = '';
+  for (const c of hangar.cards()) {
+    const def = planeEntry(c.id).plane, b = document.createElement('button');
+    b.className = `sr-card ${c.state}${c.id === hangar.previewId ? ' previewed' : ''}`;
+    b.dataset.plane = c.id;
+    const sub = c.state === 'current' ? '✔ CURRENT' : c.state === 'ready' ? (c.id === stageId ? 'this world\'s own' : 'ready') : c.requirement;
+    b.innerHTML = `<span class="sc-swatch" style="background:linear-gradient(90deg, ${hex(def.body)} 50%, ${hex(def.wing)} 50%)"></span><span class="sc-name">${c.name}</span><span class="sc-sub">${sub}</span>`;
+    b.addEventListener('click', () => { hangar.preview(c.id); renderShowroom(); }); // PREVIEW ONLY
+    box.appendChild(b);
   }
-  showScreen('planes');
+}
+function closeHangar() {
+  turntable.show(null); // one model only while open; none after
+  hangar = null;
+  mode = 'title';
+  showScreen('title');
+  refreshTitle();
 }
 
 // ---------- shop ----------
@@ -1059,14 +1092,28 @@ document.addEventListener('gesturestart', (e) => e.preventDefault()); // no pinc
 $('btn-fly').addEventListener('click', () => { unlockAudio(); startRun(); });
 $('btn-shop').addEventListener('click', () => { unlockAudio(); openShop(); });
 $('btn-shop-back').addEventListener('click', closeShop);
-$('btn-change-plane').addEventListener('click', () => { unlockAudio(); openPlanes(); });
+$('btn-change-plane').addEventListener('click', () => { unlockAudio(); openHangar(); });
+$('btn-sr-back').addEventListener('click', closeHangar); // BACK / ✕: the equipped plane stays exactly as it was
+$('btn-sr-fly').addEventListener('click', () => { // FLY THIS PLANE: equip (today's write + save) — never a locked one
+  if (!hangar || !hangar.confirm()) { sfx.bonk(); return; }
+  turntable.show(null);
+  hangar = null;
+  mode = 'title';
+  showScreen('title');
+  applyWorldAndPlane();
+});
+{ // drag the turntable sideways to spin it (it turns on its own again after a pause)
+  const v = $('sr-view');
+  v.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; v.setPointerCapture(e.pointerId); turntable.grab(e.clientX); });
+  v.addEventListener('pointermove', (e) => turntable.drag(e.clientX));
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) v.addEventListener(ev, () => turntable.release());
+}
 $('tab-fly').addEventListener('click', () => { unlockAudio(); setPanel(null); }); // the Home view; dismisses an open panel
 $('tab-worlds').addEventListener('click', () => { unlockAudio(); setPanel(homePanel === 'worlds' ? null : 'worlds'); });
 $('tab-more').addEventListener('click', () => { unlockAudio(); setPanel(homePanel === 'more' ? null : 'more'); });
 for (const w of document.querySelectorAll('.sheet-wrap')) {
   w.addEventListener('click', (e) => { if (e.target === w || e.target.closest('[data-close]')) setPanel(null); }); // ✕, or a tap on the scene above
 }
-$('btn-planes-back').addEventListener('click', () => { mode = 'title'; showScreen('title'); refreshTitle(); });
 $('car-prev').addEventListener('click', () => scrollToCard(carouselIndex - 1));
 $('car-next').addEventListener('click', () => scrollToCard(carouselIndex + 1));
 $('carousel').addEventListener('scroll', onCarouselScroll, { passive: true });
@@ -1384,7 +1431,7 @@ function cameraTarget(out, look) {
     look.set(p.x, p.y - (portrait ? 4.2 : 3.4), p.z);
     return;
   }
-  if (mode === 'title' || mode === 'planes' || mode === 'codes' || mode === 'transfer') {
+  if (mode === 'title' || mode === 'codes' || mode === 'transfer') {
     // The hangar: a 3/4 view with the plane in the middle of the screen.
     out.set(p.x + 7, p.y + 2.2, p.z + 6);
     look.set(p.x, p.y - 0.9, p.z - 0.4);
@@ -1474,6 +1521,12 @@ function frame(now) {
   last = now;
 
   syncMusic();
+  if (mode === 'hangar') { // v1.8 THE HANGAR: only the turntable renders (into the viewport at the top)
+    turntable.update(dt);
+    const v = $('sr-view').getBoundingClientRect();
+    turntable.render(renderer, v.left, v.top, v.width, v.height);
+    return;
+  }
   if (!paused) {
     clock += dt;
     if (mode === 'aim') {
@@ -1484,7 +1537,7 @@ function frame(now) {
       updateSpeedo();
     } else if (mode === 'fly') {
       stepGame(dt);
-    } else if (mode === 'shop' || mode === 'title' || mode === 'planes' || mode === 'codes' || mode === 'transfer') {
+    } else if (mode === 'shop' || mode === 'title' || mode === 'codes' || mode === 'transfer') {
       plane.root.rotation.y += dt * 0.6; // turntable
     }
     // Upgrades: a gentle bob, and a pop when something is bought.

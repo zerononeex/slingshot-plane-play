@@ -4,7 +4,8 @@
 // W supplies the terrain + modifiers and gets the coins, best distance and secrets.
 // Upgrades are paid from P's home wallet; a plane with no home world (the Barnstormer)
 // is paid from the wallet of the world you are in.
-import { STAGES, PLANE_ORDER, stageBand, planeEntry } from './stages.js';
+import { STAGES, PLANE_ORDER, FLYER_ORDER, stageBand, planeEntry } from './stages.js';
+import { FLYERS } from './flyers.js';
 import { getStage, setStage, isUnlocked, isPlaneUnlocked, checkUnlocks, flyersUnlocked } from './save.js';
 import { TRACKS, trackStats, nextCost, canBuyTrack, buyTrack, nextPart, canBuyPart, buyPart, applyRun, minLevel, maxLevel } from './economy.js';
 import { PARTS } from './config.js';
@@ -47,8 +48,9 @@ export function commitPlaneRecord(save, worldId, rec) {
 }
 
 // Everything a flight needs: who flies, with what, where.
-export function flightSetup(save, worldId) {
-  const planeId = planeFor(save, worldId);
+export const flightSetup = (save, worldId) => setupFor(save, worldId, planeFor(save, worldId));
+// (v1.8: the same setup for any plane in a world — the Hangar previews with it)
+export function setupFor(save, worldId, planeId) {
   const entry = planeEntry(planeId);
   return {
     worldId, planeId,
@@ -95,4 +97,36 @@ export function hangarBuy(save, worldId, id) {
   const rec = planeRecord(save, worldId);
   const next = TRACKS[id] ? buyTrack(rec, id) : buyPart(rec, id);
   return next ? commitPlaneRecord(save, worldId, next) : null;
+}
+
+// ───────────────────────── v1.8 THE HANGAR (the plane showroom): its pure rules ─────────────────────────
+// The lineup in a world: the world's own plane, the other planes you have unlocked (other worlds' planes,
+// the Barnstormer), then EVERY reward flyer — locked ones too, so a kid can see what they are working toward.
+export function hangarLineup(save, worldId) {
+  const others = availablePlanes(save).filter((id) => id !== worldId && !FLYER_ORDER.includes(id));
+  return [worldId, ...others, ...FLYER_ORDER];
+}
+// What still has to happen for a locked plane ("★ Canyon"), or null once it is yours.
+export function unlockLabel(save, planeId) {
+  if (isPlaneUnlocked(save, planeId)) return null;
+  const f = FLYERS.find((x) => x.id === planeId);
+  if (f) return f.unlock.replace(/\s*\(.*\)\s*$/, '');
+  return STAGES[planeId] ? `Open ${STAGES[planeId].name}` : 'Keep flying';
+}
+// The status a previewed plane shows: its level + top speed IN THIS WORLD, read exactly as a flight reads
+// them — the plane's own record and its band (stageBand of the plane's caps at its band level, as
+// flightSetup / the loadout do) — and its state: 'current' (it flies this world), 'ready' or 'locked'.
+export function planeStatus(save, worldId, planeId) {
+  const setup = setupFor(save, worldId, planeId), unlocked = isPlaneUnlocked(save, planeId);
+  return {
+    id: planeId, name: setup.plane.name, flyer: setup.plane.flyer ?? null,
+    level: setup.loadout.band, topSpeed: setup.band(setup.loadout.band).launchMax,
+    state: !unlocked ? 'locked' : planeFor(save, worldId) === planeId ? 'current' : 'ready',
+    requirement: unlockLabel(save, planeId),
+  };
+}
+// FLY THIS PLANE: exactly today's equip (choosePlane) — or null for a plane that is still locked.
+export function confirmPlane(save, worldId, planeId) {
+  if (!isUnlocked(save, worldId) || !isPlaneUnlocked(save, planeId)) return null;
+  return choosePlane(save, worldId, planeId);
 }

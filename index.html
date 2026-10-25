@@ -101,13 +101,34 @@
   .chip-btn:disabled { cursor: default; transform: none; color: var(--ink); box-shadow: 0 4px 0 #c3ccd4; }
   .chip-btn.maxed:disabled { background: #e6f9ea; }
   .chip-btn.poor:disabled, .chip-btn.buyable:disabled { background: #fff; }
-  .planes-panel { max-height: 90vh; }
-  .plane-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; overflow-y: auto; }
-  .plane-card { min-height: 0; padding: 10px; border-radius: 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
-    background: #fff; color: var(--ink); box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: 13px; font-weight: 700; }
-  .plane-card .pc-swatch { width: 100%; height: 22px; border-radius: 10px; }
-  .plane-card .pc-name { font-weight: 900; font-size: 17px; }
-  .plane-card.selected { border-color: var(--go); background: #e6f9ea; box-shadow: 0 5px 0 var(--go-dark); }
+  /* v1.8 THE HANGAR (the plane showroom): the turntable on top, the status + lineup + FLY THIS PLANE below */
+  .showroom { padding: 0; gap: 0; justify-content: stretch; align-items: stretch; }
+  .sr-view { flex: 1 1 50%; min-height: 0; position: relative; touch-action: none; cursor: grab; }
+  .sr-top { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 12px; padding: max(12px, env(safe-area-inset-top)) 14px 0; }
+  .sr-x { min-height: 0; width: 52px; height: 52px; padding: 0; border-radius: 18px; font-size: 26px; }
+  .sr-title { font-weight: 900; font-size: clamp(22px, 3.4vh, 32px); color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.25); letter-spacing: 1px; }
+  .sr-panel { flex: 0 0 auto; max-height: 52%; display: flex; flex-direction: column; gap: 1.4vh; align-items: stretch;
+    background: var(--panel); border-radius: 28px 28px 0 0; padding: 1.8vh 16px max(14px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 0 rgba(0, 0, 0, 0.08); }
+  .sr-status { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sr-name { font-weight: 900; font-size: clamp(24px, 3.8vh, 36px); line-height: 1.05; }
+  .sr-stats { font-weight: 800; font-size: clamp(15px, 2.2vh, 20px); opacity: 0.8; }
+  .sr-state { font-weight: 900; font-size: 14px; letter-spacing: 1px; padding: 4px 12px; border-radius: 12px; background: #e6f9ea; color: var(--go-dark); }
+  .sr-state.ready { background: #e3f1ff; color: #2f7fd1; }
+  .sr-state.locked { background: #2b2f3a; color: #ffd23f; }
+  .sr-lineup { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x proximity; }
+  .sr-card { flex: 0 0 auto; width: 118px; min-height: 0; padding: 8px; border-radius: 6px 18px 6px 18px; display: flex; flex-direction: column; gap: 4px; align-items: stretch; text-align: left;
+    background: #fff; color: var(--ink); box-shadow: 0 5px 0 #c3ccd4; border: 3px solid #dfe5ea; font-size: 12px; font-weight: 700; scroll-snap-align: center; }
+  .sr-card .sc-swatch { height: 34px; border-radius: 10px; }
+  .sr-card .sc-name { font-weight: 900; font-size: 14px; line-height: 1.1; }
+  .sr-card .sc-sub { font-size: 11px; opacity: 0.7; }
+  .sr-card.previewed { border-color: #4fa8ff; box-shadow: 0 5px 0 #2f7fd1; }
+  .sr-card.current .sc-sub { color: var(--go-dark); opacity: 1; font-weight: 900; }
+  .sr-card.locked { background: #2b2f3a; color: #c9ced6; border-color: #3a3f4c; box-shadow: 0 5px 0 #15171d; }
+  .sr-card.locked .sc-swatch { filter: brightness(0.12); }
+  .sr-card.locked .sc-sub { color: #ffd23f; opacity: 1; }
+  .sr-card.locked.previewed { border-color: #ffd23f; }
+  .sr-fly { font-size: clamp(26px, 4.4vh, 44px); padding: 1.6vh 20px; }
+  .sr-fly.locked { background: #2b2f3a; box-shadow: 0 7px 0 #15171d; color: #ffd23f; font-size: clamp(16px, 2.4vh, 22px); }
   .updraft { color: #ffe14d; margin-left: 6px; }
   .unlock { background: #3ccf5a; color: #fff; border-radius: 16px; padding: 6px 14px; font-weight: 900; font-size: clamp(18px, 2.6vh, 26px); }
 
@@ -372,9 +393,9 @@
   .panel > button:active, .btn-row > button:active, .pause-row > button:active, .home-sheet .sheet-row:active { transform: translateY(5px) scale(1.02, 0.94); }
   button:disabled::after { opacity: 0.4; }
   /* Cards (carousel, Upgrades, hangar, planes): sharper corners, a gold top edge and a sheen. */
-  .stage-card, .card, .plane-card { position: relative; overflow: hidden; border-radius: 6px 22px 6px 22px; }
+  .stage-card, .card, .sr-card { position: relative; overflow: hidden; border-radius: 6px 22px 6px 22px; }
   .chip-btn, .swatch { position: relative; overflow: hidden; border-radius: 4px 14px 4px 14px; }
-  .stage-card::after, .card::after, .plane-card::after, .chip-btn::after {
+  .stage-card::after, .card::after, .sr-card::after, .chip-btn::after {
     content: ""; position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(90deg, rgba(255, 198, 26, 0.95), rgba(255, 198, 26, 0) 70%) top left / 100% 3px no-repeat,
                 linear-gradient(115deg, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0.55) 55% 62%, rgba(255, 255, 255, 0) 62%);
@@ -617,12 +638,19 @@
   </nav>
 </section>
 
-<section id="planes" class="screen" hidden>
-  <div class="panel planes-panel">
-    <h2>Change plane</h2>
-    <p class="msg">Every plane brings its own upgrades. Coins and bests go to the world you fly in.</p>
-    <div class="plane-list" id="plane-list"></div>
-    <button id="btn-planes-back" class="alt">◀ BACK</button>
+<!-- v1.8 THE HANGAR: the plane showroom. The top is the turntable's viewport (the game canvas shows through). -->
+<section id="showroom" class="screen showroom" hidden>
+  <div class="sr-view" id="sr-view">
+    <div class="sr-top"><button id="btn-sr-back" class="alt sr-x" aria-label="Back">✕</button><div class="sr-title">THE HANGAR</div></div>
+  </div>
+  <div class="sr-panel">
+    <div class="sr-status">
+      <div class="sr-name" id="sr-name"></div>
+      <div class="sr-stats" id="sr-stats"></div>
+      <div class="sr-state" id="sr-state"></div>
+    </div>
+    <div class="sr-lineup" id="sr-lineup"></div>
+    <button id="btn-sr-fly" class="big sr-fly">FLY THIS PLANE</button>
   </div>
 </section>
 
