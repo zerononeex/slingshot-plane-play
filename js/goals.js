@@ -618,6 +618,91 @@ GOALS.starfox = {
   goal: { at: 61000, x: 0, height: 28, size: 13 },
 };
 
+// ───────────────────────── v1.7 STAR WARS: 70 gates (the final mega-stage) ─────────────────────────
+// Z = min(70,000, FULL corner 68,478) = 68,478 m. Regular gates run 5 % → 84 % of Z in number order
+// (jumbo rings, size 9 — 270 m/s passes): each ≥ 45 m clear of every weave row, wild flyer and mine,
+// clear of the tilt sectors' run-in, the loop doors' circles and the interiors — except the one INSIDE
+// THE SHIELD BUNKER (over its raised floor). The specials sit in their structures: gate 26 in the HIDDEN
+// HANGAR, gate 30 INSIDE THE ICE CAVE (the signature), gate 53 in the BUNKER CACHE, gate 64 in THE
+// SMUGGLER'S MOON and gate 70 on the STATION APPROACH (the run to the gates; the trench lies beyond the
+// goal, the victory lap). Every gate is numbered in distance order. The goal at 88 % of Z — THE STATION
+// GATES. (Authored with tools-side validation.)
+GOALS.starwars = {
+  gates: [
+    G(1, 3684, 0, 10.5, 9, 'skimming low'),
+    G(2, 4289, -8, 24, 9, 'mid'),
+    G(3, 5125, 6, 40, 9, 'high'),
+    G(4, 5985, 0, 16, 9, 'mid'),
+    G(5, 6805, 10, 34, 9, 'high'),
+    G(6, 7681, -6, 44, 9, 'high'),
+    G(7, 8526, 4, 20, 9, 'mid'),
+    G(8, 9342, -10, 30, 9, 'high'),
+    G(9, 10187, 0, 12, 9, 'skimming low'),
+    G(10, 11032, 8, 38, 9, 'high'),
+    G(11, 11853, -4, 26, 9, 'mid'),
+    G(12, 12698, 12, 44, 9, 'high'),
+    G(13, 13683, 0, 10.5, 9, 'skimming low'),
+    G(14, 14399, -8, 24, 9, 'mid'),
+    G(15, 15254, 6, 40, 9, 'high'),
+    G(16, 16104, 0, 16, 9, 'mid'),
+    G(17, 17025, 10, 34, 9, 'high'),
+    G(18, 17795, -6, 44, 9, 'high'),
+    G(19, 18640, 4, 20, 9, 'mid'),
+    G(20, 19416, -10, 30, 9, 'high'),
+    G(21, 20331, 0, 12, 9, 'skimming low'),
+    G(22, 21177, 8, 38, 9, 'high'),
+    G(23, 22022, -4, 26, 9, 'mid'),
+    G(24, 22857, 12, 44, 9, 'high'),
+    G(25, 23713, 0, 10.5, 9, 'skimming low'),
+    G(26, 24405, -72, 7, 6, 'inside the HIDDEN HANGAR', 'pocket'),
+    G(27, 24533, -8, 24, 9, 'mid'),
+    G(28, 25403, 6, 40, 9, 'high'),
+    G(29, 26009, 0, 16, 9, 'mid'),
+    G(30, 26570, 0, 12, 9, 'inside THE ICE CAVE', 'signature'),
+    G(31, 27354, 10, 34, 9, 'high'),
+    G(32, 27894, -6, 44, 9, 'high'),
+    G(33, 28795, 4, 20, 9, 'mid'),
+    G(34, 29600, -10, 30, 9, 'high'),
+    G(35, 30526, 0, 12, 9, 'skimming low'),
+    G(36, 31321, 8, 38, 9, 'high'),
+    G(37, 32166, -4, 26, 9, 'mid'),
+    G(38, 33027, 12, 44, 9, 'high'),
+    G(39, 33887, 0, 10.5, 9, 'skimming low'),
+    G(40, 34702, -8, 24, 9, 'mid'),
+    G(41, 35418, 6, 40, 9, 'high'),
+    G(42, 36393, 0, 16, 9, 'mid'),
+    G(43, 37238, 10, 34, 9, 'high'),
+    G(44, 38089, -6, 44, 9, 'high'),
+    G(45, 38859, 4, 20, 9, 'mid'),
+    G(46, 39774, -10, 30, 9, 'high'),
+    G(47, 40625, 0, 12, 9, 'skimming low'),
+    G(48, 41460, 8, 38, 9, 'high'),
+    G(49, 42291, -4, 26, 9, 'mid'),
+    G(50, 43156, 12, 44, 9, 'high'),
+    G(51, 43991, 0, 10.5, 9, 'skimming low'),
+    G(52, 44847, -8, 24, 9, 'mid'),
+    G(53, 45305, 72, 7, 6, 'inside the BUNKER CACHE', 'pocket2'),
+    G(54, 45687, 6, 40, 9, 'high'),
+    G(55, 46570, 0, 12, 9, 'inside THE SHIELD BUNKER'),
+    G(56, 47383, 10, 34, 9, 'high'),
+    G(57, 48193, -6, 44, 9, 'high'),
+    G(58, 49033, 4, 20, 9, 'mid'),
+    G(59, 49919, -10, 30, 9, 'high'),
+    G(60, 50764, 0, 12, 9, 'skimming low'),
+    G(61, 51684, 8, 38, 9, 'high'),
+    G(62, 52400, -4, 26, 9, 'mid'),
+    G(63, 53300, 12, 44, 9, 'high'),
+    G(64, 53505, -72, 7, 6, 'inside THE SMUGGLER\'S MOON', 'pocket3'),
+    G(65, 54146, 0, 10.5, 9, 'skimming low'),
+    G(66, 55026, -8, 24, 9, 'mid'),
+    G(67, 55961, 6, 40, 9, 'high'),
+    G(68, 56682, 0, 16, 9, 'mid'),
+    G(69, 57417, 10, 34, 9, 'high'),
+    G(70, 60600, -4, 24, 9, 'on the STATION APPROACH', 'approach'),
+  ],
+  goal: { at: 60900, x: 0, height: 28, size: 13 },
+};
+
 // ───────────────────────── geometry ─────────────────────────
 // The ring's centre height (absolute y). In a tunnel lane the floor is the lane floor.
 export const gateY = (terrain, g) => terrain.surfaceAt(g.x, g.at, -Infinity) + g.height;

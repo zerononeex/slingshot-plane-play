@@ -9,12 +9,13 @@ import { neonRunFor } from './neon.js';
 import { megaRunFor } from './megarun.js';
 import { DW_ZONES, HEROES, GOLDEN_SET, dragonWarPieces } from './dragonwar.js';
 import { SF_ZONES, SF_HEROES, starFoxPieces } from './starfox.js';
+import { SW_ZONES, SW_HEROES, starWarsPieces } from './starwars.js';
 
-export const LADDER = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 20000, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 40000, dragonwar: 50000, starfox: 70000 };
+export const LADDER = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 20000, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 40000, dragonwar: 50000, starfox: 70000, starwars: 70000 };
 export const uniqueRun = (stageId) => LADDER[stageId] ?? 0;
 // v1.1 FAIRNESS RULE: each world's COMPLETION ZONE = min(unique run, its own v1.0 FULL-maxed corner).
 // All completion content (goal gates, secrets, the GOAL) lives inside it; beyond it is bonus country.
-export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17063, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 37829, dragonwar: 46455, starfox: 69570 }; // v1.3: provisional for the new worlds until their corners are tuned
+export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17063, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 37829, dragonwar: 46455, starfox: 69570, starwars: 68478 }; // v1.3: provisional for the new worlds until their corners are tuned
 export const completionZone = (stageId) => COMPLETION_ZONE[stageId] ?? 0;
 
 // One character zone per 1,000 m block (its name rides the zone's banner arch).
@@ -40,6 +41,7 @@ export const ZONES = {
     'BINARY BAY', 'ORBIT OUTPOST', 'ZENITH ZONE', 'DATA DUNES', 'HALO HARBOR', 'RETRO RINGS', 'STARLIGHT STRIP', 'AURORA ARRAY', 'FINAL FRONTIER', 'THE LAST LIGHT'],
   dragonwar: DW_ZONES, // v1.5: fifty zones in five arcs (dragonwar.js)
   starfox: SF_ZONES, // v1.6: seventy zones in seven arcs (starfox.js)
+  starwars: SW_ZONES, // v1.7: seventy zones in seven arcs (starwars.js)
 };
 // The world landmarks (scenery set pieces, outside the corridor; looks only).
 export const LANDMARKS = {
@@ -56,6 +58,7 @@ export const LANDMARKS = {
   skyislands: ['skyIsland', 'rainbowArch', 'waterfallIsland'],
   neonvoid: ['gridPyramid', 'neonTower', 'prismCube'],
   starfox: SF_HEROES.map((h) => h[2]), // v1.6: 35 unique hero landmarks (one per 2,000 m)
+  starwars: SW_HEROES.map((h) => h[2]), // v1.7: 35 unique hero landmarks (one per 2,000 m)
   dragonwar: [...new Set([...HEROES.map((h) => h[2]), 'ruinedTemple', ...GOLDEN_SET.map((g) => g[2])])], // v1.5: 25 unique hero landmarks (+ the forest's ruined temples, + §6 the Golden City's set)
 };
 export const PIECE_KINDS = ['coinArc', 'coinRing', 'hoops', 'bannerArch', 'landmark', 'shape'];
@@ -853,6 +856,8 @@ SET_PIECES.neonvoid = [
 SET_PIECES.dragonwar = dragonWarPieces();
 // v1.6 STAR FOX: the same rule over its seventy zones (starfox.js).
 SET_PIECES.starfox = starFoxPieces();
+// v1.7 STAR WARS: the same rule over its seventy zones (starwars.js).
+SET_PIECES.starwars = starWarsPieces();
 // ───────────────────────── v1.1 §4 DEEP TAIL (past Z to the end of the run) ─────────────────────────
 // Bonus country only: coin lines, boost shapes, bumpables and set pieces — NO gates, secrets or goal.
 // Only Jetstream has one (Z 17063 → 20000; every other world's run ends inside its FULL-maxed reach).

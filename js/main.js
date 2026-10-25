@@ -154,7 +154,7 @@ function showScreen(id) {
 }
 
 // ---------- home (the hangar) ----------
-const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', volcano: '🌋', jungle: '🌴', skyislands: '🏝️', neonvoid: '🌌', dragonwar: '🐉', starfox: '🚀' };
+const MOTIF = { plains: '🌾', canyon: '⛰️', city: '🏙️', snow: '❄️', desert: '🌵', ocean: '🏝️', space: '🌙', jetstream: '☁️', volcano: '🌋', jungle: '🌴', skyislands: '🏝️', neonvoid: '🌌', dragonwar: '🐉', starfox: '🚀', starwars: '✨' };
 let carouselIndex = 0;
 let lockedView = false;
 
@@ -473,7 +473,7 @@ const WORLD_TINT = {
   plains: [0x3ccf5a, 0x24a33f], canyon: [0xc8572a, 0x8f3517], city: [0xe8b100, 0xa87c00], snow: [0x5cb8ff, 0x2f86d1],
   desert: [0xe2b064, 0xb07f2f], ocean: [0x16a89f, 0x0b7470], space: [0x7c5cff, 0x5136d1], jetstream: [0xff9a4d, 0xd9661b],
   volcano: [0xe8552a, 0xa8331a], jungle: [0x2fae4a, 0x1f7a33], skyislands: [0xff8fb8, 0xd9578a],
-  neonvoid: [0x00b8d4, 0x00838f], dragonwar: [0xc0392b, 0x8a1f1a], starfox: [0x2f6fe8, 0x1a3f9a],
+  neonvoid: [0x00b8d4, 0x00838f], dragonwar: [0xc0392b, 0x8a1f1a], starfox: [0x2f6fe8, 0x1a3f9a], starwars: [0xd8402a, 0x8a2418],
 };
 const rgba = (n, a) => `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 function applyTint() {
@@ -561,7 +561,7 @@ function refreshShop() {
     b.className = `swatch${rec.paints.current === p.id ? ' current' : ''}${poor ? ' poor' : ''}`;
     b.dataset.key = `paint:${p.id}`;
     b.disabled = poor;
-    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : p.dragonwings ? 'dragon-dot' : p.starfire ? 'starfire-dot' : '';
+    const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : p.dragonwings ? 'dragon-dot' : p.starfire ? 'starfire-dot' : p.hyperdrive ? 'hyperdrive-dot' : '';
     b.innerHTML = `<span class="dot ${fancy}" style="${fancy ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
     b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id, planeId)); });
     paints.appendChild(b);
@@ -1387,7 +1387,7 @@ $('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are
 
 // ---------- v0.7 speed FX ----------
 // World-tinted dust: snow puffs white, desert tan, moon grey…
-const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, volcano: 0x6a5a55, jungle: 0x8a7a5a, skyislands: 0xf4f7fc, neonvoid: 0x00e5ff, dragonwar: 0xdfe6ee, starfox: 0xcfe0ff };
+const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, volcano: 0x6a5a55, jungle: 0x8a7a5a, skyislands: 0xf4f7fc, neonvoid: 0x00e5ff, dragonwar: 0xdfe6ee, starfox: 0xcfe0ff, starwars: 0xe8d8b0 };
 const trails = createTrails(scene), streaks = createStreaks(scene, camera);
 const _tl = new THREE.Vector3(), _tr = new THREE.Vector3();
 function speedFx(dt) {
@@ -1679,7 +1679,7 @@ function megaMoments() {
   for (const sp of m.spectacles) if (!spectaclesSeen.has(sp) && flight.d > sp.d - 700 && flight.d < sp.d) { spectaclesSeen.add(sp); banner(sp.name, 2.4); }
   // v1.5 §6: the hall's DIVE / CLIMB gap walls called out as they come up
   for (const g of m.gaps) if (!spectaclesSeen.has(g) && flight.d > g.d - 140 && flight.d < g.d) { spectaclesSeen.add(g); puffText(g.move === 'dive' ? 'DIVE!' : 'CLIMB!'); }
-  // v1.6 Star Fox: each ASCENT / DESCENT transition announces itself as the plane enters it
+  // v1.6 Star Fox: each ASCENT / DESCENT transition announces itself as the plane enters it (v1.7: + HYPERSPACE)
   for (const tr of m.transitions) if (!spectaclesSeen.has(tr) && flight.d > tr.d0 && flight.d < tr.d1) { spectaclesSeen.add(tr); banner(tr.name, 2.6); }
 }
 
@@ -1780,6 +1780,8 @@ function stepGame(dt) {
     if (ev === 'doorOpen') { const dr = megaDoorNear(); sfx.doorOpen(); banner(`${dr ? dr.name : 'THE GATE'} OPENS!`, 2.4); if (dr) fx.goalBurst(dr.x, dr.y + 12, -dr.d, 2); }
     if (ev === 'doorBonk') { sfx.doorBonk(); setTimeout(() => sfx.grind(), 150); banner('CLONK! THE GATE GRINDS OPEN…', 2.2); bonkWobble = 0.9; plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y, _v.z - 2, 0x6b4423, 0x2a2d36); }
     if (ev === 'tiltSector') { runCoins += 10; banner('KNIFE EDGE! +10', 1.6); sfx.slot(); }
+    // v1.7 THE TARGET PORT: a big one-time coin burst + the full fanfare (once per flight)
+    if (ev === 'targetPort') { const pt = terrain.mega.port; runCoins += pt.coins; sfx.stageComplete(); setTimeout(() => sfx.doorOpen(), 600); banner(`DIRECT HIT! ${pt.name}! +${pt.coins}`, 3.2); fx.goalBurst(pt.x, pt.y, -pt.d, 2.2); }
     // v1.5 §6 THE LAVA WAVE: the warning, the shelter's fanfare, or the heavy knock outside (no damage)
     // v1.6 Star Fox's underwater sector (sink × 0.5, a gentle drift up, extra drag)
     if (ev === 'underwater') { sfx.splash(); banner('UNDERWATER! SLOW AND FLOATY', 2.2); plane.root.getWorldPosition(_v); fx.splash(_v.x, _v.y, _v.z, true); }

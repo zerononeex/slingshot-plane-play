@@ -61,6 +61,7 @@ const IDENTITY = {
   'Sky Dart': { num: '09', stripe: [0xff7a1a, 0x3b4252] }, 'Void Runner': { num: '10', stripe: [0x00e5ff, 0xff2bd6] },
   'Sky Knight': { num: '13', stripe: [0xffc61a, 0x1f4fa8] }, // v1.5
   Starhound: { num: '14', stripe: [0xff7a1a, 0x2f6fe8] }, // v1.6
+  'Star Kestrel': { num: '15', stripe: [0xd8402a, 0xffc61a] }, // v1.7
 };
 const hexCss = (n) => `#${n.toString(16).padStart(6, '0')}`;
 function canvasTex(w, h) {
@@ -500,12 +501,13 @@ export function buildPlane(tune) {
     nebula = !!paint.nebula;
     dragonwings = !!paint.dragonwings;
     starfire = !!paint.starfire;
+    hyperdrive = !!paint.hyperdrive;
     // v1.0 Lv10 rainbow sheen on the engine cowl, the magnet and the wheel rims.
     gearSheen = [ENGINE_LV.rainbow ? cowlMat : null, MAGNET_LV.rainbow ? magMat : null, WHEELS_LV.rainbow ? rimMat : null].filter(Boolean);
   }
   let gearSheen = [];
 
-  let rainbow = false, nebula = false, dragonwings = false, starfire = false;
+  let rainbow = false, nebula = false, dragonwings = false, starfire = false, hyperdrive = false;
   let squash = 0;
   const _hsl = new THREE.Color();
   // Per-frame visual life: rainbow paint, wheel squash after a bounce.
@@ -530,6 +532,7 @@ export function buildPlane(tune) {
     for (let i = 0; i < gearSheen.length; i++) gearSheen[i].color.copy(_hsl.setHSL((t * 0.15 + i * 0.33) % 1, 0.9, 0.62));
     if (nebula) bodyMat.color.copy(_hsl.setHSL(0.5 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.3)), 0.7, 0.5)); // swirling teal ↔ purple
     if (starfire) bodyMat.color.copy(_hsl.setHSL(0.6 + 0.06 * Math.sin(t * 2.1), 0.85, 0.5 + 0.12 * (0.5 + 0.5 * Math.sin(t * 5.3)))); // v1.6: blue fire with a pulsing core
+    if (hyperdrive) bodyMat.color.copy(_hsl.setHSL(0.56 + 0.04 * Math.sin(t * 1.4), 0.7 - 0.5 * (0.5 + 0.5 * Math.sin(t * 6.1)), 0.62 + 0.22 * (0.5 + 0.5 * Math.sin(t * 6.1)))); // v1.7: blue-white streaking to white
     if (dragonwings) bodyMat.color.copy(_hsl.setHSL(0.01 + 0.07 * (0.5 + 0.5 * Math.sin(t * 1.7)), 0.85, 0.36 + 0.08 * Math.sin(t * 2.3))); // v1.5: crimson scales glowing ember-gold
     if (beamT > 0) { beamT = Math.max(0, beamT - dt); beamMat.opacity = 0.28 * Math.min(1, beamT / 0.15) * (0.8 + 0.2 * Math.sin(t * 30)); }
     beam.visible = beamT > 0;
@@ -542,7 +545,7 @@ export function buildPlane(tune) {
       exhaust.scale.set(f, f, f * len);
       exhaust.position.z = 1.55 + (len - 1) * 0.45;
     }
-    if (flyer && (rainbow || nebula || dragonwings || starfire)) for (const m of flyer.bodyMats) m.color.copy(bodyMat.color);
+    if (flyer && (rainbow || nebula || dragonwings || starfire || hyperdrive)) for (const m of flyer.bodyMats) m.color.copy(bodyMat.color);
     squash = Math.max(0, squash - dt);
     const k = squash > 0 ? 0.55 + 0.45 * (1 - squash / 0.15) : 1;
     for (const w of wheels) {

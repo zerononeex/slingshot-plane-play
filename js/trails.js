@@ -58,9 +58,9 @@ export function createTrails(scene) {
     // look: 'prop' | 'jet' (shorter, tighter, hotter) | 'ship' (ion blue) | 'runner' (v1.2: a wide, long
     // cyan LIGHT RIBBON). accent: the plane's stripe colour.
     setLook(look, accent) {
-      const LOOK_TINT = { runner: 0x00e5ff, ship: 0x8fd0ff, jet: 0xffe0b0, ember: 0xff8a2a, leaf: 0x7fe07a, cloud: 0xffffff, knight: 0xffd23f, starhound: 0x5fb8ff }; // v1.3: ember / leaf / cloud; v1.5: the Sky Knight's gold pennant; v1.6: the Starhound's blue glow
+      const LOOK_TINT = { runner: 0x00e5ff, ship: 0x8fd0ff, jet: 0xffe0b0, ember: 0xff8a2a, leaf: 0x7fe07a, cloud: 0xffffff, knight: 0xffd23f, starhound: 0x5fb8ff, kestrel: 0xff6a4a }; // v1.3: ember / leaf / cloud; v1.5: the Sky Knight's gold pennant; v1.6: the Starhound's blue glow
       tint.set(LOOK_TINT[look] ?? 0xffffff).lerp(new THREE.Color(accent), look === 'ship' ? 0.1 : 0.12);
-      width = look === 'runner' ? 0.16 : look === 'cloud' || look === 'knight' || look === 'starhound' ? 0.12 : look === 'jet' ? 0.05 : 0.07;
+      width = look === 'runner' ? 0.16 : look === 'cloud' || look === 'knight' || look === 'starhound' || look === 'kestrel' ? 0.12 : look === 'jet' ? 0.05 : 0.07;
       keep = look === 'runner' ? 1.8 : look === 'jet' ? 0.55 : 1;
     },
     update(left, right, speed, boosting, dt = SAMPLE, camPos = null) {

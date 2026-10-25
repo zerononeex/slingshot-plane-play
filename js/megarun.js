@@ -18,15 +18,17 @@ import { createShotPool, fireShot, stepShots, shotTime, SHOTS, HIT } from './sho
 import { keyRingHit, createDoorStates, openByLoop, crossDoors, DOOR } from './loopdoors.js';
 import { MEGA_DATA } from './dragonwar.js';
 import { SF_MEGA } from './starfox.js';
+import { SW_MEGA } from './starwars.js';
 
-// Every mega-stage's data, by stage id (v1.5 Dragon War, v1.6 Star Fox).
-const ALL_MEGA = { ...MEGA_DATA, ...SF_MEGA };
+// Every mega-stage's data, by stage id (v1.5 Dragon War, v1.6 Star Fox, v1.7 Star Wars).
+const ALL_MEGA = { ...MEGA_DATA, ...SF_MEGA, ...SW_MEGA };
 
 export const WEAVE_HALF = 30;     // weave rows + tilt walls span the corridor (±26) with a margin; pocket lanes (±72) pass
 export const POST_GAP = 16;       // posts 16 m apart in a row: the clear lines sit at offset + 8 + 16k
 export const POST_TOP = 90;       // above the 60 m ceiling: no flying over
 export const POST_R = { pine: 1.3, giantTree: 2.1, tower: 2.4, spire: 1.7, castleTower: 2.6,
-  asteroid: 2.4, coral: 1.8, hullMast: 2.2, obelisk: 2.0, plasma: 1.7, redSpire: 2.4 }; // v1.6 Star Fox's posts
+  asteroid: 2.4, coral: 1.8, hullMast: 2.2, obelisk: 2.0, plasma: 1.7, redSpire: 2.4, // v1.6 Star Fox's posts
+  rockSpire: 2.2, iceSpire: 1.9, cloudTower: 2.4, redwood: 2.6, greebleTower: 2.3 }; // v1.7 Star Wars'
 export const TILT = { gap: 3, depth: 2, top: 90 };   // gap 3 m: wings out (half-span 1.6) never fit, knife-edge (0.3) does
 export const WILD_R = 3.4;
 export const GAP = { depth: 2 };                          // a hall gap wall's thickness
@@ -90,6 +92,8 @@ function build(data) {
   const wild = data.wild.map((w, i) => ({ r: WILD_R, ...w, id: i, kind: 'wildDragon', cur: { x: w.x, y: w.y, d: w.d } }));
   const thermals = data.thermals.map((u, i) => ({ ...u, id: i }));
   const lanes = data.lanes.map((l, i) => ({ ...l, id: i, x0: l.x - l.w / 2, x1: l.x + l.w / 2, y0: l.y - l.h / 2, y1: l.y + l.h / 2 }));
+  // v1.7 THE TARGET PORT: one glowing ring; flying through it pays once per flight (never twice).
+  const port = data.port ?? null;
 
   const put = (map, k, v) => { if (!map.has(k)) map.set(k, []); map.get(k).push(v); };
   const solid = new Map(), fx = new Map(), fire = new Map();
@@ -108,7 +112,7 @@ function build(data) {
     ...thermals.map((u) => ({ d: u.d, kind: 'thermal' })), ...lanes.map((l) => ({ d: l.d0, kind: 'windLane' })),
     ...gaps.map((g) => ({ d: g.d, kind: `gap:${g.move}` })), ...halls.map((h) => ({ d: h.d0, kind: 'hall' })),
     ...caves.map((c) => ({ d: c.d0, kind: c.falls ? 'waterfallCave' : 'shelterCave' })), ...(wave ? [{ d: wave.d, kind: 'lavaWave' }] : []),
-    ...water.map((w) => ({ d: w.d0, kind: 'underwater' })),
+    ...water.map((w) => ({ d: w.d0, kind: 'underwater' })), ...(port ? [{ d: port.d, kind: 'targetPort' }] : []),
   ].sort((a, b) => a.d - b.d);
   const inHall = (d) => { const h = hallAt(d, 0.0001); return !!h && d >= h.d0; };
   const inCaveLane = (x, y, d) => { const c = caveAt(d); return !!c && d >= c.d0 && d <= c.d1 && x >= c.lane[0] && x <= c.lane[1] && y < c.roof; };
@@ -190,6 +194,9 @@ function build(data) {
     return null;
   }
 
+  // The target port within `reach` m (not yet crossed this flight): { d, x, y }.
+  const portAhead = (d, reach, hz = null) => (port && !(hz?.port) && d < port.d && port.d - d <= reach ? port : null);
+
   // The shelter tunnel within `reach` m (until its exit): { d (mouth), x, y }.
   function caveAhead(d, reach) {
     for (const c of caves) if (d <= c.d1 && d >= c.d0 - reach) return { d: c.d0, x: (c.lane[0] + c.lane[1]) / 2, y: c.cruise, glide: !!c.clearApproach };
@@ -203,7 +210,7 @@ function build(data) {
   }
 
   // The flight's hazard state (created on its first step; pooled shots, per-door state).
-  const createHazards = () => ({ shots: createShotPool(), fired: new Int16Array(shooters.length), next: new Float64Array(shooters.length), doors: createDoorStates(doors), tiltsPassed: new Uint8Array(tilts.length), wave: 0, prevD: null, prevX: 0, prevY: 0 });
+  const createHazards = () => ({ shots: createShotPool(), fired: new Int16Array(shooters.length), next: new Float64Array(shooters.length), doors: createDoorStates(doors), tiltsPassed: new Uint8Array(tilts.length), wave: 0, port: 0, prevD: null, prevX: 0, prevY: 0 });
   const _from = { x: 0, y: 0, d: 0 }, _to = { x: 0, y: 0, d: 0 };
 
   // Fire whatever is due this step (deterministic: the flight's own clock and state only).
@@ -265,6 +272,12 @@ function build(data) {
         hz.tiltsPassed[t.id] = 1;
         if (s.tilted && Math.abs(s.x - t.x) < t.gap / 2 && (s.bonkGrace ?? 0) <= 0) s.events.push('tiltSector');
       }
+      // v1.7 THE TARGET PORT: crossing its plane settles it for this flight — through the ring pays once
+      if (port && !hz.port && hz.prevD < port.d && s.d >= port.d) {
+        const k = (port.d - hz.prevD) / Math.max(1e-6, s.d - hz.prevD), x = hz.prevX + (s.x - hz.prevX) * k, y = hz.prevY + (s.y - hz.prevY) * k;
+        hz.port = Math.hypot(x - port.x, y - port.y) < port.r ? 1 : 2;
+        if (hz.port === 1) s.events.push('targetPort');
+      }
     }
     if (wave && !s.ended) { // THE WAVE: a warning well before; then inside the shelter = safe, outside = the heavy knock
       if (hz.wave === 0 && hz.prevD < wave.warn && s.d >= wave.warn) { hz.wave = 1; s.events.push('waveWarn'); }
@@ -289,8 +302,8 @@ function build(data) {
   // v1.6: a pocket's portal is shut inside an interior or a cave (the walls are in the way).
   const noPortal = (d) => !!hallAt(d, 30) || !!caveAt(d, 30);
   return { rows, tilts, doors, shooters, wild, thermals, lanes, features, spectacles: data.spectacles ?? [], hall, gaps, cave, wave, golden: data.golden ?? null,
-    halls, caves, water, waterAt, hallAt, caveAt, noPortal, transitions: data.transitions ?? [], skin: data.skin ?? null, fortress: data.fortress ?? null,
-    hit, effects, openingAhead, doorAhead, caveAhead, inHall, inCaveLane, floorAt, ceilingAt, keyRingAt, stepHazards, loopDone, createHazards, run: data.run };
+    halls, caves, water, waterAt, hallAt, caveAt, noPortal, transitions: data.transitions ?? [], skin: data.skin ?? null, fortress: data.fortress ?? null, port,
+    hit, effects, openingAhead, doorAhead, caveAhead, portAhead, inHall, inCaveLane, floorAt, ceilingAt, keyRingAt, stepHazards, loopDone, createHazards, run: data.run };
 }
 
 export function megaRunFor(stageId) {

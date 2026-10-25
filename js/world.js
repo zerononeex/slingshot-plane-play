@@ -48,7 +48,8 @@ const COLUMN_LOOK = {
 };
 
 // v1.6 Star Fox's pockets wear the classic pocket looks (the falls grotto, the gold mine, the temple).
-const POCKET_LOOK = { waterfallHideout: 'grotto', minersCache: 'goldMine', buriedTomb: 'temple' };
+const POCKET_LOOK = { waterfallHideout: 'grotto', minersCache: 'goldMine', buriedTomb: 'temple',
+  hiddenHangar: 'glacier', bunkerCache: 'goldMine', smugglersMoon: 'comet' }; // v1.7 Star Wars' (the ice hangar, the bunker's stores, a dark little moon)
 
 export function createWorld(scene) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0x6f9a52, 1.6);
@@ -144,7 +145,8 @@ export function createWorld(scene) {
   scene.add(farLayer);
   const FAR_STYLE = { plains: 'hills', canyon: 'mesas', city: 'towers', snow: 'peaks', desert: 'dunes', ocean: 'islands', space: 'rims', jetstream: 'peaks', volcano: 'peaks', skyislands: 'islands',
     snowfields: 'peaks', deepforest: 'hills', warplains: 'castles', firelands: 'peaks', skycastles: 'islands', // v1.5: Dragon War's arcs
-    greenworld: 'hills', asteroids: 'rims', oceanworld: 'islands', fleet: 'rims', desertworld: 'dunes', solarworld: 'peaks', bossworld: 'castles' }; // v1.6: Star Fox's
+    greenworld: 'hills', asteroids: 'rims', oceanworld: 'islands', fleet: 'rims', desertworld: 'dunes', solarworld: 'peaks', bossworld: 'castles', // v1.6: Star Fox's
+    twinsuns: 'mesas', orbital: 'rims', iceworld: 'peaks', cloudworld: 'islands', forestmoon: 'hills', greatfleet: 'rims', greatstation: 'towers' }; // v1.7: Star Wars'
   function profile(style, a) {
     const s1 = Math.sin(a * 3 + 1.3), s2 = Math.sin(a * 7 + 0.4), s3 = Math.sin(a * 17 + 2.2);
     switch (style) {
@@ -1079,9 +1081,9 @@ export function createWorld(scene) {
   const _skyTh = { sky: 0 }, _l1 = new THREE.Color(), _l2 = new THREE.Color();
   const lerpHex = (out, h1, h2, k) => out.setHex(h1).lerp(_l2.setHex(h2), k);
   const PARTICLES = { snow: [0.7, 1, 0.9], leaves: [0.6, 0.6, 0.9], ash: [0.45, 0.35, 0.7], embers: [0.6, 1, 0.85], motes: [0.5, 0.3, 0.6],
-    stardust: [0.45, 0.5, 0.9], bubbles: [0.6, 0.8, 0.75], sand: [0.5, 1.4, 0.7], wisps: [0.8, 4, 0.75], reentry: [0.7, 5, 0.95] }; // size, speed, opacity (v1.6: Star Fox's)
+    stardust: [0.45, 0.5, 0.9], bubbles: [0.6, 0.8, 0.75], sand: [0.5, 1.4, 0.7], wisps: [0.8, 4, 0.75], reentry: [0.7, 5, 0.95], hyper: [0.9, 9, 1] }; // size, speed, opacity (v1.6: Star Fox's; v1.7: hyperspace)
   // v1.6 the TRANSITION zones' particles: air wisps rushing past on the way up, re-entry glow on the way down.
-  const TRANSIT = { ascent: { kind: 'wisps', color: 0xffffff, dir: -1 }, descent: { kind: 'reentry', color: 0xff8a3a, dir: -1 } };
+  const TRANSIT = { ascent: { kind: 'wisps', color: 0xffffff, dir: -1 }, descent: { kind: 'reentry', color: 0xff8a3a, dir: -1 }, hyperspace: { kind: 'hyper', color: 0xdfefff, dir: -1 } }; // v1.7: + HYPERSPACE
   const _uw = new THREE.Color(0x0a4a7a);
   // the under-water blend at the plane (0 → 1 over 80 m inside a sector's ends)
   function waterK(planeD) {
@@ -1122,7 +1124,7 @@ export function createWorld(scene) {
         coneMat.color.setHex(near.scenery.cone); ballMat.color.setHex(near.scenery.ball); trunkMat.color.setHex(near.scenery.trunk);
         updraftRings.material.color.setHex(near.lava ? 0xffa060 : 0xffffff);
       }
-      const part = tr && (tr.kind === 'descent' || planeD < tr.d) ? TRANSIT[tr.kind] : near.particles; // v1.6: a transition's own particles
+      const part = tr && (tr.kind !== 'ascent' || planeD < tr.d) ? TRANSIT[tr.kind] : near.particles; // v1.6: a transition's own particles
       const pk = PARTICLES[part.kind] ?? PARTICLES.snow;
       embers.material.color.setHex(part.color); embers.material.size = pk[0]; embers.material.opacity = pk[2];
       emberDir = part.dir; emberSpeed = pk[1];
@@ -1130,7 +1132,7 @@ export function createWorld(scene) {
   }
 
   // Pocket looks: the Nebula Pocket's purple fog, the Eye of the Storm's golden calm.
-  const POCKET_FOG = { waterfallHideout: 0x3a6a7a, minersCache: 0x2a2436, buriedTomb: 0x6a4a1a, dragonRoost: 0x5a2a18, warChest: 0x4a3a18, nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
+  const POCKET_FOG = { hiddenHangar: 0x5a7a9a, bunkerCache: 0x2a3a2a, smugglersMoon: 0x14182a, waterfallHideout: 0x3a6a7a, minersCache: 0x2a2436, buriedTomb: 0x6a4a1a, dragonRoost: 0x5a2a18, warChest: 0x4a3a18, nebula: 0x3a1a5a, stormEye: 0xffd98a, aurora: 0x2a4a6a, goldMine: 0x4a3418, neon: 0x2a1a40, comet: 0x14204a, gridCore: 0x001820, prism: 0x1a0018, lavaTube: 0x4a1a08, magmaVault: 0x5a2a08, templeRuins: 0x6a5a2a, parrotHollow: 0x2a5a2a, grotto: 0x5a8aa8, rainbowRoof: 0x8a6aa8 };
   function setPocketLook(look) {
     const c = look && POCKET_FOG[look];
     if (c) { scene.fog.color.setHex(c); scene.background.setHex(c); }

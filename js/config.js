@@ -212,6 +212,10 @@ export const PAINTS = [
   { id: 'starfire', name: 'STARFIRE',        cost: 230, color: 0x2f6fe8, starfire: true, only: 'starfox' },
   { id: 'foxwhite', name: 'Fox White',       cost: 110, color: 0xf2f4f7, only: 'starfox' },
   { id: 'wolfpurple', name: 'Wolf Purple',   cost: 110, color: 0x5a3a9a, only: 'starfox' },
+  // v1.7 the Star Kestrel's SQUADRON MARKINGS (its record only, not in the shared totals): HYPERDRIVE at the rainbow tier.
+  { id: 'hyperdrive', name: 'HYPERDRIVE',    cost: 230, color: 0x9fd8ff, hyperdrive: true, only: 'starwars' },
+  { id: 'redleader', name: 'Red Leader',     cost: 110, color: 0xd8402a, only: 'starwars' },
+  { id: 'goldleader', name: 'Gold Leader',   cost: 110, color: 0xffc61a, only: 'starwars' },
   // v1.4 THE DRAGON's skin, free with it (its record only): the Dragonite model in place of the Dragon.
   { id: 'dragonite', name: 'Dragonite',      cost: 0,   color: 0xf5a142, skin: 'dragonite', only: 'dragon' },
 ];

@@ -23,9 +23,12 @@ import { rng } from './rng.js';
 import { merged, cyl, cone, box, ico } from './meshkit.js';
 import { createSFLayer } from './sfview.js';
 import { sfPostGeo, sfDecorGeo, SF_POST_R0, SF_DECOR_INFO, SF_ATTACH } from './sfdecor.js';
+import { swPostGeo, swDecorGeo, SW_POST_R0, SW_DECOR_INFO, SW_ATTACH } from './swdecor.js';
+// v1.6 / v1.7: how the mega-stages' dressing floats + moves, and what it carries (sfdecor.js, swdecor.js)
+const DECOR_INFO = { ...SF_DECOR_INFO, ...SW_DECOR_INFO }, ATTACH = { ...SF_ATTACH, ...SW_ATTACH };
 
 const SHOW_BEHIND = 80, SHOW_AHEAD = 760;
-const POST_R0 = { pine: 1.3, giantTree: 2.1, tower: 2.4, spire: 1.7, castleTower: 2.6, ...SF_POST_R0 }; // the radius each post geometry is built at
+const POST_R0 = { pine: 1.3, giantTree: 2.1, tower: 2.4, spire: 1.7, castleTower: 2.6, ...SF_POST_R0, ...SW_POST_R0 }; // the radius each post geometry is built at
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const _a = { x: 0, y: 0, d: 0 };
@@ -54,7 +57,7 @@ function postGeo(kind) {
       ...[14, 30, 46, 62].map((y, i) => [box(0.5, 9, 0.5), 0xff7a1a, [Math.cos(i * 2) * (3.6 - y * 0.035), y, Math.sin(i * 2) * (3.6 - y * 0.035)], [0.2, 0, 0.1]])]);
     case 'castleTower': return merged([[cyl(2.6, 3, H, 12), 0xf4f2ec, [0, H / 2, 0]], [cone(4.2, 12, 12), 0x2f6fe8, [0, H + 6, 0]], [cyl(3.4, 3.4, 3, 12), 0xd8d4cc, [0, H - 1, 0]],
       [box(0.3, 8, 0.3), 0xdfe6ee, [0, H + 15, 0]], [box(3, 1.8, 0.15), 0xffc61a, [1.6, H + 17.5, 0]], ...[20, 34, 50, 70].map((y) => [box(0.8, 2.6, 0.4), 0x2a3a5a, [0, y, 2.9]])]);
-    default: return sfPostGeo(kind) ?? merged([[cyl(2, 2, H), 0x888888, [0, H / 2, 0]]]); // v1.6 Star Fox's posts
+    default: return sfPostGeo(kind) ?? swPostGeo(kind) ?? merged([[cyl(2, 2, H), 0x888888, [0, H / 2, 0]]]); // v1.6 Star Fox's posts; v1.7 Star Wars'
   }
 }
 // The arc dressing (outside the corridor; looks only). Sheets (falls) and flags are separate (animated).
@@ -95,7 +98,7 @@ function decorGeo(kind) {
       ...[14, 22, 30].map((y) => [box(1, 2, 0.3), 0xffd27a, [0, y, 3.1]])]);
     case 'goldenHouse': return merged([[box(16, 10, 12), 0xf6ead0, [0, 5, 0]], [cone(11, 6, 4), 0xffc61a, [0, 13, 0], [0, Math.PI / 4, 0], [1, 1, 0.75]], ...[-5, 0, 5].map((x) => [box(1.6, 3, 0.3), 0xffd27a, [x, 5.5, 6.05]]),
       ...[-7, 7].map((x) => [cyl(0.7, 0.8, 10, 8), 0xfff4d6, [x, 5, 6.6]]), [box(17, 1, 1.4), 0xffc61a, [0, 10.4, 6.6]]]);
-    default: return sfDecorGeo(kind) ?? merged([[box(2, 2, 2), 0xff00ff, [0, 1, 0]]]); // v1.6 Star Fox's kits
+    default: return sfDecorGeo(kind) ?? swDecorGeo(kind) ?? merged([[box(2, 2, 2), 0xff00ff, [0, 1, 0]]]); // v1.6 Star Fox's kits; v1.7 Star Wars'
   }
 }
 const SHEET = { iceFall: ['ice', 8, 26, 0, 14, 3], lavaFall: ['lava', 7, 24, 0, 13, 3], waterfall: ['water', 5, 30, 10, 20, 0] }; // [material, w, h, x, y, z]
@@ -129,14 +132,19 @@ function signTexture(lines, fg = '#ffffff', bg = '#1b2438', accent = '#ffc61a') 
 
 // Per-arc dragon tint (the Dragon model's colours are baked; the material colour multiplies them).
 const DRAGON_TINT = { snowfields: 0xbfe0ff, deepforest: 0x8fd08a, warplains: 0xffffff, firelands: 0x7a5a5a, skycastles: 0xffe8a0,
-  greenworld: 0xc08080, asteroids: 0xb07a8a, oceanworld: 0x8a9ac0, fleet: 0x9a7ab8, desertworld: 0xb08a6a, solarworld: 0xc06a4a, bossworld: 0x8a3a4a }; // v1.6: Star Fox's enemy fighters
+  greenworld: 0xc08080, asteroids: 0xb07a8a, oceanworld: 0x8a9ac0, fleet: 0x9a7ab8, desertworld: 0xb08a6a, solarworld: 0xc06a4a, bossworld: 0x8a3a4a, // v1.6: Star Fox's enemy fighters
+  twinsuns: 0xc8b8a0, orbital: 0x9aa0b0, iceworld: 0xc8d0e0, cloudworld: 0xe8c0a0, forestmoon: 0x9aa890, greatfleet: 0x8a90a8, greatstation: 0x7a808c }; // v1.7: Star Wars'
 const BIRD_TINT = { snowfields: 0x22242a, deepforest: 0x3fae4a, warplains: 0x22242a, firelands: 0xff7a1a, skycastles: 0xffffff,
-  greenworld: 0x22242a, asteroids: 0x9aa4b2, oceanworld: 0xffffff, fleet: 0x9aa4b2, desertworld: 0x3a2a20, solarworld: 0xffa21f, bossworld: 0x5a3a4a };
+  greenworld: 0x22242a, asteroids: 0x9aa4b2, oceanworld: 0xffffff, fleet: 0x9aa4b2, desertworld: 0x3a2a20, solarworld: 0xffa21f, bossworld: 0x5a3a4a,
+  twinsuns: 0x3a2a20, orbital: 0x9aa4b2, iceworld: 0x5a6a7a, cloudworld: 0xffffff, forestmoon: 0x2a3a20, greatfleet: 0x9aa4b2, greatstation: 0x9aa4b2 };
 // v1.6 Star Fox's tilt walls (per arc) and loop-door looks ([towers, roofs / lights, leaves]).
-const TILT_WALL = { greenworld: 0x6a7068, asteroids: 0x5a5660, oceanworld: 0x4a8a9a, fleet: 0x6a707c, desertworld: 0xd0a860, solarworld: 0x3a1a10, bossworld: 0x3a2a30 };
-const DOOR_LOOK = { warpGate: [0x8a92a0, 0x5fd8ff, 0x4a505c], sunkenGate: [0x5a8a8a, 0xff7ab8, 0x3a5a5a], coronaGate: [0xffc61a, 0xff6a1a, 0x8a4a1a], fortressDoor: [0x3a2a30, 0xff3a3a, 0x2a1e24] };
+const TILT_WALL = { greenworld: 0x6a7068, asteroids: 0x5a5660, oceanworld: 0x4a8a9a, fleet: 0x6a707c, desertworld: 0xd0a860, solarworld: 0x3a1a10, bossworld: 0x3a2a30,
+  twinsuns: 0xb0845a, cloudworld: 0xe8e0d8, iceworld: 0xc8d8e8, greatstation: 0x6a707c }; // v1.7: Star Wars' canyon rock, cloud towers, ice, station steel
+const DOOR_LOOK = { warpGate: [0x8a92a0, 0x5fd8ff, 0x4a505c], sunkenGate: [0x5a8a8a, 0xff7ab8, 0x3a5a5a], coronaGate: [0xffc61a, 0xff6a1a, 0x8a4a1a], fortressDoor: [0x3a2a30, 0xff3a3a, 0x2a1e24],
+  dockingGate: [0x9aa0a8, 0x5fd8ff, 0x4a4e56], bunkerDoor: [0x5a5a50, 0x3aff5a, 0x3a3a34], airlock: [0x5a5048, 0xffa21f, 0x3a342e], trenchGate: [0x6a707c, 0xff3a3a, 0x3a3e46] }; // v1.7: Star Wars' gates
 const RIVER = { snowfields: ['ice', 0.85], deepforest: ['water', 0.8], warplains: ['water', 0.8], firelands: ['lava', 0.95],
-  greenworld: ['water', 0.8], oceanworld: ['water', 0.8], solarworld: ['lava', 0.95], bossworld: ['lava', 0.95] };
+  greenworld: ['water', 0.8], oceanworld: ['water', 0.8], solarworld: ['lava', 0.95], bossworld: ['lava', 0.95],
+  iceworld: ['ice', 0.85], forestmoon: ['water', 0.8], cloudworld: ['water', 0.6] }; // v1.7 (the desert's gullies are dry)
 
 export function createMegaView(scene, fx) {
   const root = new THREE.Group();
@@ -333,12 +341,12 @@ export function createMegaView(scene, fx) {
     keepM(smokeMesh);
     attach = {};
     for (const k of KINDS) {
-      const def = SF_ATTACH[k];
+      const def = ATTACH[k];
       if (!def) continue;
       const mat = def.glow ? basic(def.glow, { transparent: true, opacity: def.anim === 'sweep' ? 0.08 : 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }) : VC;
       const m = inst(def.geo(), mat, CH * PER); keepM(m); attach[k] = { mesh: m, list: [], def };
     }
-    animKinds = KINDS.filter((k) => SF_DECOR_INFO[k]?.anim);
+    animKinds = KINDS.filter((k) => DECOR_INFO[k]?.anim);
     for (const it of items) it.on = false;
     dressDirty = true;
   }
@@ -358,7 +366,7 @@ export function createMegaView(scene, fx) {
       if (FLAGGED[it.kind]) { flagMesh.setColorAt(flagList.length, _c.setHex(it.col)); flagList.push(it); }
       if (SMOKY[it.kind]) smokeList.push(it);
       if (it.kind === 'wagon') { it.wi = n; wagonList.push(it); }
-      if (SF_DECOR_INFO[it.kind]?.anim) { it.wi = n; animList.push(it); }
+      if (DECOR_INFO[it.kind]?.anim) { it.wi = n; animList.push(it); }
       if (attach[it.kind]) attach[it.kind].list.push(it);
     }
     for (const a of Object.values(attach)) a.mesh.count = a.list.length;
@@ -379,7 +387,7 @@ export function createMegaView(scene, fx) {
       it.on = false;
       // the zone's own mix: a window of its arc's kit, shifted per zone (no two zones dress alike)
       const kind = kit[(zone * 3 + Math.floor(r() * 5)) % kit.length];
-      const info = SF_DECOR_INFO[kind]; // v1.6: how Star Fox's dressing floats + moves
+      const info = DECOR_INFO[kind]; // v1.6: how Star Fox's dressing floats + moves
       const side = j % 2 ? 1 : -1, far = kind === 'regiment' || kind === 'plateau' || kind === 'castle' || kind === 'bridge' || kind === 'waterfall' || info?.far ? 70 + r() * 70 : 36 + r() * 80;
       const x = side * far, d = d0 + r() * 80, s = 0.8 + r() * 0.6, ry = r() * Math.PI * 2;
       if (r() < 0.12 && kind !== 'pine') continue; // a little breathing room
@@ -410,7 +418,7 @@ export function createMegaView(scene, fx) {
     for (const o of run.doors) buildDoor(o, arcAt(o.d));
     for (const sh of run.shooters) if (sh.kind === 'trebuchet') buildTreb(sh);
     buildAddendum(arcAt);
-    if (run.transitions.length || run.water.length || run.fortress) sfLayer = createSFLayer({ keepM, scene, fx, terrain, run, sheetMats });
+    if (run.transitions.length || run.water.length || run.fortress) sfLayer = createSFLayer({ keepM, scene, fx, terrain, run, sheetMats, arcs });
     // perches under the perched dragons (stone pillars / dark rock spires, outside the corridor)
     const perches = run.shooters.filter((s) => s.kind === 'dragon' && !s.patrol && !s.look); // (v1.6 Star Fox's flyers hover)
     const perchMesh = inst(merged([[cyl(3.4, 4.4, 1, 8), 0xffffff, [0, 0.5, 0]], [cyl(4.6, 4.6, 1.2, 8), 0xdddddd, [0, 1, 0]]]), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), perches.length);
@@ -461,6 +469,9 @@ export function createMegaView(scene, fx) {
   // v1.6 a laser turret: a domed gun housing with twin barrels (Star Fox's archers)
   FIG.turret = () => merged([[cyl(0.9, 1.1, 1, 10), 0x6a707c, [0, 0.5, 0]], [new THREE.SphereGeometry(0.9, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0x8a92a0, [0, 1, 0]],
     ...[-0.25, 0.25].map((x) => [cyl(0.1, 0.1, 1.6, 6), 0x3a3e46, [x, 1.4, 0.9], [Math.PI / 2, 0, 0]]), [box(0.3, 0.2, 0.2), 0xff3a3a, [0, 1.75, 0.4]]]);
+  // v1.7 a four-legged WALKER (its chin guns are the muzzle; drawn at 2.2 ×, so ≈ 30 m tall): Star Wars' ice-world archers
+  FIG.walker = () => merged([[box(4.4, 3, 7), 0x9aa0a8, [0, 0.6, -1.6]], [box(2, 1.8, 2.4), 0x9aa0a8, [0, 0.4, 2.4]], ...[-0.4, 0.4].map((x) => [cyl(0.08, 0.08, 1, 6), 0x3a3e46, [x, 0.1, 3.9], [Math.PI / 2, 0, 0]]),
+    ...[[-1.6, -4], [1.6, -4], [-1.6, 0.8], [1.6, 0.8]].map(([x, z]) => [box(0.6, 11, 0.6), 0x4a4e56, [x, -5.4, z]])]);
   const tor = (R, r, rs = 6, ts = 18) => new THREE.TorusGeometry(R, r, rs, ts);
   const HALL_ROOF = 64, HALL_TOP = 72;
   // The interiors' palettes + their outsides: Dragon War's castle hall (v1.5 §6), Star Fox's GREAT PYRAMID
@@ -484,13 +495,24 @@ export function createMegaView(scene, fx) {
         for (const sx of [-1, 1]) P(box(3, 3, 0.6), 0xff3a3a, sx * 20, HALL_TOP + 8, H.d0 - 1.2);
       } },
   };
+  // v1.7 Star Wars' interiors: THE ICE CAVE (crystal halls, ice-blue light), THE SHIELD BUNKER (concrete,
+  // green status lights) and THE TRENCH (station steel, open to the stars: `open` = no roof).
+  HALL_PAL.iceCave = { stone: 0xc8dcf0, dark: 0x9ab4d0, trim: 0x8ad8ff, carpet: 0xe8f4ff, pillar: 0xe0f0ff, banners: [0x8ad8ff, 0xffffff], window: 0xbfe8ff, roof: 0x8aa8c8, beam: 0x6a88a8, sign: '#2a4a6a', torch: 0x8ad8ff,
+    towers: (P, x, d) => { P(cone(6, 70, 5), 0xd8f0ff, x, 35, d); P(cone(3, 30, 5), 0xbfe0ff, x + 4, 15, d); },
+    facade: (P, H) => { P(cone(80, 70, 7), 0xf4f8ff, 0, 34, H.d0 + 60); for (let i = 0; i < 7; i++) P(cone(2, 9, 5), 0xd8f0ff, -24 + i * 8, 58, H.d0 - 1, [Math.PI, 0, 0]); } };
+  HALL_PAL.bunker = { stone: 0x6a6a5e, dark: 0x4a4a40, trim: 0x3aff5a, carpet: 0x3a3a34, pillar: 0x5a5a50, banners: [0x3a5a3a, 0x4a4a40], window: 0x8aff9a, roof: 0x3a3a34, beam: 0x2a2a24, sign: '#1a2a1a', torch: 0x3aff5a,
+    towers: (P, x, d) => { P(box(10, 40, 10), 0x5a5a50, x, 20, d); P(box(12, 3, 12), 0x3a3a34, x, 41, d); },
+    facade: (P, H) => { P(box(H.outer * 2 + 10, 14, 30), 0x2a5a2a, 0, HALL_TOP + 7, H.d0 + 14); for (let i = 0; i < 6; i++) P(cone(4, 10, 6), 0x2a6a2a, -30 + i * 12, HALL_TOP + 18, H.d0 + 8); } };
+  HALL_PAL.trench = { open: true, stone: 0x6a707c, dark: 0x4a4e56, trim: 0xc8e0ff, carpet: 0x3a3e46, pillar: 0x8a909a, banners: [0x4a4e56, 0x5a5e66], window: 0xc8e0ff, roof: 0x3a3e46, beam: 0x2a2e36, sign: '#1a1e2a', torch: 0xff3a3a,
+    towers: (P, x, d) => { P(box(8, 90, 8), 0x7a808a, x, 45, d); P(box(10, 2, 10), 0x4a4e56, x, 91, d); },
+    facade: (P, H) => { for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) P(box(6, 3 + (i % 3) * 2, 6), 0x4a4e56, sx * (H.half + 4 + i * 2.6), HALL_TOP + 1.5, H.d0 + 10 + i * 18); } };
   function buildAddendum(arcAt) {
     // ── the archers + what they stand on (static, except the cavalry who ride their paths) ──
     const A = run.shooters.filter((sh) => sh.kind === 'archer');
     const by = (look) => A.filter((sh) => (sh.look ?? 'castle') === look);
     const face = (sh) => (sh.x > 0 ? -Math.PI / 2 : Math.PI / 2);
     // (v1.6 Star Fox: laser TURRETS on pylons, DEFENSE PLATFORMS hovering in space, gantry turrets indoors)
-    for (const [look, geo] of [['elf', FIG.elf()], ['castle', FIG.knight()], ['hall', run.skin ? FIG.turret() : FIG.knight()], ['turret', FIG.turret()], ['platform', FIG.turret()]]) {
+    for (const [look, geo] of [['elf', FIG.elf()], ['castle', FIG.knight()], ['hall', run.skin ? FIG.turret() : FIG.knight()], ['turret', FIG.turret()], ['platform', FIG.turret()], ['walker', FIG.walker()]]) {
       const list = by(look);
       if (!list.length) continue;
       const m = inst(geo, VC, list.length);
@@ -507,8 +529,8 @@ export function createMegaView(scene, fx) {
           : merged([[box(5, 0.8, 11), 0x8a8478, [0, -0.4, 0]], ...[-4.5, -1.5, 1.5, 4.5].map((z) => [box(0.3, 1.2, 0.3), 0xffc61a, [0, 0.6, z]]), [box(0.2, 0.2, 11), 0xffc61a, [0, 1.2, 0]], ...[-4, 4].map((z) => [cone(1.6, 3, 4), 0x6a645a, [1.6, -2.2, z], [Math.PI, 0, 0]])]), VC, list.length);
       list.forEach((sh, i) => {
         const g = terrain.surfaceAt(sh.x, sh.d, Infinity), h = sh.y - 1.2 - g;
-        if (look === 'hall' || look === 'platform') setI(trunk, i, 0, -100, sh.d, 0, 0, 0); else setI(trunk, i, sh.x, g, sh.d, 1, Math.max(1, h), 1);
-        setI(top, i, look === 'hall' ? Math.sign(sh.x) * 15.6 : sh.x, sh.y - 1.2, sh.d, 1, 1, 1, look === 'hall' ? 0 : face(sh));
+        if (look === 'hall' || look === 'platform' || look === 'walker') setI(trunk, i, 0, -100, sh.d, 0, 0, 0); else setI(trunk, i, sh.x, g, sh.d, 1, Math.max(1, h), 1);
+        if (look === 'walker') setI(top, i, 0, -100, sh.d, 0, 0, 0); else setI(top, i, look === 'hall' ? Math.sign(sh.x) * 15.6 : sh.x, sh.y - 1.2, sh.d, 1, 1, 1, look === 'hall' ? 0 : face(sh));
       });
       trunk.count = top.count = list.length; keepM(trunk); keepM(top);
       archerMeshes.push({ meshes: [m, trunk, top], list });
@@ -544,9 +566,10 @@ export function createMegaView(scene, fx) {
       pal.facade(P, H);                                                                                            // the pediment / pyramid / bastion
       P(box(H.outer * 2, HALL_TOP - FLIGHT.ceiling, 3), STONE, 0, (FLIGHT.ceiling + HALL_TOP) / 2, H.d1);               // the exit lintel (above the ceiling)
       P(box(H.half * 2, 0.8, 3.4), GOLDC, 0, FLIGHT.ceiling - 0.4, H.d1);
-      // the roof — planes facing DOWN only, so the camera always sees in from above (FrontSide)
-      P(new THREE.PlaneGeometry(H.half * 2 + 2, L).rotateX(Math.PI / 2), pal.roof, 0, HALL_ROOF, (H.d0 + H.d1) / 2);
-      for (let d = H.d0 + 10; d < H.d1; d += 25) P(new THREE.PlaneGeometry(H.half * 2, 1.6).rotateX(Math.PI / 2), pal.beam, 0, HALL_ROOF - 0.3, d);
+      // the roof — planes facing DOWN only, so the camera always sees in from above (FrontSide); v1.7: none over an open trench
+      if (!pal.open) P(new THREE.PlaneGeometry(H.half * 2 + 2, L).rotateX(Math.PI / 2), pal.roof, 0, HALL_ROOF, (H.d0 + H.d1) / 2);
+      if (!pal.open) for (let d = H.d0 + 10; d < H.d1; d += 25) P(new THREE.PlaneGeometry(H.half * 2, 1.6).rotateX(Math.PI / 2), pal.beam, 0, HALL_ROOF - 0.3, d);
+      if (pal.open) for (let d = H.d0 + 20; d < H.d1; d += 40) for (const sx of [-1, 1]) P(box(0.4, 1.2 + (d % 3), 6 + (d % 5)), (d / 40) % 2 ? pal.dark : pal.window, sx * (H.half - 0.15), H.floor + 6 + ((d * 7) % 40), d); // greeble panels on the trench walls
       // the gap walls: one opening each (DIVE low / CLIMB high), a gold frame
       for (const g of myGaps) {
         const y0 = g.y - g.h / 2, y1 = g.y + g.h / 2, xl = g.x - g.w / 2, xr = g.x + g.w / 2, D = GAP.depth;
@@ -827,7 +850,7 @@ export function createMegaView(scene, fx) {
     // v1.6 Star Fox's moving dressing: tumbling rocks, ships under way, crawling wrecks, swaying kelp,
     // spinning dust devils; and what it carries: turning windmill blades, blinking nav lights, sweeping beams
     for (let i = 0; i < animList.length; i++) {
-      const it = animList[i], a = SF_DECOR_INFO[it.kind].anim, mesh = decor[it.kind], s0 = it.s, t0 = clock + it.ph;
+      const it = animList[i], a = DECOR_INFO[it.kind].anim, mesh = decor[it.kind], s0 = it.s, t0 = clock + it.ph;
       if (a === 'tumble') setI(mesh, it.wi, it.x, it.y + it.lift + Math.sin(t0 * 0.5) * 1.5, it.d, s0, s0, s0, it.ry + t0 * 0.2, t0 * 0.13);
       else if (a === 'drift') { const dd = it.d + ((clock * 9 + it.ph * 3) % 160) - 80; setI(mesh, it.wi, it.x, it.y + it.lift, dd, s0, s0, s0, Math.PI); }
       else if (a === 'crawl') { const dd = it.d + ((clock * 3 + it.ph) % 50) - 25; setI(mesh, it.wi, it.x, terrain.surfaceAt(it.x, dd, Infinity), dd, s0, s0, s0, Math.PI); }
@@ -897,7 +920,7 @@ export function createMegaView(scene, fx) {
         const fx0 = side * (80 + Math.random() * 60), fd = sp.d - 100 + Math.random() * 250, gy = terrain.surfaceAt(fx0, fd, Infinity);
         if (sp.kind === 'volley' || sp.kind === 'barrage') { fx.flame(fx0, gy + 2, -fd); fx.smoke(fx0, gy + 3, -fd, 1); fx.dust(fx0, gy + 1, -fd, 0xb8a888, 8, 2); }
         else if (sp.kind === 'eruption') { const y = gy + 40 + Math.random() * 50; fx.flame(fx0 * 1.2, y, -fd); fx.smoke(fx0 * 1.2, y + 4, -fd, 1); }
-        else if (sp.kind === 'avalanche') fx.dust(fx0, gy + 40 * (1 - u) + 4, -fd, run.skin ? 0xe8c890 : 0xffffff, 10, 3); // (v1.6: Star Fox's dust storm is sand)
+        else if (sp.kind === 'avalanche') fx.dust(fx0, gy + 40 * (1 - u) + 4, -fd, run.skin ? run.skin.dust ?? 0xe8c890 : 0xffffff, 10, 3); // (v1.6: Star Fox's dust storm is sand; v1.7: the skin says)
         else if (sp.kind === 'flock') fx.bits(side * 50, 30 + u * 40, -(sp.d - 300 + u * 400), 0x3fae4a, 0x22242a);
         else if (sp.kind === 'salute') fx.goalBurst(fx0 * 0.8, gy + 70 + Math.random() * 20, -fd, 0.8);
       }

@@ -33,6 +33,11 @@ export const STARFOX_NAMES = {
   ...STOCK_NAMES, band: 'CATAPULT RAIL', engine: 'G-DIFFUSER', tank: 'BOOST CELL', ramp: 'LAUNCH DECK', magnet: 'SALVAGE BEAM',
   wheels: 'LANDING SKIDS', radar: 'ROB\'S SCANNER', horn: 'COMMS', balloons: 'BRAKE FINS', paints: 'SQUADRON COLOURS',
 };
+// v1.7 Star Wars (the builder's list; the lines not listed keep their stock names).
+export const STARWARS_NAMES = {
+  ...STOCK_NAMES, band: 'TRACTOR CATAPULT', engine: 'ION THRUSTERS', tank: 'HYPERDRIVE CELL', ramp: 'HANGAR RAMP', magnet: 'SALVAGE TRACTOR',
+  wheels: 'LANDING STRUTS', radar: 'ASTROMECH', horn: 'SQUADRON COMMS', balloons: 'AIR BRAKES', paints: 'SQUADRON MARKINGS',
+};
 // The short labels on the Home hangar strip.
 const STOCK_CHIPS = { band: 'ELASTIC', engine: 'PROPELLER', leftWing: 'LEFT WING', rightWing: 'RIGHT WING', tail: 'TAIL' };
 const SPACE_CHIPS = { band: 'RAIL', engine: 'ION ENGINE', leftWing: 'LEFT FIN', rightWing: 'RIGHT FIN', tail: 'STABILIZER' };
@@ -41,13 +46,14 @@ const JUNGLE_CHIPS = { ...STOCK_CHIPS, band: 'JUNGLE VINE', engine: 'CANOPY ENGI
 const SKY_CHIPS = { ...STOCK_CHIPS, engine: 'BREEZE ENGINE' };
 const DRAGON_CHIPS = { ...STOCK_CHIPS, band: 'WAR BANNER', engine: 'KNIGHT\'S ENGINE' };
 const STARFOX_CHIPS = { ...STOCK_CHIPS, band: 'CATAPULT', engine: 'G-DIFFUSER', leftWing: 'LEFT BLADE', rightWing: 'RIGHT BLADE' };
+const STARWARS_CHIPS = { ...STOCK_CHIPS, band: 'TRACTOR', engine: 'ION THRUSTERS', leftWing: 'LEFT FOILS', rightWing: 'RIGHT FOILS' };
 
 // The worlds with their own names: [upgrade names, hangar chips]. A plane's own set wins (the Starship
 // borrowed elsewhere keeps its names), else the world's, else the stock names.
 const OWN = {
   space: [SPACE_NAMES, SPACE_CHIPS], neonvoid: [VOID_NAMES, VOID_CHIPS],
   volcano: [VOLCANO_NAMES, STOCK_CHIPS], jungle: [JUNGLE_NAMES, JUNGLE_CHIPS], skyislands: [SKY_NAMES, SKY_CHIPS],
-  dragonwar: [DRAGON_NAMES, DRAGON_CHIPS], starfox: [STARFOX_NAMES, STARFOX_CHIPS],
+  dragonwar: [DRAGON_NAMES, DRAGON_CHIPS], starfox: [STARFOX_NAMES, STARFOX_CHIPS], starwars: [STARWARS_NAMES, STARWARS_CHIPS],
 };
 const nameSet = (planeId, worldId) => OWN[planeId] ?? OWN[worldId] ?? [STOCK_NAMES, STOCK_CHIPS];
 export const spaceNamed = (planeId, worldId) => nameSet(planeId, worldId)[0] === SPACE_NAMES;

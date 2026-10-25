@@ -5,7 +5,10 @@
 //   · THE FORTRESS GATES (the goal's outer gate) and THE GUARDIAN HEAD — seen from 2,000 m out, growing
 //     (drawn at a fixed far range and scaled by the true distance until it is really in view)
 //   · the stage's own spectacle moments (a rainbow, the warp rings, a comet, the great whale, the flagship,
-//     the sand critter, the eclipse)
+//     the sand critter, the eclipse; v1.7: a fleet jumping in out of hyperspace)
+//   · v1.7: the HYPERSPACE transitions (the stars stretch into lines streaming past, a blue-white surge),
+//     THE TARGET PORT (a glowing ring), the twin suns over a desert arc, and THE STATION GATES / THE GREAT
+//     STATION (the fortress slot with `look: 'station'`)
 // Built once per world; per frame only what is near the plane is placed. No per-frame allocation.
 import * as THREE from 'three';
 import { merged, cyl, cone, box, ico } from './meshkit.js';
@@ -16,7 +19,7 @@ const glowMat = (color, opacity) => basic(color, { transparent: true, opacity, b
 const VC = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 const FAR = 470; // the far range a distant landmark is drawn at (inside the camera's far plane)
 
-export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats }) {
+export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats, arcs = [] }) {
   const inst = (geo, mat, n) => {
     const m = new THREE.InstancedMesh(geo, mat, n);
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.count = 0;
@@ -56,10 +59,43 @@ export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats }) {
   const puffs = inst(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x888888, transparent: true, opacity: 0.7, depthWrite: false }), PUFFS);
   const streaks = inst(box(0.18, 0.18, 1), glowMat(0xff9a3a, 0.7), STREAKS);
 
+  // ── v1.7 HYPERSPACE: star lines streaming past the camera (stretching in, then out) + a blue-white surge ──
+  const HYPER = 90;
+  const hyperLines = inst(box(0.14, 0.14, 1), glowMat(0xdfefff, 0.85), HYPER);
+  const surge = new THREE.Mesh(new THREE.SphereGeometry(28, 16, 10), basic(0x9fd0ff, { transparent: true, opacity: 0, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+  surge.renderOrder = 998; surge.visible = false; keepM(surge);
+  // ── v1.7 THE TARGET PORT: one glowing ring (+ a pulsing core and a frame of steel) ──
+  const PT = run.port;
+  let portG = null, portRing = null;
+  if (PT) {
+    portG = new THREE.Group();
+    portRing = new THREE.Mesh(new THREE.TorusGeometry(PT.r, 0.7, 8, 40), glowMat(0x3aff5a, 0.95)); portG.add(portRing);
+    portG.add(new THREE.Mesh(new THREE.TorusGeometry(PT.r + 1.6, 0.9, 6, 12), new THREE.MeshLambertMaterial({ color: 0x6a707c, flatShading: true })));
+    const core = new THREE.Mesh(new THREE.CircleGeometry(PT.r * 0.5, 24), glowMat(0x9affaa, 0.25)); core.position.z = -6; portG.add(core);
+    portG.position.set(PT.x, PT.y, -PT.d); portG.visible = false; keepM(portG);
+  }
+  // ── v1.7 twin suns over a desert arc (an arc with `suns`): two discs riding the sky with the camera ──
+  const sunArcs = arcs.filter((a) => a.suns);
+  const suns = sunArcs.length ? keepM(new THREE.Group()) : null;
+  if (suns) { sunArcs[0].suns.forEach((c, i) => { const m = new THREE.Mesh(new THREE.CircleGeometry(i ? 16 : 22, 24), basic(c, { fog: false })); m.position.set(i ? 60 : 0, i ? -18 : 0, 0); suns.add(m); const h = new THREE.Mesh(new THREE.CircleGeometry(i ? 28 : 36, 24), glowMat(c, 0.25)); h.position.copy(m.position); h.position.z = -1; suns.add(h); }); suns.visible = false; }
+
   // ── THE FORTRESS GATES (around the goal) and THE GUARDIAN HEAD ──
   const F = run.fortress;
   let gatesG = null, head = null, headEyes = null;
-  if (F) {
+  const station = F?.look === 'station';
+  if (F && station) { // v1.7 THE STATION GATES (two steel towers, a lit gantry) and THE GREAT STATION (a grey moon with its dish)
+    const parts = [], P = (geo, c, x, y, d, rot, sc) => parts.push([geo, c, [x, y, -d], rot, sc]);
+    for (const sx of [-1, 1]) {
+      P(box(18, 96, 18), 0x6a707c, sx * 46, 48, F.gates); P(box(22, 4, 22), 0x4a4e56, sx * 46, 98, F.gates); P(new THREE.SphereGeometry(2, 8, 6), 0xff3a3a, sx * 46, 104, F.gates);
+      P(box(40, 30, 10), 0x5a5e66, sx * 72, 15, F.gates); for (const y of [16, 40, 64, 88]) P(box(0.6, 3, 18.4), 0xc8e0ff, sx * 37, y, F.gates);
+    }
+    P(box(110, 10, 10), 0x4a4e56, 0, 71, F.gates); P(box(112, 1.6, 11), 0xc8e0ff, 0, 65.4, F.gates);
+    gatesG = new THREE.Group(); gatesG.add(new THREE.Mesh(merged(parts), VC())); gatesG.visible = false; keepM(gatesG);
+    const S = merged([[new THREE.SphereGeometry(60, 28, 18), 0x8a909a, [0, 0, 0]], [new THREE.CylinderGeometry(60.4, 60.4, 2.4, 40, 1, true), 0x4a4e56, [0, 0, 0]],
+      [new THREE.SphereGeometry(15, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), 0x5a5e66, [24, 22, 46], [1.1, 0, -0.5]], [new THREE.CircleGeometry(4, 12), 0x3aff5a, [25, 23, 52.4], [0.5, 0.5, 0]]]);
+    head = new THREE.Mesh(S, VC()); head.visible = false; keepM(head);
+    headEyes = new THREE.Group(); head.add(headEyes);
+  } else if (F) {
     const parts = [], P = (geo, c, x, y, d, rot, sc) => parts.push([geo, c, [x, y, -d], rot, sc]);
     for (const sx of [-1, 1]) {
       P(cyl(9, 12, 96, 8), 0x3a2a30, sx * 46, 48, F.gates); P(cone(11, 26, 8), 0x2a1e24, sx * 46, 109, F.gates); P(new THREE.SphereGeometry(2, 8, 6), 0xff3a3a, sx * 46, 124, F.gates);
@@ -91,6 +127,7 @@ export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats }) {
   const flagship = new THREE.Mesh(merged([[box(60, 34, 420), 0x6a707c, [0, 0, 0]], [box(110, 6, 180), 0x4a505c, [0, -8, -60]], ...[-150, -60, 30, 120].map((z) => [box(30, 26, 40), 0x8a92a0, [0, 28, z]]),
     [cyl(20, 26, 40, 12), 0x4a505c, [0, 0, -220], [Math.PI / 2, 0, 0]], [cyl(16, 16, 2, 12), 0x5fd8ff, [0, 0, -241], [Math.PI / 2, 0, 0]], ...Array.from({ length: 12 }, (_, i) => [box(2, 2, 2), 0xffe14d, [31, 6, -180 + i * 32]])]), VC());
   flagship.visible = false; keepM(flagship);
+  const jumpShips = inst(merged([[cone(10, 60, 3), 0x9aa0a8, [0, 0, 0], [Math.PI / 2, Math.PI, 0]], [box(8, 4, 10), 0xb0b6be, [0, 4, 16]], [cyl(2, 2, 0.6, 10), 0x5fd8ff, [0, 0, 30.4], [Math.PI / 2, 0, 0]]]), VC(), 6);
   const worm = inst(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshLambertMaterial({ color: 0xb08a5a, flatShading: true }), 14);
   const eclipse = keepM(new THREE.Group());
   const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(60, 32), basic(0xfff2c0, { fog: false })); eclipse.add(sunDisc);
@@ -132,6 +169,21 @@ export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats }) {
       }
     }
     puffs.count = np; streaks.count = nst; puffs.instanceMatrix.needsUpdate = streaks.instanceMatrix.needsUpdate = true;
+    // v1.7 HYPERSPACE: the stars stretch into lines (longest at the boundary), the sky surges blue-white
+    let nh = 0, surgeK = 0;
+    for (const tr of T) {
+      if (tr.kind !== 'hyperspace' || planeD < tr.d0 || planeD > tr.d1 || !camPos) continue;
+      const u = (planeD - tr.d0) / (tr.d1 - tr.d0), k = Math.sin(u * Math.PI); surgeK = Math.max(surgeK, k);
+      for (let i = 0; i < HYPER; i++) {
+        const a = i * 2.39996, rr = 6 + (i * 37 % 40), z = -camPos.z + 20 + ((i * 53 + clock * 900) % 420);
+        setI(hyperLines, nh++, camPos.x + Math.cos(a) * rr, camPos.y + Math.sin(a) * rr * 0.7, z, 1, 1, 2 + 90 * k * k, 0);
+      }
+    }
+    hyperLines.count = nh; hyperLines.instanceMatrix.needsUpdate = true;
+    surge.visible = surgeK > 0.02; if (surge.visible) { surge.position.copy(camPos); surge.material.opacity = 0.42 * surgeK * surgeK; }
+    // v1.7 THE TARGET PORT (its ring pulses) and the twin suns (over their desert, riding with the camera)
+    if (portG) { portG.visible = PT.d + 40 > lo && PT.d - 600 < hi; if (portG.visible) { portRing.scale.setScalar(1 + 0.06 * Math.sin(clock * 6)); portRing.material.opacity = 0.75 + 0.25 * Math.sin(clock * 9); } }
+    if (suns) { const a = sunArcs.find((x) => planeD >= x.from && planeD < x.to); suns.visible = !!a && !!camPos; if (suns.visible) { suns.position.set(camPos.x - 140, camPos.y + 120, camPos.z - 420); suns.lookAt(camPos.x, camPos.y, camPos.z); } }
     // THE FORTRESS GATES; THE GUARDIAN HEAD from 2,000 m out (at a fixed far range, scaled by the true distance)
     if (F) {
       gatesG.visible = F.gates + 40 > lo && F.gates - 300 < hi;
@@ -139,14 +191,14 @@ export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats }) {
       head.visible = dist > -60 && dist < hd.from;
       if (head.visible) {
         const k = dist > FAR ? FAR / dist : 1, dd = dist > FAR ? planeD + FAR : hd.d;
-        head.position.set(hd.x * k, ground(hd.x, hd.d) * k, -dd); head.scale.setScalar(k);
-        head.rotation.y = Math.atan2(-hd.x, 60) * 0.6;
+        head.position.set(hd.x * k, (station ? 140 : ground(hd.x, hd.d)) * k, -dd); head.scale.setScalar(k);
+        head.rotation.y = station ? 0.6 + clock * 0.01 : Math.atan2(-hd.x, 60) * 0.6;
         for (const e of headEyes.children) e.scale.setScalar(0.9 + 0.25 * Math.sin(clock * 6));
       }
     }
     // the eclipse veil rides with the camera
     if (veil.visible && camPos) veil.position.copy(camPos);
-    if (!specOn) { rainbow.visible = comet.visible = bigWhale.visible = flagship.visible = eclipse.visible = veil.visible = false; warpRings.count = worm.count = 0; }
+    if (!specOn) { rainbow.visible = comet.visible = bigWhale.visible = flagship.visible = eclipse.visible = veil.visible = false; warpRings.count = worm.count = jumpShips.count = 0; }
     specOn = 0;
   }
 
@@ -172,6 +224,16 @@ export function createSFLayer({ keepM, scene, fx, terrain, run, sheetMats }) {
         if (camPos) { eclipse.position.set(camPos.x - 120, camPos.y + 220, camPos.z - 360); eclipse.lookAt(camPos.x, camPos.y, camPos.z); }
         moon.position.x = (0.5 - u) * 150; corona.material.opacity = 0.6 * Math.max(0, k - 0.6) / 0.4;
         veil.material.opacity = 0.42 * Math.max(0, (k - 0.5) / 0.5);
+        return true;
+      }
+      case 'jumpIn': { // v1.7 a fleet drops out of hyperspace wide of the line: streaks first, then the ships, settling
+        specOn = 1; let n = 0;
+        for (let i = 0; i < 6; i++) {
+          const arrive = 0.25 + i * 0.07, k = Math.max(0, Math.min(1, (u - arrive) / 0.12)), x = side * (120 + (i % 3) * 50), y = 70 + (i % 2) * 40, d = sp.d + 200 + i * 90;
+          if (u < arrive) continue;
+          setI(jumpShips, n++, x, y, d - (1 - k) * 600, 1, 1, 1 + (1 - k) * 14, 0);
+        }
+        jumpShips.count = n; jumpShips.instanceMatrix.needsUpdate = true;
         return true;
       }
       default: return false;

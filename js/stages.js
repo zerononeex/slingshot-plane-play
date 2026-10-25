@@ -10,9 +10,10 @@
 import { FLYERS } from './flyers.js';
 import { ARCS, ARC_LEN, DW_LAP, zoneTint } from './dragonwar.js';
 import { SF_ARCS, SF_ARC_LEN, SF_BLEND, SF_LAP, sfZoneTint, TRANSITIONS } from './starfox.js';
+import { SW_ARCS, SW_ARC_LEN, SW_BLEND, SW_LAP, swZoneTint, SW_TRANSITIONS } from './starwars.js';
 
 export const DEFAULT_STAGE = 'plains';
-export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid', 'dragonwar', 'starfox']; // v1.3: three new worlds before the finale; v1.5: the first mega-stage after it; v1.6: Star Fox
+export const STAGE_ORDER = ['plains', 'canyon', 'city', 'snow', 'desert', 'ocean', 'space', 'jetstream', 'volcano', 'jungle', 'skyislands', 'neonvoid', 'dragonwar', 'starfox', 'starwars']; // v1.3: three new worlds before the finale; v1.5: the first mega-stage after it; v1.6: Star Fox; v1.7: Star Wars (the last)
 
 const range = (from, to, step) => { const a = []; for (let d = from; d <= to; d += step) a.push(d); return a; };
 const SHARED_PATTERNS = ['line', 'highArc', 'slalom', 'dive', 'stairs', 'wave', 'fork', 'ring'];
@@ -971,6 +972,55 @@ STAGES.starfox = {
     { id: 'starfox-buoys', name: 'High over the buoy course', x: 0, y: 26, d: 1530, coins: 15, radius: 5 },
     { id: 'starfox-tomb', name: 'Deep in the Buried Tomb', x: -75, y: 4, d: 1600, coins: 14, radius: 5 },
     { id: 'starfox-sky', name: 'Above the corona', x: -10, y: 42, d: 56600, coins: 15, radius: 7 },
+  ],
+  patterns: patterns(['ditchDip', 'craterDip']),
+};
+
+// ───────────────────────── S15 STAR WARS — the third and final 70,000 m MEGA-STAGE (v1.7) ─────────────────────────
+// A galaxy-far-away love letter in seven 10,000 m arcs (starwars.js): the twin-suns desert → the orbital
+// battle → the ice world → the cloud world → the forest moon → the great fleet battle → the great station,
+// with an ASCENT / DESCENT / HYPERSPACE transition zone at each boundary. The base lap repeats every
+// 2,000 m (a loop ring, two dive gates, a landing-beacon course, three pockets); the authored 70,000 m run
+// on top of it is the shared mega layer (megarun.js) — the shooter system and Loop Doors reused
+// unchanged, reskinned by stage data; THE TRENCH RUN ends at THE TARGET PORT.
+const SW0 = SW_ARCS[0];
+STAGES.starwars = {
+  ...base,
+  id: 'starwars', name: 'Star Wars',
+  unlock: { after: 'starfox', best: 25000 },
+  unlockBanner: 'NEW PLANE: STAR KESTREL!',
+  // The STAR KESTREL: a cream-and-red strike fighter with four swept blades. Caps Lv1–5 locked; Lv6–10
+  // ≈ +9 %/level (the v1.0 method: the fastest stage plane at every level).
+  plane: { name: 'Star Kestrel', body: 0xe6e3dc, wing: 0xd8402a, accent: 0xffc61a, wingScale: 1.05, floats: false, kestrel: true,
+    caps: [104, 121, 140, 160, 181, 197, 215, 234, 255, 278], decayMul: 5, glideMul: 0.02, noLiftCarry: 22, stallSpeed: 16, trail: 'kestrel' }, // tuned (BALANCE.md)
+  theme: { bits: [0xe6e3dc, 0xd8402a], sky: SW0.sky, fogNear: 150, fogFar: 500, hemiGround: SW0.hemi, sun: SW0.sun,
+    ground: { ...SW0.pal, water: null }, base: SW0.base, rock: SW0.rock, scenery: SW0.scenery.kind, treesPerChunk: SW0.scenery.trees, rocksPerChunk: SW0.scenery.rocks,
+    // the seven arcs, blended over the 600 m TRANSITION zones (±SW_BLEND about each boundary)
+    arcs: SW_ARCS, zoneTint: swZoneTint, blend: SW_BLEND, transitions: SW_TRANSITIONS },
+  ground: { style: 'rolling', center: 4, side: 14, arcs: SW_ARCS.map((a) => a.ground), arcLen: SW_ARC_LEN, blend: SW_BLEND },
+  flatStart: 60,
+  // gullies (the arc's colour: sand-dry, frozen, water, coolant) and a crater
+  ditches: [{ d: 520, depth: 3, halfLength: 9 }, { d: 1440, depth: 3, halfLength: 8 }],
+  pits: [{ x: -7, d: 770, depth: 4, radius: 8, rim: 1.5, crater: true }, { x: 8, d: 1760, depth: 4, radius: 8 }],
+  zones: [{ side: 'left', kind: 'riverFalls', from: 500, to: 540 }, { side: 'right', kind: 'cavern', from: 680, to: 810 }, { side: 'right', kind: 'riverFalls', from: 1420, to: 1460 }, { side: 'right', kind: 'slot', from: 1600, to: 1640 }],
+  caverns: [SW_LAP.cavern],
+  bridges: [SW_LAP.bridge],
+  slots: [SW_LAP.slot],
+  loopRings: [SW_LAP.loopRing],
+  diveGates: SW_LAP.diveGates,
+  courses: [{ id: 'starwars-beacons', look: 'buoys', gates: SW_LAP.course.map((d, i) => gate(d, i % 2 ? 4 : -4)) }],
+  bumpables: [['satellite', 300, 13], ['drone', 560, -12], ['astronaut', 1000, 12], ['pebbleRocks', 1420, 10], ['satellite', 1880, -12]].map(([type, d, x]) => ({ type, d, x })),
+  pockets: [
+    pocket('hidden-hangar', 'HIDDEN HANGAR', 'hiddenHangar', -1, 180, 400, 8, [['caveBats', 130, 3], ['drone', 300, -3]]),
+    pocket('bunker-cache', 'BUNKER CACHE', 'bunkerCache', 1, 1180, 400, 8, [['pebbleRocks', 130, -3], ['astronaut', 290, 3]]),
+    pocket('smugglers-moon', 'THE SMUGGLER\'S MOON', 'smugglersMoon', -1, 1300, 400, 8, [['satellite', 120, -3], ['drone', 280, 3]]),
+  ],
+  secrets: [
+    { id: 'starwars-loop', name: 'Top of the docking loop', x: 0, y: 32, d: 900, coins: 13, radius: 5 },
+    { id: 'starwars-hangar', name: 'In the Hidden Hangar\'s rafters', x: -72, y: 4, d: 480, coins: 14, radius: 5 },
+    { id: 'starwars-beacons', name: 'High over the landing beacons', x: 0, y: 26, d: 1530, coins: 15, radius: 5 },
+    { id: 'starwars-moon', name: 'Deep in the Smuggler\'s Moon', x: -75, y: 4, d: 1600, coins: 14, radius: 5 },
+    { id: 'starwars-sky', name: 'Above the super-capital', x: 10, y: 42, d: 53600, coins: 15, radius: 7 },
   ],
   patterns: patterns(['ditchDip', 'craterDip']),
 };
