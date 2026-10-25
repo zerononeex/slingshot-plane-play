@@ -19,7 +19,7 @@ export const FLYERS = [
     character: 'Red biplane: two wings, struts, big propeller, two open seats (a blue hedgehog + an orange fox)',
     colors: { body: 0xd8202a, trim: 0xffffff, dark: 0x2a2d36 } },
   { id: 'bluefalcon', name: 'Blue Falcon', from: 'F-Zero', unlock: '★ City', caps: [90, 105, 121, 138, 157, 162, 167, 172, 177, 182], stars: ['city'],
-    flight: { stallSpeed: 13, decayMul: 1.3, glideMul: 0.77, engineSound: 'turbine' },
+    flight: { stallSpeed: 13, decayMul: 1.3, glideMul: 0.74, engineSound: 'turbine' },
     character: 'Anti-gravity racer: wide blue wedge hull, yellow stripes, twin boosters, hover glow',
     colors: { body: 0x2160d8, trim: 0xffd23f, dark: 0x14306e } },
   { id: 'vicviper', name: 'Vic Viper', from: 'Gradius', unlock: '★ Snow', caps: [95, 110, 127, 145, 164, 169, 174, 179, 185, 190], stars: ['snow'],

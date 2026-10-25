@@ -114,9 +114,14 @@ export const TANK = [
   { level: 10, seconds: 13, cost: 4580, scale: 2.15 },
 ];
 export const BOOST = {
-  thrust: 6,            // m/s² while the BOOST button is held
-  capOverBand: 10,      // boost can't push you faster than band cap + this
+  thrust: 6,            // m/s² while the BOOST button is held (band Lv1)
+  capOverBand: 10,      // boost can't push you faster than band cap + this (band Lv1; tailwinds always + 10)
+  thrustPerLevel: 0.5,  // v1.9 BOOSTS SCALE: + 0.5 m/s² per band level above 1 (Lv10 → 10.5)
+  capPerLevel: 2,       // v1.9: + 2 m/s of margin per band level above 1 (Lv10 → + 28)
 };
+// v1.9 the hold-boost at a band level: margin over the cap, and thrust (Space's WARP TANK keeps its own thrust).
+export const boostMargin = (bandLv) => BOOST.capOverBand + BOOST.capPerLevel * (Math.max(1, bandLv) - 1);
+export const boostThrustAt = (bandLv) => BOOST.thrust + BOOST.thrustPerLevel * (Math.max(1, bandLv) - 1);
 
 // LAUNCH RAMP: taller pad + steeper launch angle (launch speed unchanged).
 export const RAMP = [

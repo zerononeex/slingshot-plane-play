@@ -143,9 +143,9 @@ export const SF_HEROES = [
 // WEAVE ROWS in the lap's clear windows; the clear line swings 3 m a row (≤ 3 % per 100 m), as in
 // Dragon War. Per lap: the windows used. The asteroid belt is densest mid-arc; the interiors, the
 // underwater canyon's door, the tilt sectors and the transitions take windows of their own.
-const WINDOWS = { A: [240, 2], B: [480, 2], C: [800, 1], D: [980, 2], F: [1740, 4] };
+const WINDOWS = { A: [240, 2], B: [480, 2], C: [800, 1], D: [980, 2], F: [1870, 2] }; // (v1.9 pocket audit: F 1,740 × 4 → 1,870 × 2, clear of the pockets' exits)
 const LAP_PLAN = [
-  'F', 'D', 'BD', 'D', 'F',              // the Green World (the waterfall caves 3,660 · 6,660 (its tilt slot 6,640) · 9,000)
+  'F', 'D', 'BD', 'D', 'F',              // the Green World (the waterfall caves 3,660 · 6,960 (its tilt slot 6,940; v1.9: was 6,660 / 6,640) · 9,000)
   'D', 'ABD', 'BD', 'ABDF', 'ABD',       // the Asteroid Belt (the pinch 14,300 · door 15,900)
   'D', 'BD', 'ABDF', 'ABD', 'D',         // the Ocean World (THE DROP 24,800 · door 27,900)
   'BD', 'ABDF', 'BDF', 'ABDF', 'BD',     // the Fleet
@@ -156,7 +156,7 @@ const LAP_PLAN = [
 const ROW_KIND = ['pine', 'asteroid', 'coral', 'hullMast', 'obelisk', 'plasma', 'redSpire'];
 const SWING = [0, 1, 2, 3, 2, 1, 0, -1, -2, -3, -2, -1];
 // No weave row inside a transition zone (the sky is busy enough there), an interior, a cave or THE DROP's entry.
-const NO_ROWS = [[9700, 10300], [19700, 20300], [29700, 30300], [39700, 40300], [49700, 50300], [59700, 60300], [6560, 6860], [8900, 9200], [24700, 24900]];
+const NO_ROWS = [[9700, 10300], [19700, 20300], [29700, 30300], [39700, 40300], [49700, 50300], [59700, 60300], [6860, 7160], [8900, 9200], [24700, 24900]];
 const WEAVE = LAP_PLAN.flatMap((plan, lap) => [...plan].flatMap((w) => {
   const [l0, n] = WINDOWS[w];
   return Array.from({ length: n }, (_, j) => ({ d: lap * 2000 + l0 + j * 100, kind: ROW_KIND[Math.floor(lap / 5)] }));
@@ -164,7 +164,7 @@ const WEAVE = LAP_PLAN.flatMap((plan, lap) => [...plan].flatMap((w) => {
 
 // TILT SECTORS (4, mandatory): [d, slot x, name, hall?]. The waterfall-cave entry slot (its slot is the
 // cave's lane), the asteroid pinch gap, the pyramid doorway and the fortress doorway (indoors).
-const TILTS = [[6640, -16, 'THE FALLS SLOT'], [14300, 8, 'THE ASTEROID PINCH']];
+const TILTS = [[6940, -16, 'THE FALLS SLOT'], [14300, 8, 'THE ASTEROID PINCH']];
 const HALL_TILTS = [[44700, 0, 'THE PYRAMID DOORWAY'], [64750, -6, 'THE FORTRESS DOORWAY']];
 // LOOP DOORS (4): [door d, loop mark d, lane x, bottom key height (abs), name, look].
 const DOORS = [
@@ -187,8 +187,10 @@ const GAPS = [
 // THE WATERFALL CAVES (the Green World's signature): a falls pours over each mouth; fly THROUGH it into
 // the cavern sector behind. The first is the tilt sector's (its slot is the cave lane).
 const CAVES = [
-  { d0: 3660, d1: 3800, x0: -30, x1: -4, lane: [-22, -10], roof: 13, top: 42, cruise: 7, name: 'THE WATERFALL CAVE', falls: true, clearApproach: true },
-  { d0: 6660, d1: 6800, x0: -30, x1: -4, lane: [-22, -10], roof: 13, top: 42, cruise: 7, name: 'THE FALLS CAVERN', falls: true, clearApproach: true },
+  { d0: 3900, d1: 4040, x0: -30, // (v1.9 pocket audit: 3,660 → 3,900, out of the BURIED TOMB's exit)
+    x1: -4, lane: [-22, -10], roof: 13, top: 42, cruise: 7, name: 'THE WATERFALL CAVE', falls: true, clearApproach: true },
+  { d0: 6960, d1: 7100, x0: -30, // (v1.9 pocket audit: 6,660 → 6,960, out of the WATERFALL HIDEOUT's exit)
+    x1: -4, lane: [-22, -10], roof: 13, top: 42, cruise: 7, name: 'THE FALLS CAVERN', falls: true, clearApproach: true },
   { d0: 9000, d1: 9140, x0: -30, x1: -4, lane: [-22, -10], roof: 13, top: 42, cruise: 7, name: 'THE HIDDEN FALLS', falls: true, clearApproach: true },
 ];
 // THE DROP: splash gates take the flight UNDERWATER (sector physics flags, read by physics.js like the

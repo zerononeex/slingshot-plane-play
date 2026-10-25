@@ -179,7 +179,7 @@ export const STAGES = {
     caverns: [{ shape: 'block', start: 950, mouth: 955, exit: 1005, end: 1010, height: 44, laneMin: 14, laneMax: 26, edge: 9, roof: 10,
       alcove: { from: 975, to: 987, laneMin: 10 }, lit: true }],
     columns: [
-      { kind: 'waterTower', x: 16, d: 470, r: 2, h: 6 }, { kind: 'antenna', x: 22, d: 660, r: 0.4, h: 10 },
+      { kind: 'waterTower', x: 16, d: 470, r: 2, h: 6 }, { kind: 'antenna', x: 22, d: 780, r: 0.4, h: 10 }, // v1.9 pocket audit: 660 → 780 (out of NEON ALLEY's exit)
       { kind: 'waterTower', x: 20, d: 1060, r: 2, h: 6 }, { kind: 'antenna', x: -16, d: 1420, r: 0.4, h: 10 },
       { kind: 'waterTower', x: -20, d: 1640, r: 2, h: 6 }, { kind: 'antenna', x: -22, d: 1760, r: 0.4, h: 10 },
     ],
@@ -276,8 +276,8 @@ export const STAGES = {
       { shape: 'mesa', x: -46, d: 1700, rx: 12, rd: 22, height: 16 },
     ],
     columnSets: [
-      { kind: 'cactus', from: 620, to: 800, step: 25, xs: [12, 21], r: 0.7, h: 6 },
-      { kind: 'cactus', from: 1520, to: 1680, step: 25, xs: [12, 21], r: 0.7, h: 6, hero: { d: 1600, x: 18, r: 1.4, h: 14 } },
+      { kind: 'cactus', from: 665, to: 845, step: 25, xs: [12, 21], r: 0.7, h: 6 },                                     // (v1.9 pocket audit: 620 → 665)
+      { kind: 'cactus', from: 1620, to: 1780, step: 25, xs: [12, 21], r: 0.7, h: 6, hero: { d: 1700, x: 18, r: 1.4, h: 14 } }, // (v1.9 pocket audit: 1,520 → 1,620)
     ],
     devils: [
       { x: -18, d: 300, r: 6 }, { x: -18, d: 550, r: 6 }, { x: -18, d: 820, r: 6 }, { x: -18, d: 1100, r: 6 },
@@ -373,7 +373,7 @@ STAGES.space = {
   bigHills: [{ shape: 'dome', x: -22, d: 1000, rx: 18, rd: 36, height: 34 }], // the moon mountain
   // Asteroids float (y = height of the centre above the ground) and Bonk on a hit.
   asteroidSets: [
-    { from: 470, to: 880, step: 26, xs: [12, 21], ys: [7, 11], r: 2.6 },
+    { from: 444, to: 854, step: 26, xs: [12, 21], ys: [7, 11], r: 2.6 }, // (v1.9 pocket audit: 470 → 444, clear of the NEBULA POCKET's mouth)
     { from: 1460, to: 1700, step: 26, xs: [-12, -21], ys: [7, 11], r: 2.6, hero: { d: 1500, x: -18, y: 12, r: 7 } },
   ],
   rings: [
@@ -434,7 +434,7 @@ STAGES.jetstream = {
   gateFast: 40, gateBonus: { fast: 25, slow: 5 },
   // Storm clouds = bonk zones. Around 900 m a ring of storm puffs hides a calm eye (a secret).
   storms: [
-    { x: 18, d: 700, y: 16, r: 6 }, { x: -16, d: 1050, y: 22, r: 7 }, { x: 14, d: 1560, y: 14, r: 6 }, { x: -12, d: 1880, y: 18, r: 6.5 },
+    { x: 18, d: 900, y: 16, r: 6 }, { x: -16, d: 1050, y: 22, r: 7 }, { x: 14, d: 1560, y: 14, r: 6 }, { x: -12, d: 1880, y: 18, r: 6.5 },
     ...[0, 1, 2, 3, 4, 5].map((i) => ({ x: 18 + 9 * Math.cos((i / 6) * Math.PI * 2), d: 910 + 9 * Math.sin((i / 6) * Math.PI * 2), y: 20, r: 4.2, eye: true })),
   ],
   // Cloud bridges across the sky: fly under them (CLOUD DIVE) or over them.
@@ -509,14 +509,14 @@ const FURNITURE = {
     diveGates: [{ d: 698, x: -20, w: 10, h: 6 }, { d: 1598, x: -20, w: 10, h: 6 }], // into the cavern mouths
   },
   canyon: {
-    slots: [{ d: 1170, x: 16, gap: 2, wall: 2.5, h: 14, look: 'pillars' }, { d: 1720, x: -16, gap: 2, wall: 2.5, h: 14, look: 'pillars' }],
+    slots: [{ d: 1120, x: 16, gap: 2, wall: 2.5, h: 14, look: 'pillars' }, { d: 1720, x: -16, gap: 2, wall: 2.5, h: 14, look: 'pillars' }],
     loopRings: [{ d: 600, x: 0, yc: 12, R: 10 }],                               // around the low arch
     diveGates: [{ d: 1840, x: 0, w: 10, h: 6 }, { d: 1100, x: -16, w: 10, h: 6 }],  // under the far arch; in the updraft run
   },
   city: {
     slots: [{ d: 1150, x: 16, gap: 2, wall: 2.5, h: 18, look: 'towers' }],
     loopRings: [{ d: 735, x: 0, yc: 13, R: 10 }],                               // just past the bridge
-    diveGates: [{ d: 700, x: 8, w: 10, h: 6 }, { d: 1600, x: 0, w: 10, h: 6 }],    // under the bridge
+    diveGates: [{ d: 560, x: 8, w: 10, h: 6 }, { d: 1600, x: 0, w: 10, h: 6 }],    // under the bridge (v1.9 pocket audit: 700 → 560, with it)
   },
   snow: {
     slots: [{ d: 1000, x: -12, gap: 2, wall: 2.5, h: 10, look: 'ice' }],
@@ -546,7 +546,7 @@ const FURNITURE = {
 };
 for (const [id, f] of Object.entries(FURNITURE)) Object.assign(STAGES[id], f);
 // The City bridge the LOOP RING lives at (fly under it, then loop).
-STAGES.city.bridges = [{ kind: 'stone', d: 700, x0: -30, x1: 30, under: 10, thick: 3, depth: 8 }];
+STAGES.city.bridges = [{ kind: 'stone', d: 560, x0: -30, x1: 30, under: 10, thick: 3, depth: 8 }];
 
 // ───────────────────────── v0.6 part 2: BUMPABLES (fixed per lap; respawn every flight) ─────────────────────────
 // { type (bumpables.js CAST), d, x, y? (height of the centre above the ground; defaults to the type's) }.
@@ -584,7 +584,7 @@ const EXPANSION = {
     decor: [{ kind: 'crane', d: 1240, x: -13 }],
   },
   snow: {
-    bridges: [{ kind: 'snow', d: 700, x0: -30, x1: 30, under: 10, thick: 3, depth: 8 }],           // the SNOW ARCH bridge
+    bridges: [{ kind: 'snow', d: 790, x0: -30, x1: 30, under: 10, thick: 3, depth: 8 }],           // the SNOW ARCH bridge (v1.9 pocket audit: 700 → 790)
     caverns: [{ shape: 'hill', start: 1560, mouth: 1585, exit: 1635, end: 1660, height: 24, laneMin: 14, laneMax: 26, edge: 8, roof: 10, ice: true, lit: true }], // ICE CAVE #2
     zones: [{ side: 'right', kind: 'iceCave', from: 1560, to: 1660 }],
     courses: [{ id: 'snow-flags', look: 'flags', gates: [gate(860, -4), gate(885, 4), gate(910, -4), gate(935, 4), gate(960, -4)] }],
@@ -756,10 +756,10 @@ STAGES.jungle = {
   archways: [{ kind: 'templeArch', d: 620, cx: 0, w: 14, h: 12, leg: 3, thick: 3, depth: 5 }],
   // The VINE-AND-TRUNK SLALOM: giant jungle trees, left side.
   columnSets: [{ kind: 'tree', from: 1320, to: 1500, step: 25, xs: [-12, -21], r: 0.9, h: 18, hero: { d: 1420, x: -18, r: 1.6, h: 22 } }],
-  diveGates: [{ d: 850, x: 0, w: 10, h: 7 }, { d: 1650, x: 4, w: 10, h: 7 }],
-  slots: [{ d: 1780, x: 14, gap: 2, wall: 2.5, h: 14, look: 'trees' }],
+  diveGates: [{ d: 850, x: 0, w: 10, h: 7 }, { d: 1760, x: 4, w: 10, h: 7 }], // (v1.9 pocket audit: 1,650 → 1,760)
+  slots: [{ d: 1880, x: 14, gap: 2, wall: 2.5, h: 14, look: 'trees' }], // (v1.9 pocket audit: 1,780 → 1,880)
   courses: [{ id: 'jungle-palms', look: 'palms', gates: [gate(1100, -4), gate(1125, 4), gate(1150, -4), gate(1175, 4), gate(1200, -4)] }],
-  bumpables: [['pigeonFlock', 300, 13], ['hotAirBalloon', 760, -10], ['kite', 1180, 10], ['pigeonFlock', 1570, 13], ['hotAirBalloon', 1850, 8]].map(([type, d, x]) => ({ type, d, x })),
+  bumpables: [['pigeonFlock', 300, 13], ['hotAirBalloon', 840, -10], ['kite', 1180, 10], ['pigeonFlock', 1570, 13], ['hotAirBalloon', 1850, 8]].map(([type, d, x]) => ({ type, d, x })),
   pockets: [
     pocket('temple-ruins', 'TEMPLE RUINS', 'templeRuins', -1, 140, 400, 8, [['pigeonFlock', 130, 3], ['kite', 300, -3]]),
     pocket('parrot-hollow', 'PARROT HOLLOW', 'parrotHollow', 1, 1150, 400, 8, [['pigeonFlock', 130, -3], ['balloonBunch', 290, 3]]),
@@ -858,7 +858,7 @@ STAGES.neonvoid = {
   slots: [{ d: 1600, x: -14, gap: 2, wall: 4, h: 14, look: 'neon' }],
   loopRings: [{ d: 1300, x: 0, yc: 18, R: 12 }],
   diveGates: [{ d: 420, x: 0, w: 10, h: 8 }, { d: 1500, x: 6, w: 10, h: 8 }],
-  bumpables: [['drone', 300, 8], ['pebbleRocks', 600, -8], ['satellite', 700, -10], ['drone', 1050, -8], ['satellite', 1450, 10], ['drone', 1850, -6]].map(([type, d, x]) => ({ type, d, x })),
+  bumpables: [['drone', 300, 8], ['pebbleRocks', 600, -8], ['satellite', 790, -10], ['drone', 1050, -8], ['satellite', 1450, 10], ['drone', 1850, -6]].map(([type, d, x]) => ({ type, d, x })),
   // The LASER COURSE: five neon gates on the lap (thin posts bonk; all five in one pass = COURSE CLEAR).
   courses: [{ id: 'neon-lasers', look: 'lasers', gates: [gate(980, -4), gate(1005, 4), gate(1030, -4), gate(1055, 4), gate(1080, -4)] }],
   pockets: [
@@ -919,7 +919,7 @@ STAGES.dragonwar = {
     pocket('war-chest-vault', 'WAR CHEST VAULT', 'warChest', 1, 1180, 400, 8, [['pigeonFlock', 130, -3], ['vulture', 290, 3]]),
   ],
   secrets: [
-    { id: 'dragonwar-arch', name: 'On top of the castle arch', x: 0, y: 21, d: 700, coins: 13, radius: 5 },
+    { id: 'dragonwar-arch', name: 'On top of the castle arch', x: 0, y: 21, d: 760, coins: 13, radius: 5 },
     { id: 'dragonwar-roost', name: 'Among the dragon eggs', x: -72, y: 4, d: 480, coins: 14, radius: 5 },
     { id: 'dragonwar-loop', name: 'Top of the castle loop', x: 0, y: 32, d: 900, coins: 15, radius: 5 },
     { id: 'dragonwar-chest', name: 'Inside the War Chest Vault', x: 75, y: 4, d: 1450, coins: 14, radius: 5 },

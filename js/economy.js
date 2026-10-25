@@ -2,6 +2,7 @@
 // getStage/setStage), so every stage has its own wallet and upgrades.
 import { ENGINE, BAND, TANK, RAMP, MAGNET, WHEELS, PARTS, PAINTS, EJECT, COINS } from './config.js';
 import { FUN_IDS, funTotal } from './funlines.js';
+import { handlingTotal } from './handling.js';
 
 // Level tracks: each table's first row is the starting level (1, or 0 = "none").
 export const TRACKS = { band: BAND, engine: ENGINE, tank: TANK, ramp: RAMP, magnet: MAGNET, wheels: WHEELS };
@@ -72,6 +73,7 @@ export function completionTotals() {
   t.parts = PARTS.reduce((a, p) => a + p.cost, 0);
   t.eject = EJECT.cost;
   for (const id of FUN_IDS) t[id] = funTotal(id); // v1.0: the five fun lines
+  t.handling = handlingTotal(); // v1.9: HANDLING (the engine's prices)
   t.core = Object.values(t).reduce((a, v) => a + v, 0);
   t.paints = PAINTS.filter((p) => !p.only).reduce((a, p) => a + p.cost, 0); // shared paints (Nebula is Starship-only)
   t.allIn = t.core + t.paints;

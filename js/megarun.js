@@ -19,6 +19,8 @@ import { keyRingHit, createDoorStates, openByLoop, crossDoors, DOOR } from './lo
 import { MEGA_DATA } from './dragonwar.js';
 import { SF_MEGA } from './starfox.js';
 import { SW_MEGA } from './starwars.js';
+import { STAGES } from './stages.js';
+import { shiftOutOfPockets } from './pockets.js';
 
 // Every mega-stage's data, by stage id (v1.5 Dragon War, v1.6 Star Fox, v1.7 Star Wars).
 const ALL_MEGA = { ...MEGA_DATA, ...SF_MEGA, ...SW_MEGA };
@@ -34,6 +36,7 @@ export const WILD_R = 3.4;
 export const GAP = { depth: 2 };                          // a hall gap wall's thickness
 export const WAVE = { keep: 0.5, push: 14, shake: 1 };    // caught outside the shelter: × 0.5 + a big sideways push (no damage)
 const B = 50; // bucket size (m)
+export const SHOOTER_NEAR = 40; // v1.9: a shooter this close to the line (|x|) is part of the corridor (the pocket audit)
 
 const RUNS = {};
 
@@ -65,7 +68,20 @@ export function wildPos(w, t, out) {
 // A patrolling shooter's muzzle x at flight time t.
 export const patrolX = (sh, t) => (sh.patrol ? sh.x + sh.patrol[0] * Math.sin((2 * Math.PI * t) / sh.patrol[1] + (sh.patrol[2] ?? 0)) : sh.x);
 
-function build(data) {
+function build(data, stage = null) {
+  // v1.9 POCKET AUDIT: weave rows, shooters and wild flyers standing in a pocket's entry or exit lane
+  // move forward, just past it (pockets.js), never into an interior, a door's run-in, a tilt sector or a
+  // cave.
+  if (stage) {
+    const busy = [...(data.halls ?? (data.hall ? [data.hall] : [])).map((h) => [h.d0 - 30, h.d1 + 10]), ...data.doors.map((o) => [o.loopD - 250, o.d + 50]),
+      ...[...data.tilts, ...(data.hallTilts ?? [])].map((t) => [t.d - 40, t.d + 20]), ...(data.caves ?? (data.cave ? [data.cave] : [])).map((c) => [c.d0 - 80, c.d1 + 20])];
+    const avoid = (d) => busy.some(([a, b]) => d > a && d < b);
+    data = { ...data,
+      weave: shiftOutOfPockets(data.weave.map((w) => ({ ...w, r: 3 })), stage, stage.cycle, { avoid }).map(({ r, movedFrom, ...w }) => w),
+      shooters: shiftOutOfPockets(data.shooters, stage, stage.cycle, { skip: (sh) => Math.abs(sh.x) > SHOOTER_NEAR }).map(({ movedFrom, ...sh }) => sh),
+      wild: shiftOutOfPockets(data.wild.map((w) => ({ ...w })), stage, stage.cycle).map(({ movedFrom, ...w }) => w),
+    };
+  }
   const rows = data.weave.map((w, i) => ({ ...w, id: i, posts: null }));
   for (const r of rows) r.posts = weavePosts(r);
   const tilts = [...data.tilts, ...(data.hallTilts ?? []).map((t) => ({ ...t, hall: true, top: 60 }))].map((t, i) => ({ gap: TILT.gap, ...t, id: i, kind: 'tiltWall' }));
@@ -308,5 +324,5 @@ function build(data) {
 
 export function megaRunFor(stageId) {
   if (!(stageId in ALL_MEGA)) return null;
-  return (RUNS[stageId] ??= build(ALL_MEGA[stageId]));
+  return (RUNS[stageId] ??= build(ALL_MEGA[stageId], STAGES[stageId]));
 }

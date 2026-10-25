@@ -18,6 +18,7 @@ import { STAGES, DEFAULT_STAGE, STAGE_ORDER, EXTRA_PLANES, EXTRA_PLANE_ORDER, FL
 import { TRACK_IDS, PART_IDS, PAINT_IDS, minLevel, maxLevel, paintFits } from './economy.js';
 import { PAINTS } from './config.js';
 import { cleanGates, cleanComplete, gateTotal } from './goals.js';
+import { cleanHandling } from './handling.js';
 import { FUN_IDS, cleanFun } from './funlines.js';
 
 const MAX_COINS = 10_000_000;
@@ -158,6 +159,8 @@ export function validateRecord(raw, stageId = DEFAULT_STAGE) {
   if (cleanComplete(r.complete, gates)) rec.complete = true;
   // v1.0 fun lines (radar, horn, chute, brakes, balloons): 0–5, sparse (absent = not bought).
   for (const id of FUN_IDS) { const v = cleanFun(r[id]); if (v) rec[id] = v; }
+  // v1.9 HANDLING: 2–10, sparse (absent = Lv1), like the fun lines.
+  const h = cleanHandling(r.handling); if (h) rec.handling = h;
   return rec;
 }
 

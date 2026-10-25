@@ -151,7 +151,7 @@ export const SW_HEROES = [
 // in every window, its swing the steepest the rule allows); the forest moon's giant trees the FASTEST
 // (rows the whole arc long, flown at the Kestrel's top speed). The interiors, the doors, the tilt
 // sectors and the transitions take windows of their own.
-const WINDOWS = { A: [240, 2], B: [480, 2], C: [800, 1], D: [980, 2], F: [1740, 4] };
+const WINDOWS = { A: [240, 2], B: [480, 2], C: [800, 1], D: [980, 2], F: [1870, 2] }; // (v1.9 pocket audit: F 1,740 × 4 → 1,870 × 2, clear of the pockets' exits)
 const LAP_PLAN = [
   'F', 'D', 'ABCDF', 'ABDF', 'ABCDF',     // the Desert World (the canyon weave; its tilt slot 6,700)
   'D', 'ABDF', 'BD', 'ABDF', 'ABD',       // the Orbital Battle (THE ASTEROID CHASE 12,000–14,000 · door 15,900)
@@ -164,7 +164,7 @@ const LAP_PLAN = [
 const ROW_KIND = ['rockSpire', 'asteroid', 'iceSpire', 'cloudTower', 'redwood', 'hullMast', 'greebleTower'];
 const SWING = [0, 1, 2, 3, 2, 1, 0, -1, -2, -3, -2, -1];
 // No weave row inside a transition zone, an interior's run-in, a door's run-in or the goal's.
-const NO_ROWS = [[9700, 10300], [19700, 20300], [29700, 30300], [39700, 40300], [49700, 50300], [59700, 60300], [6440, 6800], [35220, 35380]];
+const NO_ROWS = [[9700, 10300], [19700, 20300], [29700, 30300], [39700, 40300], [49700, 50300], [59700, 60300], [6520, 6880], [35280, 35440]];
 const WEAVE = LAP_PLAN.flatMap((plan, lap) => [...plan].flatMap((w) => {
   const [l0, n] = WINDOWS[w];
   return Array.from({ length: n }, (_, j) => ({ d: lap * 2000 + l0 + j * 100, kind: ROW_KIND[Math.floor(lap / 5)] }));
@@ -172,7 +172,7 @@ const WEAVE = LAP_PLAN.flatMap((plan, lap) => [...plan].flatMap((w) => {
 
 // TILT SECTORS (4, mandatory): the canyon slot (the Desert World), a cloud-tower slot, and two doorways
 // indoors — the ice cave's and the trench entry's.
-const TILTS = [[6700, -8, 'THE CANYON SLOT'], [35300, -8, 'THE TOWER GAP']];
+const TILTS = [[6780, -8, 'THE CANYON SLOT'], [35360, -8, 'THE TOWER GAP']];
 const HALL_TILTS = [[26750, 0, 'THE ICE CAVE DOORWAY'], [64350, -6, 'THE TRENCH ENTRY']];
 // LOOP DOORS (4): [door d, loop mark d, lane x, bottom key height (abs), name, look].
 const DOORS = [

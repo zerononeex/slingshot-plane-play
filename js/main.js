@@ -9,6 +9,8 @@ import { stepPilot, tryEject, runDistance, runOver, pilotParams } from './pilot.
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
 import { stepCoins, reachSecrets, reachStashes, secretY } from './coins.js';
+import { ringSetsFor, createRingSetRun, stepRingSets } from './ringsets.js';
+import { HANDLING_MAX, handlingLevel, nextHandlingCost, canBuyHandling, buyHandling, steerGain, handlingName } from './handling.js';
 import { FUN, FUN_IDS, funLevel, nextFunCost, canBuyFun, buyFun, radarReading, radarBlinkPeriod, hornShow, chuteSinkMul, chuteSteerMul, HORN_COOLDOWN } from './funlines.js';
 import { speedoReading, speedoZones, KMH } from './speedo.js';
 import {
@@ -510,6 +512,18 @@ function refreshShop() {
   const grid = $('shop-grid');
   grid.textContent = '';
   for (const item of SHOP_ITEMS) grid.appendChild(trackCard(item));
+  // v1.9 HANDLING: a main line (10 levels, the engine's prices) — the full UPGRADES screen only.
+  const hl = handlingLevel(rec), hCost = nextHandlingCost(hl), hState = hCost === null ? 'maxed' : canBuyHandling(rec) ? 'buyable' : 'poor';
+  const turn = (l) => `turning × ${steerGain(l).toFixed(2)}`;
+  const hc = card({
+    key: 'track:handling', icon: '🕹️', name: handlingName(planeId, stageId),
+    pips: pipsHtml(hl, 1, HANDLING_MAX, hState === 'buyable'),
+    effect: hCost === null ? turn(hl) : `▸ ${turn(hl + 1)}`,
+    price: hCost === null ? coinBtnMaxed : coinBtn(hCost), state: hState,
+    onBuy: () => purchase(buyHandling(rec)),
+  });
+  hc.dataset.track = 'handling';
+  grid.appendChild(hc);
   grid.appendChild(card({
     key: 'eject', icon: '🪂', name: upgradeNames(planeId, stageId).eject, effect: 'Pop out and parachute on!',
     price: rec.eject ? coinBtnMaxed : coinBtn(EJECT.cost),
@@ -629,6 +643,8 @@ function setupShapes() {
   const shapes = shapesFor(stageId);
   shapeRun = createShapeRun();
   shapeYs = shapes ? shapes.map((sh) => shapeY(terrain, sh)) : [];
+  ringSets = ringSetsFor(stageId, (x, d) => terrain.surfaceAt(x, d, -Infinity)); // v1.9 RING SETS: fresh every flight
+  ringRun = createRingSetRun();
   shapesView.build(shapes, shapeYs, shapeScale(stageId));
   if (setPiecesBuilt !== stageId) { // built once per world (the pieces never change within a world)
     setPiecesView.build(setPiecesFor(stageId), (x, d) => terrain.surfaceAt(x, d, -Infinity), stage.theme.neon ?? null);
@@ -638,11 +654,26 @@ function setupShapes() {
   }
 }
 let setPiecesBuilt = null;
+// v1.9 RING SETS PAY: every hoop of a yellow ring line → +30 once per flight per line.
+let ringSets = [], ringRun = createRingSetRun();
+const ringEvents = [];
+function stepRings(d0) {
+  if (ejected || flight.ended) return;
+  ringEvents.length = 0;
+  stepRingSets(ringRun, ringSets, d0, flight.x, flight.y, flight.d, ringEvents);
+  for (const ev of ringEvents) {
+    runCoins += ev.coins;
+    sfx.loopRing();
+    banner(`RING SET! +${ev.coins}`, 1.8);
+    plane.root.getWorldPosition(_v);
+    fx.sparkleBurst(_v.x, _v.y + 0.5, _v.z);
+  }
+}
 function stepShapes(d0) {
   const shapes = shapesFor(stageId);
   if (!shapes) return;
   shapeEvents.length = 0;
-  stepShapeRun(shapeRun, shapes, shapeYs, d0, flight.x, flight.y, flight.d, flight.time, !ejected && !flight.ended, shapeScale(stageId), shapeEvents);
+  stepShapeRun(shapeRun, shapes, shapeYs, d0, flight.x, flight.y, flight.d, flight.time, !ejected && !flight.ended, shapeScale(stageId), shapeEvents, lo.band.launchMax); // v1.9: scaled by the plane's current top-speed cap
   for (const ev of shapeEvents) {
     flight.speed += ev.gain; // pure velocity: an instant burst along the flight direction
     shapesView.setUsed(ev.index);
@@ -654,6 +685,7 @@ function stepShapes(d0) {
 }
 // Only the plane itself collects (not the eject glide, not after the flight ended).
 function stepGoals() {
+  stepRings(goalPrevD);
   stepShapes(goalPrevD);
   const goals = goalsFor(stageId);
   if (goals && goalRun) {
@@ -709,7 +741,7 @@ function startRun() {
   applyLooks();
   effects = partEffects(rec.parts, PART_PHYSICS);
   params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: pstage.plane, modifiers: stage.modifiers,
-    fun: { brakes: funLevel(rec, 'brakes'), balloons: funLevel(rec, 'balloons') } }); // v1.0 fun lines (0 = not owned)
+    fun: { brakes: funLevel(rec, 'brakes'), balloons: funLevel(rec, 'balloons') }, handling: handlingLevel(rec) }); // v1.0 fun lines (0 = not owned); v1.9 HANDLING
   // MEGA CHUTE: the parachute reads the chute level of the record the ejector lives in (as today).
   chutePilot = pilotParams(PILOT, stage.modifiers, { sinkMul: chuteSinkMul(funLevel(rec, 'chute')), steerMul: chuteSteerMul(funLevel(rec, 'chute')) });
   brakeHeld = brakeKey = false; hornCool = 0; radarT = 0;
@@ -1755,8 +1787,8 @@ function stepGame(dt) {
       for (const c of world.activeCoins()) if (c.alive && c.token && Math.abs(c.d - flight.d) < 8) c.alive = false; // the TOKEN
       runCoins += 10; banner('THROUGH THE SLOT! +10', 1.6); sfx.slot();
     }
-    if (ev === 'loopRing') { runCoins += 5; sfx.coin(); }
-    if (ev === 'loopMaster') { runCoins += 50; banner('LOOP MASTER! +50', 2); sfx.loopRing(); }
+    if (ev === 'loopRing') { runCoins += 2; sfx.coin(); } // v1.9: +2 a ring, once per flight, any pass
+    if (ev === 'perfectLoop') { runCoins += 25; banner('PERFECT LOOP! +25', 2.2); sfx.loopRing(); } // v1.9: a whole formation in ONE loop
     if (ev === 'diveGate') { runCoins += 15; banner('DIVE GATE! +15', 1.4); sfx.speedGate(flight.speed); }
     // SUB-AREAS
     if (ev === 'swingIn' || ev === 'swingOut') sfx.whoosh();

@@ -7,14 +7,16 @@
 // boost = m/s added; aperture = the opening the plane must be inside (metres, before world scale):
 //   circle r · square half · oval rx × ry (tall) · rectangle hw × hh (wide) · triangle side (equilateral,
 //   point up; the tightest opening — still kid-fair). bound = the frame's outer radius (placement).
+// v1.9 BOOSTS SCALE: the gain = max(the flat boost, round(pct × the flown plane's CURRENT top-speed cap)) —
+// flat wins at low caps (Plains is exactly as before), the percentage at endgame speeds.
 import { setPiecesFor } from './longrun.js';
 
 export const SHAPES = {
-  circle:    { label: 'CIRCLE', boost: 6, r: 4.2, bound: 4.8 },
-  square:    { label: 'SQUARE', boost: 7, half: 3.6, bound: 5.4 },
-  oval:      { label: 'OVAL', boost: 7, rx: 3, ry: 4.8, bound: 5.3 },
-  rectangle: { label: 'RECTANGLE', boost: 8, hw: 5.5, hh: 2.4, bound: 6.4 },
-  triangle:  { label: 'TRIANGLE', boost: 9, side: 8.4, bound: 5.6 },
+  circle:    { label: 'CIRCLE', boost: 6, pct: 0.04, r: 4.2, bound: 4.8 },
+  square:    { label: 'SQUARE', boost: 7, pct: 0.045, half: 3.6, bound: 5.4 },
+  oval:      { label: 'OVAL', boost: 7, pct: 0.045, rx: 3, ry: 4.8, bound: 5.3 },
+  rectangle: { label: 'RECTANGLE', boost: 8, pct: 0.05, hw: 5.5, hh: 2.4, bound: 6.4 },
+  triangle:  { label: 'TRIANGLE', boost: 9, pct: 0.06, side: 8.4, bound: 5.6 },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
 export const CHAIN_WINDOW = 6;   // s
@@ -40,22 +42,25 @@ export const crossesShape = (sh, cy, d0, x1, y1, d1, scale = 1) => d0 < sh.at &&
 // One flight's state: which frames are used up, and the running chain.
 export const createShapeRun = () => ({ used: new Set(), chain: 0, lastT: -Infinity });
 
+// v1.9 a shape's base gain for a plane whose current top-speed cap is `cap` m/s.
+export const shapeGain = (kind, cap = 0) => Math.max(SHAPES[kind].boost, Math.round(SHAPES[kind].pct * cap));
+
 // The boost for a pass at time t (and the chain step it makes): base + 2 per chain step, capped at × 4.
-export function chainedBoost(run, kind, t) {
+export function chainedBoost(run, kind, t, cap = 0) {
   run.chain = t - run.lastT <= CHAIN_WINDOW ? Math.min(CHAIN_CAP, run.chain + 1) : 1;
   run.lastT = t;
-  return SHAPES[kind].boost + CHAIN_STEP * (run.chain - 1);
+  return shapeGain(kind, cap) + CHAIN_STEP * (run.chain - 1);
 }
 
 // Step: returns events { type: 'boost', index, kind, gain, chain }. Only the plane itself, flying.
-export function stepShapeRun(run, shapes, ys, d0, x1, y1, d1, t, flying, scale = 1, out = []) {
+export function stepShapeRun(run, shapes, ys, d0, x1, y1, d1, t, flying, scale = 1, out = [], cap = 0) {
   if (!flying || !shapes) return out;
   if (t - run.lastT > CHAIN_WINDOW) run.chain = 0; // the chain resets after 6 s without a shape
   for (let i = 0; i < shapes.length; i++) {
     const sh = shapes[i];
     if (run.used.has(i) || !crossesShape(sh, ys[i], d0, x1, y1, d1, scale)) continue;
     run.used.add(i);
-    const gain = chainedBoost(run, sh.kind, t);
+    const gain = chainedBoost(run, sh.kind, t, cap);
     out.push({ type: 'boost', index: i, kind: sh.kind, gain, chain: run.chain });
   }
   return out;
@@ -175,8 +180,8 @@ SHAPE_SPOTS.skyislands = [
 SHAPE_SPOTS.neonvoid = [
   S(265, -72, 10, 'triangle', 'inside THE GRID CORE'),
   S(725, 72, 11.2, 'rectangle', 'inside PRISM VAULT'),
-  S(33140, 0, 28, 'triangle', 'goal approach'),
-  S(33215, 0, 28, 'rectangle', 'goal approach'),
+  S(33300, 0, 28, 'triangle', 'goal approach'), // (v1.9: the goal moved 33,290 → 33,450; was 33,140)
+  S(33375, 0, 28, 'rectangle', 'goal approach'), // (was 33,215)
 ];
 // v1.5 Dragon War: one in each pocket and two on the goal approach; its eight long-run frames (the high
 // lines) come from the long-run set pieces below — twelve in all.

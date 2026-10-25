@@ -3,7 +3,7 @@
 // Chunk records are pooled and rewritten in place: nothing is allocated once warmed up.
 import { WORLD } from './config.js';
 import { rng } from './rng.js';
-import { pocketRects, inRect } from './pockets.js';
+import { pocketRects, inRect , pocketClearZones, CLEAR_LANE } from './pockets.js';
 
 export const TREE_SLOTS = 14;
 export const ROCK_SLOTS = 8;
@@ -47,8 +47,29 @@ export function furnitureSpots(stage) {
   return out;
 }
 
-// Keep small scenery out of the tunnels, the obstacle slaloms, the furniture and the launch lane.
+// v1.9 the pockets' ENTRY and EXIT lanes stay clear (pockets.js): the line flown there at lap-local dl
+// (or null when (x, dl) is outside every clear lane).
+export function pocketClearLine(stage, x, dl, pad = 5) {
+  for (const p of stage.pockets ?? []) for (const z of pocketClearZones(p)) {
+    if (dl < z.d0 - 4 || dl > z.d1 + 4) continue;
+    const lx = z.lineX(dl);
+    if (Math.abs(x - lx) < CLEAR_LANE + pad) return lx;
+  }
+  return null;
+}
+// Keep small scenery out of the tunnels, the obstacle slaloms, the furniture and the launch lane —
+// and (v1.9) out of the pockets' entry and exit lanes: decor steps off the line flown.
 export function sceneryX(stage, terrain, x, d) {
+  let out = sceneryX0(stage, terrain, x, d);
+  const dl = terrain.local(d);
+  for (let i = 0; i < 3; i++) {
+    const lx = pocketClearLine(stage, out, dl);
+    if (lx === null) break;
+    out = lx + (out < lx ? -1 : 1) * (CLEAR_LANE + 7 + Math.abs(out - lx) * 0.2);
+  }
+  return out;
+}
+function sceneryX0(stage, terrain, x, d) {
   const dl = terrain.local(d);
   for (const f of furnitureSpots(stage)) if (Math.abs(dl - f.d) < f.r && Math.abs(x - f.x) < f.r) return x + (x < f.x ? -f.r : f.r) * 1.6;
   // Sub-areas: decor stays out of the pocket lane and its passages (the pocket has its own decor).
@@ -90,10 +111,10 @@ export function fillSceneryChunk(stage, terrain, k, out) {
     const o = out.trees[t];
     const d = d0 + r() * L;
     let x = sceneryX(stage, terrain, (r() * 2 - 1) * (HALF - 10), d);
-    if (kind === 'street') x = (r() < 0.5 ? -1 : 1) * (7.5 + r() * 1.5);
+    if (kind === 'street') { x = (r() < 0.5 ? -1 : 1) * (7.5 + r() * 1.5); if (pocketClearLine(stage, x, terrain.local(d)) !== null) x = -x; } // (v1.9: the other kerb, off a pocket's lane)
     const h = terrain.surfaceAt(x, d, Infinity);
     const s = 0.8 + r() * 0.9;
-    const hide = t >= treesPer || (terrain.surfaceKind(x, d) === 'water') || (kind === 'street' && h > 0.5);
+    const hide = t >= treesPer || (terrain.surfaceKind(x, d) === 'water') || (kind === 'street' && (h > 0.5 || pocketClearLine(stage, x, terrain.local(d)) !== null));
     const roll = r(), spin = r() * 6;
     o.x = x; o.d = d; o.h = h; o.s = s; o.spin = spin; o.street = kind === 'street';
     if (hide || kind === 'none') { o.kind = 'none'; continue; }

@@ -12,14 +12,15 @@ export const ARC_LEN = 10000;
 // Lap-local metres. The mega layer keeps ≥ 60 m clear of all of it.
 export const DW_LAP = {
   pockets: [{ id: 'dragon-roost', name: 'DRAGON ROOST', look: 'dragonRoost', side: -1, portal: 180 }, { id: 'war-chest-vault', name: 'WAR CHEST VAULT', look: 'warChest', side: 1, portal: 1180 }],
-  archway: { kind: 'castleArch', d: 700, cx: 0, w: 16, h: 16, leg: 3, thick: 3, depth: 5 },
+  archway: { kind: 'castleArch', d: 760, // (v1.9 pocket audit: 700 → 760, out of the DRAGON ROOST's exit)
+    cx: 0, w: 16, h: 16, leg: 3, thick: 3, depth: 5 },
   loopRing: { d: 900, x: 0, yc: 20, R: 12 },
   diveGates: [{ d: 420, x: 0, w: 10, h: 8 }, { d: 1660, x: 6, w: 10, h: 8 }],
   course: [1480, 1505, 1530, 1555, 1580],
   cavern: { shape: 'block', start: 1130, mouth: 1135, exit: 1215, end: 1220, height: 30, laneMin: -26, laneMax: -14, edge: -9, roof: 10, lit: true, castle: true },
   bridge: { kind: 'stone', d: 1440, x0: -30, x1: 30, under: 12, thick: 3, depth: 8 },
   slot: { d: 1620, x: -14, gap: 2, wall: 2.5, h: 12, look: 'towers' },
-  busy: [[120, 240], [360, 480], [640, 760], [840, 960], [1120, 1240], [1420, 1640], [1600, 1720]],
+  busy: [[120, 240], [360, 480], [700, 820], [840, 960], [1120, 1240], [1420, 1640], [1600, 1720]],
 };
 const lapBusy = (d) => { const l = d % 2000; return DW_LAP.busy.some(([a, b]) => l > a - 6 && l < b + 6); };
 

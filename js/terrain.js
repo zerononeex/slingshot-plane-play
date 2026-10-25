@@ -14,6 +14,9 @@ import { pocketRects, rectWeight } from './pockets.js';
 import { tailBumpablesFor } from './longrun.js';
 import { neonRunFor, LANE_PUSH, LANE_MIN } from './neon.js';
 import { megaRunFor } from './megarun.js';
+import { SKILLS } from './physics.js';
+
+export const LOOP_RING_R = 4; // v1.9: a loop ring's opening (was 3)
 
 export const DECK = { start: -8, end: 1.5, halfWidth: 2.2 };
 
@@ -335,12 +338,15 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     return null;
   }
   // LOOP RINGS: 8 rings on a vertical circle (bottom ring first, then forward and over the top).
+  // v1.9: placed EXACTLY on the physics loop's circle — the loop a plane starts at the bottom ring at the
+  // formation's entry speed (the world plane's Lv5 cap: SKILLS.loopRadius) — so that loop threads all
+  // eight. The bottom ring keeps its authored height; the apertures are kid-generous (LOOP_RING_R).
   const loopRings = [];
   stage.loopRings.forEach((set, si) => {
-    const yc = featuresAt(set.x, set.d, -Infinity) + set.yc;
+    const R = SKILLS.loopRadius(set.entry ?? stage.plane.caps[4]), bottom = featuresAt(set.x, set.d, -Infinity) + set.yc - set.R, yc = bottom + R;
     for (let k = 0; k < 8; k++) {
       const th = (k / 8) * Math.PI * 2;
-      loopRings.push({ set: si, k, id: `${si}.${k}`, x: set.x, d: set.d + set.R * Math.sin(th), y: yc - set.R * Math.cos(th), r: 3, setInfo: set, yc });
+      loopRings.push({ set: si, k, id: `${si}.${k}`, x: set.x, d: set.d + R * Math.sin(th), y: yc - R * Math.cos(th), r: LOOP_RING_R, setInfo: set, yc, R });
     }
   });
   function loopRingAt(x, y, d) {

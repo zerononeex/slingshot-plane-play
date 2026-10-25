@@ -5,6 +5,8 @@
 // SLIPSTREAM lanes (a strong forward push — the tailwind mechanic, in a box). Everything is a bonk at
 // worst: nothing is one-hit. Authored offline, validated against the terrain (BALANCE.md "Neon Void").
 // Pure data + maths (no DOM / three.js).
+import { STAGES } from './stages.js';
+import { shiftOutOfPockets } from './pockets.js';
 
 export const NEON_RUN = 40000;
 export const WALL_HALF = 32;      // walls span the corridor (±26) with a margin; pocket lanes (±72) pass
@@ -21,7 +23,15 @@ export const gapX = (o, t = 0) => (o.amp ? o.x + o.amp * Math.sin((2 * Math.PI *
 // The run, per stage id (only Neon Void has one).
 const RUNS = {};
 
-function build(data) {
+function build(data, stage = null) {
+  // v1.9 POCKET AUDIT: walls / sliders / laser rows standing in a pocket's entry or exit lane move
+  // forward, just past it (with what follows them), so a pocket never drops you straight into one.
+  if (stage) {
+    const tagged = [...data.walls.map((v) => ({ d: v[0], v, k: 'walls', r: 2 })), ...data.sliders.map((v) => ({ d: v[0], v, k: 'sliders', r: 2 })), ...data.lasers.map((v) => ({ d: v[0], v, k: 'lasers', r: 2 }))];
+    const moved = shiftOutOfPockets(tagged, stage, stage.cycle);
+    data = { ...data, walls: [], sliders: [], lasers: [] };
+    for (const m of moved) data[m.k].push([m.d, ...m.v.slice(1)]);
+  }
   const walls = data.walls.map(([d, x, y, w, h]) => ({ kind: 'wall', d, x, y, w, h }));
   const sliders = data.sliders.map(([d, x, y, w, h, amp, period, phase]) => ({ kind: 'slider', d, x, y, w, h, amp, period, phase }));
   const lasers = data.lasers.map(([d, offset]) => {
@@ -88,7 +98,7 @@ function build(data) {
 
 export function neonRunFor(stageId) {
   if (!(stageId in NEON_DATA)) return null;
-  return (RUNS[stageId] ??= build(NEON_DATA[stageId]));
+  return (RUNS[stageId] ??= build(NEON_DATA[stageId], STAGES[stageId]));
 }
 
 // ───────────────────────── the authored run (absolute metres) ─────────────────────────

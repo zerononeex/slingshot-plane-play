@@ -1,6 +1,7 @@
 // Pure flight physics — no three.js, no DOM, so node tests can run it.
 // Coordinates: x = right, y = up, d = metres flown forward from the slingshot.
-import { WHEELS, LANDING, BOOST } from './config.js';
+import { WHEELS, LANDING, BOOST, boostMargin, boostThrustAt } from './config.js';
+import { steerGain } from './handling.js';
 import { SWING } from './pockets.js';
 import { FUN, brakeFloor } from './funlines.js';
 
@@ -39,7 +40,7 @@ export function tryLoop(s) {
   if (s.mode !== 'air' || s.loop || s.ended) return false;
   if (s.speed < SKILLS.loopMinSpeed) { s.events.push('loopSlow'); return false; }
   if (s.tilted) s.tilted = false;
-  s.loop = { t: 0, R: SKILLS.loopRadius(s.speed), d0: s.d, y0: s.y, x: s.x, rings: new Set() };
+  s.loop = { t: 0, R: SKILLS.loopRadius(s.speed), d0: s.d, y0: s.y, x: s.x, rings: new Set(), thread: new Map() };
   s.events.push('loop');
   return true;
 }
@@ -54,6 +55,14 @@ export function tryRoll(s, dir = 1) {
   return true;
 }
 
+// v1.9 LOOP RINGS PAY: threading any pink ring pays (once per flight per ring) — on a loop or straight through.
+export const LOOP_RINGS = 8;
+function payLoopRing(s, lr) {
+  if (s.used.has(lr.id + 'loopRing')) return;
+  s.used.add(lr.id + 'loopRing');
+  s.events.push('loopRing');
+}
+
 // The loop itself: a full vertical circle (back to where it started), then exit at × 0.95.
 function stepLoop(s, dt, P, env) {
   const L = s.loop;
@@ -64,12 +73,12 @@ function stepLoop(s, dt, P, env) {
   s.pitch = th;
   s.vy = 0;
   const lr = env.loopRingAt ? env.loopRingAt(s.x, s.y, s.d) : null;
-  if (lr && !s.used.has(lr.id + 'loopRing')) {
-    s.used.add(lr.id + 'loopRing');
-    s.events.push('loopRing');
-    L.rings.add(lr.ring.set);
-    L.count = (L.count ?? 0) + 1;
-    L.set = lr.ring.set;
+  if (lr) {
+    payLoopRing(s, lr);
+    // v1.9: what THIS loop threads, per formation (lap:set), whether or not a ring was paid before
+    const key = lr.id.slice(0, lr.id.lastIndexOf('.'));
+    if (!L.thread.has(key)) L.thread.set(key, new Set());
+    L.thread.get(key).add(lr.ring.k);
   }
   // v1.5 LOOP DOORS: the door key rings this loop threads (both = the door opens when the loop ends).
   const kr = env.keyRingAt ? env.keyRingAt(s.x, s.y, s.d) : null;
@@ -92,7 +101,8 @@ function stepLoop(s, dt, P, env) {
     s.d = L.d0; s.y = L.y0; s.pitch = 0;
     s.speed *= SKILLS.loopExitKeep;
     s.events.push('loopEnd');
-    if (L.count >= 8 && L.rings.size === 1) s.events.push('loopMaster'); // all 8 of one set in ONE loop
+    // v1.9 PERFECT LOOP: every ring of one formation threaded inside ONE loop — once per flight per formation
+    for (const [key, ks] of L.thread) if (ks.size >= LOOP_RINGS && !s.used.has(key + 'perfectLoop')) { s.used.add(key + 'perfectLoop'); s.events.push('perfectLoop'); }
     if (L.keys && env.loopDone) env.loopDone(s, L.keys); // v1.5: a keyed loop opens its door in advance
   }
 }
@@ -118,7 +128,8 @@ export function partEffects(parts, pp) {
 // items that change the flight (wheels, band cap for the boost limit), the stage's
 // plane (decay/glide multipliers) and the stage's modifiers (soft snow, water).
 const STOCK_PLANE = { decayMul: 1, glideMul: 1 };
-export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null, plane = STOCK_PLANE, modifiers = {}, fun = null } = {}) {
+export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0], band = null, plane = STOCK_PLANE, modifiers = {}, fun = null, handling = 1 } = {}) {
+  const steer = steerGain(handling); // v1.9: the base raise (× 1.15) × the HANDLING line (Lv1 × 1 → Lv10 × 1.6)
   const e = effects ?? { sinkMul: 1, climbCostMul: 1, driftSpeed: 0, stallSpeed: null, stallSinkMul: 1, responseMul: 1 };
   const snow = modifiers.softSnow;
   const lowG = modifiers.lowGravity;
@@ -141,15 +152,17 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     // A plane's own stall speed (biplane 8, jet 16) replaces the stock 11; the tail lowers it by the same 9/11.
     stallSpeed: plane.stallSpeed ? plane.stallSpeed * (e.stallSpeed ?? flight.stallSpeed) / flight.stallSpeed : e.stallSpeed ?? flight.stallSpeed,
     stallSink: flight.stallSink * e.stallSinkMul * g, // …and you sink slower
-    pitchRateDeg: flight.pitchRateDeg * e.responseMul,
-    lateralResponse: flight.lateralResponse * e.responseMul,
-    lateralSpeed: flight.lateralSpeed * (plane.steerMul ?? 1), // v1.2 the Void Runner steers × 1.1 (precision at 250 m/s)
+    pitchRateDeg: flight.pitchRateDeg * e.responseMul * steer,
+    lateralResponse: flight.lateralResponse * e.responseMul * steer,
+    lateralSpeed: flight.lateralSpeed * (plane.steerMul ?? 1) * steer, // v1.2 the Void Runner steers × 1.1 (precision at 250 m/s)
+    steerGain: steer,
     bounceKeep: snow ? Math.min(0.97, wheels.keep + snow.keepBonus) : wheels.keep,
     bouncePop: wheels.pop,
     landingSinkBonus: (snow ? snow.sinkBonus : 0) + (lowG ? lowG.sinkBonus : 0),
     water: modifiers.water ?? null,
-    boostThrust: modifiers.warp ? modifiers.warp.boostThrust : BOOST.thrust, // Space: the WARP TANK
-    boostCap: (band ? band.launchMax : 30) + BOOST.capOverBand,
+    boostThrust: modifiers.warp ? modifiers.warp.boostThrust : boostThrustAt(band?.level ?? 1), // Space: the WARP TANK; v1.9: grows with the band level
+    boostCap: (band ? band.launchMax : 30) + boostMargin(band?.level ?? 1), // v1.9: the margin grows with the band level (Lv1: + 10, as before)
+    windCap: (band ? band.launchMax : 30) + BOOST.capOverBand,              // tailwinds: always + 10 (unchanged)
   };
   // v1.0 fun lines that touch the flight (only when owned: everything else is exactly as before).
   if (fun?.brakes) P.brakeDecel = FUN.brakes.decel[fun.brakes];
@@ -408,9 +421,10 @@ function stepAir(s, input, dt, P, env) {
     if (s.speed < P.boostCap) thrust = P.boostThrust;
   }
   // Tailwind: a push forward (never past the boost cap). A v1.2 slipstream only catches a fast plane (pushMin).
-  const wind = zone.push > 0 && s.speed < P.boostCap && s.speed >= (zone.pushMin ?? 0) ? zone.push : 0;
+  const wind = zone.push > 0 && s.speed < P.windCap && s.speed >= (zone.pushMin ?? 0) ? zone.push : 0;
   s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust + wind) * dt);
-  if ((thrust > 0 || wind > 0) && s.speed > P.boostCap) s.speed = Math.max(P.boostCap, s.speed - (thrust + wind) * dt);
+  const pushCap = thrust > 0 ? P.boostCap : P.windCap; // v1.9: the boost's own margin; tailwinds keep + 10
+  if ((thrust > 0 || wind > 0) && s.speed > pushCap) s.speed = Math.max(pushCap, s.speed - (thrust + wind) * dt);
   // v1.0 SPOILER BRAKES (held): strong drag, but never below stall + 2 m/s (it can't stall you out).
   if (P.brakeDecel) {
     s.braking = !!input.brake;
@@ -429,6 +443,8 @@ function stepAir(s, input, dt, P, env) {
   s.d += forward * dt;
   s.y = Math.min(P.ceiling, s.y + s.vy * dt);
 
+  // v1.9 a pink loop ring flown straight through pays too.
+  if (env.loopRingAt) { const lr = env.loopRingAt(s.x, s.y, s.d); if (lr) payLoopRing(s, lr); }
   // Through an arch opening or a ring: once each per flight.
   if (env.crossings) {
     _cross.length = 0;
