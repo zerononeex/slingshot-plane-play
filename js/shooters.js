@@ -80,6 +80,7 @@ function closest2(px0, py0, pd0, px1, py1, pd1, p, t0, t1) {
 
 // Apply THE HIT RULE to the flight (and a boulder's sideways knock). Returns true if it landed.
 export function applyHit(s, p, P) {
+  if (P.guard) { s.hitGrace = HIT.grace; s.events.push('guard'); return false; } // v2.2 KNIGHT'S GUARD: no effect
   s.speed = Math.max(P.minAirSpeed, s.speed * HIT.keep);
   s.hitGrace = HIT.grace;
   s.shake = Math.max(s.shake ?? 0, HIT.shake);

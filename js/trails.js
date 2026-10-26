@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 const SEG = 40;            // ribbon points per trail (fixed budget)
 const SAMPLE = 0.012;      // s of flight per point → a trail is ~0.5 s long whatever the frame rate
+const GOLD = new THREE.Color(0xffc93a);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 
 // Fade-in above ~25 m/s, stronger with speed; BOOST flares it.
@@ -28,8 +29,8 @@ function ribbon(scene) {
 
 export function createTrails(scene) {
   const L = ribbon(scene), R = ribbon(scene);
-  const tint = new THREE.Color(1, 1, 1);
-  let width = 0.07, keep = 1;
+  const base = new THREE.Color(1, 1, 1), tint = new THREE.Color(1, 1, 1);
+  let width = 0.07, keepBase = 1, keep = 1;
 
   let acc = 0;
   function push(r, p) {
@@ -59,11 +60,13 @@ export function createTrails(scene) {
     // cyan LIGHT RIBBON). accent: the plane's stripe colour.
     setLook(look, accent) {
       const LOOK_TINT = { runner: 0x00e5ff, ship: 0x8fd0ff, jet: 0xffe0b0, ember: 0xff8a2a, leaf: 0x7fe07a, cloud: 0xffffff, knight: 0xffd23f, starhound: 0x5fb8ff, kestrel: 0xff6a4a }; // v1.3: ember / leaf / cloud; v1.5: the Sky Knight's gold pennant; v1.6: the Starhound's blue glow
-      tint.set(LOOK_TINT[look] ?? 0xffffff).lerp(new THREE.Color(accent), look === 'ship' ? 0.1 : 0.12);
+      base.set(LOOK_TINT[look] ?? 0xffffff).lerp(new THREE.Color(accent), look === 'ship' ? 0.1 : 0.12);
+      tint.copy(base);
       width = look === 'runner' ? 0.16 : look === 'cloud' || look === 'knight' || look === 'starhound' || look === 'kestrel' ? 0.12 : look === 'jet' ? 0.05 : 0.07;
-      keep = look === 'runner' ? 1.8 : look === 'jet' ? 0.55 : 1;
+      keepBase = keep = look === 'runner' ? 1.8 : look === 'jet' ? 0.55 : 1;
     },
-    update(left, right, speed, boosting, dt = SAMPLE, camPos = null) {
+    // v2.2 intensity (0 → 1, the speed-feel value): faint at cruise, brighter and longer with it; gold while boosting.
+    update(left, right, speed, boosting, dt = SAMPLE, camPos = null, intensity = 0) {
       if (camPos) cam.copy(camPos);
       if (!L.has) { L.last.copy(left); R.last.copy(right); L.has = R.has = true; }
       acc += dt;
@@ -74,7 +77,9 @@ export function createTrails(scene) {
       if (!L.n) return;
       // The newest point always sits on the wingtip.
       L.pts[0].copy(left); R.pts[0].copy(right);
-      const k = trailStrength(speed, boosting) * (boosting ? 1.25 : 1);
+      keep = keepBase * (1 + 1.2 * intensity);
+      tint.copy(base).lerp(GOLD, boosting ? 0.85 : 0);
+      const k = Math.min(1, trailStrength(speed, boosting) * (boosting ? 1.25 : 1) * (1 + 1.5 * intensity));
       write(L, k); write(R, k);
       L.mesh.visible = R.mesh.visible = k > 0.001;
     },

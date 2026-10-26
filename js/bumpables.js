@@ -34,8 +34,8 @@ export const CAST = {
   skydiver:       { name: 'SKYDIVER', reward: 10, r: 1.6, y: 14, leave: 'chute', sound: 'boing' },
 };
 
-// The results line: "Bumps: N (+M coins)" (null when there were none).
-export function bumpSummary(bumps) {
-  const coins = bumps.reduce((a, b) => a + CAST[b.type].reward, 0);
+// The results line: "Bumps: N (+M coins)" (null when there were none). mul: v2.2 SNACK MASTER's × 2.
+export function bumpSummary(bumps, mul = 1) {
+  const coins = bumps.reduce((a, b) => a + CAST[b.type].reward * mul, 0);
   return bumps.length ? { n: bumps.length, coins, text: `Bumps: ${bumps.length} (+${coins} coins)` } : null;
 }

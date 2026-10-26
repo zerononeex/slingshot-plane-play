@@ -46,21 +46,23 @@ export const createShapeRun = () => ({ used: new Set(), chain: 0, lastT: -Infini
 export const shapeGain = (kind, cap = 0) => Math.max(SHAPES[kind].boost, Math.round(SHAPES[kind].pct * cap));
 
 // The boost for a pass at time t (and the chain step it makes): base + 2 per chain step, capped at × 4.
-export function chainedBoost(run, kind, t, cap = 0) {
-  run.chain = t - run.lastT <= CHAIN_WINDOW ? Math.min(CHAIN_CAP, run.chain + 1) : 1;
+// v2.2 abilities (the flight params): SHAPE CHARGE gain × 1.5 (shapeGainMul); SHAPE HUNTER window 10 s, cap × 6.
+export function chainedBoost(run, kind, t, cap = 0, ab = {}) {
+  run.chain = t - run.lastT <= (ab.chainWindow ?? CHAIN_WINDOW) ? Math.min(ab.chainCap ?? CHAIN_CAP, run.chain + 1) : 1;
   run.lastT = t;
-  return shapeGain(kind, cap) + CHAIN_STEP * (run.chain - 1);
+  const gain = shapeGain(kind, cap) + CHAIN_STEP * (run.chain - 1);
+  return ab.shapeGainMul ? Math.round(gain * ab.shapeGainMul) : gain;
 }
 
 // Step: returns events { type: 'boost', index, kind, gain, chain }. Only the plane itself, flying.
-export function stepShapeRun(run, shapes, ys, d0, x1, y1, d1, t, flying, scale = 1, out = [], cap = 0) {
+export function stepShapeRun(run, shapes, ys, d0, x1, y1, d1, t, flying, scale = 1, out = [], cap = 0, ab = {}) {
   if (!flying || !shapes) return out;
-  if (t - run.lastT > CHAIN_WINDOW) run.chain = 0; // the chain resets after 6 s without a shape
+  if (t - run.lastT > (ab.chainWindow ?? CHAIN_WINDOW)) run.chain = 0; // the chain resets after 6 s without a shape
   for (let i = 0; i < shapes.length; i++) {
     const sh = shapes[i];
     if (run.used.has(i) || !crossesShape(sh, ys[i], d0, x1, y1, d1, scale)) continue;
     run.used.add(i);
-    const gain = chainedBoost(run, sh.kind, t, cap);
+    const gain = chainedBoost(run, sh.kind, t, cap, ab);
     out.push({ type: 'boost', index: i, kind: sh.kind, gain, chain: run.chain });
   }
   return out;
@@ -217,4 +219,27 @@ for (const id of Object.keys(SHAPE_SPOTS)) {
   const extra = setPiecesFor(id).filter((p) => p.kind === 'shape').map((p) => S(p.d, p.x, p.y, p.shape, 'long run'));
   SHAPE_SPOTS[id] = [...SHAPE_SPOTS[id], ...extra].sort((a, b) => a.at - b.at);
 }
+// v2.2 MORE BOOST SHAPES (owner 2026-10-25: "add more boost shapes throughout the stages"): ≈ + 50 % in every stage,
+// spread early → late over the completion zone on each stage's own racing / detour lines (x, height as its open-line
+// frames). Authored with tools-side validation: placementProblem, clear of the pockets' passages and their audit
+// lanes, the key-ring runways + Loop Door doorways, tilt sectors, interiors, caves, rows, wild flyers, shooters,
+// Neon Void's walls / lasers, the goal gates and every other frame; inside Z. [at, x, height, kind]
+const MORE_SHAPES_V22 = {
+  plains: [[342, 6, 12, 'circle'], [636, 0, 14, 'square'], [1050, 0, 12, 'oval'], [1344, 10, 12, 'rectangle'], [1498, 6, 12, 'triangle']],
+  canyon: [[418, 0, 12, 'circle'], [954, -12, 14, 'square'], [1490, -10, 12, 'oval'], [2046, 0, 12, 'rectangle'], [2222, 0, 14, 'triangle']],
+  city: [[497, 0, 12, 'circle'], [1100, -12, 14, 'square'], [1673, -10, 12, 'oval'], [2247, 0, 14, 'rectangle'], [2820, 12, 14, 'triangle'], [3243, 0, 12, 'circle']],
+  snow: [[628, 0, 12, 'circle'], [1365, 10, 12, 'square'], [2082, 0, 14, 'oval'], [2808, 12, 14, 'rectangle'], [3525, 0, 12, 'triangle'], [4112, 0, 14, 'circle']],
+  desert: [[689, 0, 14, 'circle'], [1466, -10, 12, 'square'], [2163, 0, 14, 'oval'], [2940, 0, 12, 'rectangle'], [3677, 0, 14, 'triangle'], [4434, 0, 12, 'circle'], [4981, -8, 14, 'square']],
+  ocean: [[850, 0, 14, 'circle'], [1710, 10, 12, 'square'], [2550, -8, 14, 'oval'], [3430, -6, 14, 'rectangle'], [4290, 0, 12, 'triangle'], [5120, 12, 14, 'circle'], [5830, 0, 12, 'square']],
+  space: [[1078, -12, 14, 'circle'], [2063, 6, 12, 'square'], [3079, 0, 14, 'oval'], [3994, 6, 14, 'rectangle'], [4820, 0, 12, 'triangle'], [5846, 0, 14, 'circle'], [6811, 0, 12, 'square'], [7767, 0, 14, 'oval'], [8482, 0, 14, 'rectangle']],
+  jetstream: [[1753, 0, 14, 'circle'], [3235, 0, 14, 'square'], [4647, 0, 12, 'oval'], [6119, 6, 14, 'rectangle'], [7651, 10, 12, 'triangle'], [9123, 0, 14, 'circle'], [10585, 0, 14, 'square'], [11977, -10, 12, 'oval'], [13539, 0, 14, 'rectangle'], [14641, 0, 14, 'triangle']],
+  volcano: [[2080, 0, 14, 'circle'], [4590, 0, 14, 'square'], [7170, 0, 14, 'oval'], [9720, 0, 14, 'rectangle']],
+  jungle: [[2044, 0, 14, 'circle'], [4452, 0, 14, 'square'], [6860, -8, 14, 'oval'], [9268, -8, 26, 'rectangle'], [11676, -12, 14, 'triangle']],
+  skyislands: [[2336, -12, 14, 'circle'], [4988, 0, 14, 'square'], [7840, 0, 14, 'oval'], [10522, 0, 14, 'rectangle'], [13344, 0, 14, 'triangle']],
+  neonvoid: [[4680, 6, 14, 'triangle'], [9416, 0, 14, 'rectangle'], [14072, 0, 14, 'circle'], [18917, 0, 14, 'triangle'], [23613, 0, 14, 'rectangle'], [28358, 0, 14, 'oval'], [33094, 0, 14, 'square']],
+  dragonwar: [[6135, 6, 46, 'circle'], [12815, 0, 50, 'square'], [19556, 6, 44, 'oval'], [26256, 0, 48, 'rectangle'], [33027, -6, 46, 'triangle'], [39657, 0, 50, 'circle']],
+  starfox: [[8500, 0, 46, 'circle'], [17120, -6, 50, 'square'], [24770, 0, 44, 'oval'], [34300, 0, 48, 'rectangle'], [42940, -6, 46, 'triangle'], [51500, 0, 50, 'circle'], [60300, 0, 44, 'square']],
+  starwars: [[8435, 0, 46, 'circle'], [17120, -6, 50, 'square'], [25625, 6, 44, 'oval'], [34221, 0, 48, 'rectangle'], [42776, -6, 46, 'triangle'], [51361, 0, 50, 'circle'], [59696, -6, 44, 'square']],
+};
+for (const [id, list] of Object.entries(MORE_SHAPES_V22)) SHAPE_SPOTS[id] = [...SHAPE_SPOTS[id], ...list.map(([at, x, h, kind]) => S(at, x, h, kind, 'more shapes'))].sort((a, b) => a.at - b.at);
 export const shapesFor = (stageId) => SHAPE_SPOTS[stageId] ?? null;

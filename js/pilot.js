@@ -76,7 +76,7 @@ export function pilotGrade(p, sinkBonus = 0) {
   const g = gradeTouchdown(p.touch.vy, p.touch.gradeDeg, sinkBonus);
   return p.touch.water && (g === 'super' || g === 'perfect') ? 'good' : g;
 }
-// The LANDING row an ejection pays: SUPER PERFECT +500, PERFECT +100, safe +5, rough 0.
+// The LANDING row an ejection pays (v2.2: SUPER PERFECT +1000, PERFECT +200, safe +5, rough 0 — the table's numbers).
 export const pilotPayout = (grade) => LANDING[{ super: 'pilotSuper', perfect: 'pilotPerfect', good: 'pilot' }[grade] ?? 'pilotRough'];
 
 // ---- the eject rules for one flight (pure, so they can be tested) ----

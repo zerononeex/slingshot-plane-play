@@ -8,6 +8,7 @@
 // (secrets at their own distance, once: 1–4 in the first lap, v1.0's secret 5 far out).
 
 import { FLYERS } from './flyers.js';
+import { NATIVE_ABILITY } from './abilities.js';
 import { ARCS, ARC_LEN, DW_LAP, zoneTint } from './dragonwar.js';
 import { SF_ARCS, SF_ARC_LEN, SF_BLEND, SF_LAP, sfZoneTint, TRANSITIONS } from './starfox.js';
 import { SW_ARCS, SW_ARC_LEN, SW_BLEND, SW_LAP, swZoneTint, SW_TRANSITIONS } from './starwars.js';
@@ -469,7 +470,7 @@ export const EXTRA_PLANES = {
     id: 'biplane', name: 'Barnstormer', kind: 'Stunt biplane', unlock: { world: 'canyon' },
     banner: 'NEW PLANE: BARNSTORMER BIPLANE!',
     plane: { name: 'Barnstormer', body: 0xd8262c, wing: 0xfff1d6, accent: 0x2b3a55, wingScale: 1.0, floats: false, biplane: true,
-      caps: [34, 40, 47, 54, 62, 66, 70, 75, 80, 85], decayMul: 1.05, glideMul: 1, liftMul: 1.15, stallSpeed: 8, deepPutter: true, balloonMul: 0.6 },
+      caps: [34, 40, 47, 54, 62, 66, 70, 75, 80, 85], decayMul: 1.05, glideMul: 1, liftMul: 1.15, stallSpeed: 8, deepPutter: true, balloonMul: 0.6, ability: 'magnet' },
   },
 };
 export const EXTRA_PLANE_ORDER = ['biplane'];
@@ -1024,3 +1025,6 @@ STAGES.starwars = {
   ],
   patterns: patterns(['ditchDip', 'craterDip']),
 };
+
+// v2.2 PLANE ABILITIES: every world's own plane names its ability in its data (abilities.js NATIVE_ABILITY).
+for (const id of STAGE_ORDER) STAGES[id].plane.ability = NATIVE_ABILITY[id];

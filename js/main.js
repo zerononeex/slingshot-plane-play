@@ -4,8 +4,13 @@ import * as THREE from 'three';
 import {
   PLANE_TUNE, LAUNCH, FLIGHT, PARTS, PART_PHYSICS, RENDER, COINS, PILOT, LANDING, PAINTS, EJECT,
 } from './config.js';
-import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects, toggleTilt, tryLoop, tryRoll, pickupRadiusFor, SKILLS, isGoodLanding } from './physics.js';
-import { speedFov, overCap, speedReadout } from './speedfeel.js';
+import { createFlight, stepFlight, launchSpeedFor, partEffects, toggleTilt, tryLoop, tryRoll, pickupRadiusFor, SKILLS, isGoodLanding } from './physics.js';
+import { ABILITIES, abilitiesOf, abilityLines } from './abilities.js';
+import { flyLine, isNative, upgradeHeader, cardBadge } from './planelabels.js';
+import { speedFov, speedReadout, speedIntensity, easeIntensity, vignette } from './speedfeel.js';
+import { describe, chipDescription, HOLD_MS } from './describe.js';
+import { flightParamsFor, statBars, movedBars, BARS, BAR_LABELS } from './statbars.js';
+import { coinRegen, COIN_REGEN } from './regen.js';
 import { stepPilot, tryEject, runDistance, runOver, pilotParams, pilotGrade, pilotPayout } from './pilot.js';
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
@@ -19,7 +24,7 @@ import {
   nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, runPayout, newSecrets,
 } from './economy.js';
 import { loadSave, writeSave, getStage, setStage, isUnlocked, selectStage, setPrefs, sensitivityGain, nextSteerSetting, steerSetting, steerInput } from './save.js';
-import { planeFor, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
+import { planeFor, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord } from './planes.js';
 import { buildPlane } from './plane.js';
 import { createTurntable } from './hangarview.js';
 import { createHangar } from './hangar.js';
@@ -167,6 +172,9 @@ function refreshTitle() {
   updateCarousel();
   renderHangar();
   $('fly-label').textContent = lockedView ? '🔒 LOCKED' : 'FLY!';
+  const pl = $('plane-line'); // v2.2: whose plane this is
+  pl.textContent = lockedView ? '' : flyLine(stageId, planeId);
+  pl.classList.toggle('native', isNative(stageId, planeId));
   $('btn-fly').disabled = lockedView;
   applyLooks();
 }
@@ -288,7 +296,8 @@ function onCarouselScroll() {
 const CHIP_LOOK = { band: ['➰', 'ELASTIC'], engine: ['🌀', 'PROPELLER'], leftWing: ['◀', 'LEFT WING'], rightWing: ['▶', 'RIGHT WING'], tail: ['▲', 'TAIL'] };
 function renderHangar() {
   const borrowed = planeId !== stageId;
-  $('hangar-label').textContent = borrowed ? `Upgrading: ${pstage.plane.name} (${STAGES[walletOf(save, stageId)].name} wallet: ${rec.coins})` : 'Hangar';
+  const hdr = upgradeHeader(stageId, planeId, rec.coins);
+  $('hangar-label').textContent = borrowed ? `${hdr.title} · ${hdr.sub}` : 'Hangar';
   const box = $('hangar-chips');
   box.textContent = '';
   for (const c of hangarChips(save, stageId)) {
@@ -318,7 +327,7 @@ function renderHangar() {
       sfx.coin();
       refreshTitle();
     });
-    box.appendChild(b);
+    box.appendChild(holdable(b, chipDescription(c.id)));
   }
 }
 
@@ -364,11 +373,29 @@ function openHangar() {
   showScreen('showroom');
   requestAnimationFrame(() => $('sr-lineup').querySelector('.previewed')?.scrollIntoView({ inline: 'center', block: 'nearest' }));
 }
+// v2.2 PLANE STAT BARS: render a record's five bars into a panel; the bars that moved since its last reading glow.
+const barsShown = new Map(); // panel id → { key (whose record), bars }
+function renderBars(id, key, rec, entry, modifiers) {
+  const box = $(id), bars = statBars(rec, entry, modifiers), last = barsShown.get(id);
+  if (!box.children.length) for (const k of BARS) box.insertAdjacentHTML('beforeend', `<span class="sb-label">${BAR_LABELS[k]}</span><span class="sb-track" data-bar="${k}"><span class="sb-fill"></span></span>`);
+  const moved = last && last.key === key ? movedBars(last.bars, bars) : [];
+  for (const k of BARS) {
+    const tr = box.querySelector(`[data-bar="${k}"]`);
+    tr.firstElementChild.style.width = `${Math.round(bars[k] * 1000) / 10}%`;
+    if (moved.includes(k)) { tr.classList.remove('moved'); void tr.offsetWidth; tr.classList.add('moved'); }
+  }
+  barsShown.set(id, { key, bars });
+}
+
 // The status (name · level + top speed in this world · CURRENT / READY / what unlocks it) and the lineup.
 function renderShowroom() {
   const st = hangar.status();
+  renderBars('sr-bars', hangar.previewId, getStage(save, hangar.previewId), planeEntry(hangar.previewId), stage.modifiers); // the previewed plane's own record, this world
   $('sr-name').textContent = st.name;
   $('sr-stats').textContent = `Lv ${st.level} · top speed ${Math.round(st.topSpeed * KMH)} km/h in ${stage.name}`;
+  const abBox = $('sr-ability'); // v2.2: "ABILITY: {NAME} — {line}" (locked planes too)
+  abBox.textContent = '';
+  for (const line of abilityLines(planeEntry(hangar.previewId).plane)) { const sp = document.createElement('span'); sp.textContent = line; abBox.appendChild(sp); }
   const chip = $('sr-state');
   chip.className = `sr-state ${st.state}`;
   chip.textContent = st.state === 'current' ? 'CURRENT' : st.state === 'ready' ? 'READY' : `🔒 ${st.requirement}`;
@@ -379,10 +406,10 @@ function renderShowroom() {
   box.textContent = '';
   for (const c of hangar.cards()) {
     const def = planeEntry(c.id).plane, b = document.createElement('button');
-    b.className = `sr-card ${c.state}${c.id === hangar.previewId ? ' previewed' : ''}`;
+    b.className = `sr-card ${c.state}${c.id === hangar.previewId ? ' previewed' : ''}${isNative(stageId, c.id) ? ' native' : ''}`;
     b.dataset.plane = c.id;
     const sub = c.state === 'current' ? '✔ CURRENT' : c.state === 'ready' ? (c.id === stageId ? 'this world\'s own' : 'ready') : c.requirement;
-    b.innerHTML = `<span class="sc-swatch" style="background:linear-gradient(90deg, ${hex(def.body)} 50%, ${hex(def.wing)} 50%)"></span><span class="sc-name">${c.name}</span><span class="sc-sub">${sub}</span>`;
+    b.innerHTML = `<span class="sc-swatch" style="background:linear-gradient(90deg, ${hex(def.body)} 50%, ${hex(def.wing)} 50%)"></span><span class="sc-name">${c.name}</span><span class="sc-badge">${cardBadge(stageId, c.id)}</span><span class="sc-ab">⚡ ${abilitiesOf(def).map((a) => ABILITIES[a].name).join(' + ')}</span><span class="sc-sub">${sub}</span>`;
     b.addEventListener('click', () => { hangar.preview(c.id); renderShowroom(); }); // PREVIEW ONLY
     box.appendChild(b);
   }
@@ -416,6 +443,30 @@ function pipsHtml(level, min, max, pulseNext = false) {
 const coinBtnMaxed = '<span class="coin-btn">★ MAXED</span>';
 const coinBtn = (cost) => `<span class="coin-btn"><span class="coin-dot"></span>${cost}</span>`;
 
+// v2.2 PRESS-AND-HOLD: a press held ≥ HOLD_MS shows what the line does in a tooltip (fixed, so nothing shifts);
+// releasing hides it, and a held press NEVER buys. A short tap buys exactly as before. Pointer events still reach a
+// disabled (unaffordable / maxed) card, so its description shows too.
+let holdTimer = 0;
+function showTip(el, text) {
+  const tip = $('hold-tip'), r = el.getBoundingClientRect();
+  tip.textContent = text;
+  tip.hidden = false;
+  const t = tip.getBoundingClientRect();
+  const left = Math.min(window.innerWidth - t.width - 8, Math.max(8, r.left + r.width / 2 - t.width / 2));
+  const top = r.top - t.height - 10 >= 8 ? r.top - t.height - 10 : Math.min(window.innerHeight - t.height - 8, r.bottom + 10);
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
+}
+function hideTip() { clearTimeout(holdTimer); $('hold-tip').hidden = true; }
+function holdable(el, text) {
+  if (!text) return el;
+  el.addEventListener('pointerdown', () => { hideTip(); el.dataset.held = ''; holdTimer = setTimeout(() => { el.dataset.held = '1'; showTip(el, text); }, HOLD_MS); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, hideTip);
+  el.addEventListener('click', (e) => { if (el.dataset.held === '1') { el.dataset.held = ''; e.preventDefault(); e.stopImmediatePropagation(); } }, true); // a hold is not a tap
+  el.addEventListener('contextmenu', (e) => e.preventDefault()); // a long press must not open the browser's menu
+  return el;
+}
+
 // state: buyable | poor (can't afford yet) | maxed | locked (needs an earlier part)
 function card({ key, icon, iconBg, name, pips = '', effect, price, state, onBuy }) {
   const b = document.createElement('button');
@@ -425,7 +476,7 @@ function card({ key, icon, iconBg, name, pips = '', effect, price, state, onBuy 
   b.innerHTML = `<span class="icon" style="${iconBg ? `background:${iconBg}` : ''}">${icon}</span>
     <span class="name">${name}</span><span class="effect">${effect}</span><span class="price">${pips}${price}</span>`;
   b.addEventListener('click', () => { lastBought = key; onBuy(); });
-  return b;
+  return holdable(b, describe(key));
 }
 let lastBought = null; // which card/swatch gets the happy bounce after the screen rebuilds
 
@@ -509,7 +560,10 @@ function showWallet(coins) {
 function refreshShop() {
   applyTint();
   showWallet(rec.coins);
-  $('shop-for').textContent = `${planeId !== stageId ? 'Upgrading: ' : ''}${pstage.plane.name} · ${pstage.home ? `${pstage.name} plane` : pstage.name}`;
+  renderBars('shop-bars', planeId, rec, pstage, stage.modifiers); // v2.2: the record on screen; a purchase lights the bars it moved
+  const hdr = upgradeHeader(stageId, planeId, rec.coins); // v2.2: the plane being upgraded + the wallet that pays
+  $('shop-for').textContent = hdr.title;
+  $('shop-sub').textContent = hdr.sub;
   const grid = $('shop-grid');
   grid.textContent = '';
   for (const item of SHOP_ITEMS) grid.appendChild(trackCard(item));
@@ -579,7 +633,7 @@ function refreshShop() {
     const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : p.dragonwings ? 'dragon-dot' : p.starfire ? 'starfire-dot' : p.hyperdrive ? 'hyperdrive-dot' : '';
     b.innerHTML = `<span class="dot ${fancy}" style="${fancy ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
     b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id, planeId)); });
-    paints.appendChild(b);
+    paints.appendChild(holdable(b, describe(`paint:${p.id}`)));
   }
   applyLooks();
 }
@@ -602,6 +656,7 @@ let flight = null, params = null, effects = null, lo = null;
 let pilot = null, ejected = false, pilotDizzy = false, pilotChuteT = 0;
 let session = { ownsSeat: false, ejected: false, pilot: null };
 let runCoins = 0, landingBonus = 0, secretsFound = [], reached = new Set();
+let regenCoins = 0; // v2.2 BOOST REGEN: the flight's coin count the tank last refilled at
 let flop = false, endTimer = 0, crashTimer = 0, pull = 0, tumbleSpin = 0, acc = 0;
 let boostHeld = false, boostKey = false, flightSeed = 1, bonkWobble = 0;
 let bumpsRun = []; // this flight's bumps ({ type }) for the results line
@@ -674,13 +729,14 @@ function stepShapes(d0) {
   const shapes = shapesFor(stageId);
   if (!shapes) return;
   shapeEvents.length = 0;
-  stepShapeRun(shapeRun, shapes, shapeYs, d0, flight.x, flight.y, flight.d, flight.time, !ejected && !flight.ended, shapeScale(stageId), shapeEvents, lo.band.launchMax); // v1.9: scaled by the plane's current top-speed cap
+  stepShapeRun(shapeRun, shapes, shapeYs, d0, flight.x, flight.y, flight.d, flight.time, !ejected && !flight.ended, shapeScale(stageId), shapeEvents, lo.band.launchMax, params); // v1.9: scaled by the plane's current top-speed cap (v2.2: + its ability)
   for (const ev of shapeEvents) {
     flight.speed += ev.gain; // pure velocity: an instant burst along the flight direction
     shapesView.setUsed(ev.index);
     plane.root.getWorldPosition(_v);
     fx.sparkleBurst(_v.x, _v.y + 0.5, _v.z);
     sfx.shapeBoost(ev.chain);
+    pulseAge = 0; // v2.2: a Boost Shape fires a full-intensity speed-feel pulse
     banner(ev.chain > 1 ? `BOOST CHAIN ×${ev.chain}! +${ev.gain}` : `BOOST! ${SHAPES[ev.kind].label} +${ev.gain}`, 1.6);
   }
 }
@@ -741,8 +797,7 @@ function startRun() {
   newWorld();
   applyLooks();
   effects = partEffects(rec.parts, PART_PHYSICS);
-  params = flightParams(FLIGHT, lo.engine, effects, { wheels: lo.wheels, band: lo.band, plane: pstage.plane, modifiers: stage.modifiers,
-    fun: { brakes: funLevel(rec, 'brakes'), balloons: funLevel(rec, 'balloons') }, handling: handlingLevel(rec) }); // v1.0 fun lines (0 = not owned); v1.9 HANDLING
+  params = flightParamsFor(rec, pstage, stage.modifiers); // the loadout, parts, fun lines (v1.0) and HANDLING (v1.9) — the same build the stat bars read (v2.2)
   // MEGA CHUTE: the parachute reads the chute level of the record the ejector lives in (as today).
   chutePilot = pilotParams(PILOT, stage.modifiers, { sinkMul: chuteSinkMul(funLevel(rec, 'chute')), steerMul: chuteSteerMul(funLevel(rec, 'chute')) });
   brakeHeld = brakeKey = false; hornCool = 0; radarT = 0;
@@ -752,7 +807,7 @@ function startRun() {
   params.canDive = skills.has('dive');
   flight = null;
   camera.fov = baseFov; camera.updateProjectionMatrix(); // the speed kick starts from rest
-  runCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set(); bumpsRun = []; stashReached = new Set();
+  runCoins = 0; regenCoins = 0; landingBonus = 0; secretsFound = []; reached = new Set(); bumpsRun = []; stashReached = new Set();
   world.setPocketLook(null);
   megaArc = -1; spectaclesSeen.clear();
   flop = false; pull = 0; endTimer = 0; crashTimer = 0; paused = false; tumbleSpin = 0;
@@ -818,7 +873,7 @@ function launch() {
     speed, y: p.y, d: p.d,
     pitchDeg: flop ? 0 : LAUNCH.pitchDeg + lo.ramp.angleDeg,
     momentum: flop ? 0 : lo.band.momentum,
-    fuel: lo.tank.seconds,
+    fuel: lo.tank.seconds * (params.tankMul ?? 1), // v2.2 BIG TANK
     hold: flop ? 0 : FLIGHT.launchHold,
   });
   mode = 'fly';
@@ -832,7 +887,7 @@ function launch() {
   // v0.7: a little launch dust, and the trails start fresh.
   plane.root.getWorldPosition(_v);
   fx.dust(_v.x, _v.y - 0.5, _v.z + 1, DUST[stageId] ?? 0xd8c8a8, 8, 0.6);
-  trails.reset();
+  trails.reset(); pulseAge = Infinity;
   trails.setLook(plane.trailLook, plane.accent);
 }
 
@@ -872,7 +927,7 @@ function finishRun() {
   if (ejected) $('res-glide').textContent = Math.round(pilot.d - pilot.ejectD);
   const verdict = ejected ? pilotPayout(pilotGrade(pilot, params.landingSinkBonus ?? 0)) : LANDING[flight.landing ?? 'rough'];
   $('res-verdict').textContent = verdict.bonus ? `${verdict.text} +${verdict.bonus}` : verdict.text;
-  const bs = bumpSummary(bumpsRun);
+  const bs = bumpSummary(bumpsRun, params.smashMul ?? 1);
   $('res-bumps').hidden = !bs;
   if (bs) $('res-bumps').textContent = bs.text;
   const gl = goalRun ? goalLines(goalRun) : { gates: null, complete: null }; // v0.9 STAGE GOALS
@@ -1438,15 +1493,24 @@ $('xfer-show').addEventListener('click', () => { // tap to skip (the numbers are
 const DUST = { plains: 0xcdb98e, canyon: 0xd99a68, city: 0xc4c4c4, snow: 0xffffff, desert: 0xe8c98a, ocean: 0xeadcb0, space: 0xc2c6d0, jetstream: 0xf4f7fc, volcano: 0x6a5a55, jungle: 0x8a7a5a, skyislands: 0xf4f7fc, neonvoid: 0x00e5ff, dragonwar: 0xdfe6ee, starfox: 0xcfe0ff, starwars: 0xe8d8b0 };
 const trails = createTrails(scene), streaks = createStreaks(scene, camera);
 const _tl = new THREE.Vector3(), _tr = new THREE.Vector3();
+// v2.2 SPEED-FEEL KIT: one eased intensity (0 at the cap → 1 at the boost ceiling; a Boost Shape pulse holds it
+// at 1 for ~0.8 s) drives the FOV, the speed lines, the ribbon trail and the edge vignette.
+let feel = 0, pulseAge = Infinity, vigShown = -1;
+const vigEl = $('speed-vignette');
 function speedFx(dt) {
-  if (mode === 'fly' && flight && !flight.ended && !ejected) {
+  pulseAge += dt;
+  const live = mode === 'fly' && flight && !flight.ended && !ejected;
+  feel = easeIntensity(feel, live ? speedIntensity(flight.speed, params.topSpeed, params.boostCap, pulseAge) : 0, dt);
+  if (live) {
     plane.trailPoints(_tl, _tr);
-    trails.update(_tl, _tr, flight.speed, flight.boosting, dt, camera.position);
-    streaks.update(flight.speed, dt, overCap(flight.speed, params.topSpeed, params.boostCap)); // v2.1: harder past the cap
+    trails.update(_tl, _tr, flight.speed, flight.boosting, dt, camera.position, feel);
+    streaks.update(flight.speed, dt, feel); // v2.1: harder past the cap
   } else {
     trails.update(_tl, _tr, 0, false, dt);
     streaks.hide();
   }
+  const v = vignette(feel), q = Math.round(v.opacity * 100);
+  if (q !== vigShown) { vigShown = q; vigEl.style.setProperty('--vig-o', (q / 100).toFixed(2)); vigEl.style.setProperty('--vig-in', `${v.inner.toFixed(1)}%`); }
 }
 
 // ---------- visuals ----------
@@ -1694,7 +1758,7 @@ function sweepLoop(L) {
 function collect(pos, opts) {
   const res = stepCoins(world.activeCoins(), pos, STEP, opts);
   if (res.pulled) plane.tractor();
-  if (res.collected) { runCoins += res.collected; sfx.coin(); }
+  if (res.collected) { runCoins += res.collected * (pos === flight ? params.coinMul ?? 1 : 1); sfx.coin(); } // v2.2 DOUBLE COINS (the plane's own grabs)
   if (res.pulled && !ejected) magnetSpark(0xfff3b0);
   for (const st of reachStashes(terrain, world.activeCoins(), pos, stashReached)) { // a sub-area's BONUS STASH
     runCoins += st.coins;
@@ -1756,7 +1820,7 @@ function stepGame(dt) {
     stepFlight(flight, ejected ? { x: 0, y: -0.4, boost: false } : steerIn, STEP, params, terrain);
     stepGoals();
     if (!ejected) {
-      collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: pickupRadiusFor(flight, COINS.pickupRadius), speed: flight.speed });
+      collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: Math.max(pickupRadiusFor(flight, COINS.pickupRadius), params.snapRadius ?? 0), speed: flight.speed }); // v2.2 COIN MAGNET: ≤ 12 m snaps in
     } else {
       const wasLanded = pilot.landed;
       stepPilot(pilot, steerIn, STEP, chutePilot, terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
@@ -1795,7 +1859,7 @@ function stepGame(dt) {
       bonkWobble = 0.6;
     }
     if (ev === 'scrape') sfx.scrape();
-    if (isGoodLanding(ev) && !ejected) { // judged once (first contact): SUPER PERFECT's +500 replaces PERFECT's +10
+    if (isGoodLanding(ev) && !ejected) { // judged once (first contact): SUPER PERFECT's bonus replaces PERFECT's (amounts: the LANDING table)
       landingBonus += LANDING[ev].bonus;
       banner(`${LANDING[ev].text} +${LANDING[ev].bonus}`, 2.2);
       sfx.cheer();
@@ -1830,6 +1894,9 @@ function stepGame(dt) {
     if (ev === 'devil') { banner('WHOOSH! DUST DEVIL BOOST!', 1.4); sfx.whoosh(); }
     if (ev === 'updraft') sfx.whoosh();
     // v1.5 THE MEGA-STAGES (no damage, ever: a hit is a shake + 1 % speed; a roll dodges)
+    if (ev === 'shield') { puffText('SHIELD!'); sfx.slot(); } // v2.2 SAND SHIELD: the first bonk bounced off
+    if (ev === 'guard') { puffText('GUARD!'); sfx.slot(); }   // v2.2 KNIGHT'S GUARD: a shot bounced off
+    if (ev === 'burn') { runCoins += params.fire.coins; puffText(`🔥 +${params.fire.coins}`); plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y + 0.5, _v.z - 12, 0xff6a1a, 0xffd23f); } // v2.2 FIRE BREATH
     if (ev === 'hit') { sfx.fireHit(); plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y + 0.3, _v.z - 1, 0xff8a1f, 0xffd23f); bonkWobble = Math.max(bonkWobble, 0.3); }
     if (ev === 'boulderHit') puffText('BOULDER!');
     if (ev === 'dodge') { sfx.dodge(); puffText('DODGED!'); }
@@ -1859,10 +1926,10 @@ function stepGame(dt) {
   for (const bp of flight.bumps) {
     world.bump(bp.b.id, bp.lap);
     if (ejected) continue;
-    const c = bp.b.cast;
-    runCoins += c.reward;
+    const c = bp.b.cast, reward = c.reward * (params.smashMul ?? 1); // v2.2 SNACK MASTER × 2
+    runCoins += reward;
     bumpsRun.push({ type: bp.b.type });
-    bumpFx(c.reward);
+    bumpFx(reward);
     sfx[c.sound]?.();
     plane.root.getWorldPosition(_v);
     const [c1, c2] = c.leave === 'crack' ? [0xfff3b0, 0xc9d0da] : c.leave === 'pop3' || c.leave === 'popChute' ? [0xff4fa3, 0xffe14d] : [0xffffff, 0xe8e0d0];
@@ -1889,7 +1956,7 @@ function stepGame(dt) {
     bank += dir * SWING.bankDeg * DEG * Math.sin(Math.PI * k);
     swingKick = SWING.fovKick * Math.sin(Math.PI * k);
   }
-  const fovWant = speedFov(baseFov, flight.speed, params.topSpeed, params.boostCap, swingKick, !!flight.ended);
+  const fovWant = speedFov(baseFov, flight.speed, params.topSpeed, params.boostCap, swingKick, !!flight.ended, feel);
   if (Math.abs(camera.fov - fovWant) > 0.01) { camera.fov += (fovWant - camera.fov) * Math.min(1, (swingKick ? 14 : 5) * dt); camera.updateProjectionMatrix(); }                                         // TILT: knife-edge (left wing down)
   if (flight.rollT > 0) bank += flight.rollDir * Math.PI * 2 * (1 - flight.rollT / SKILLS.rollTime); // ROLL: a barrel roll
   const yaw = -Math.atan2(flight.vx, Math.max(1, flight.speed)) * 0.6;
@@ -1937,6 +2004,13 @@ function stepGame(dt) {
     }
   }
 
+  // v2.2 BOOST REGEN: each 1,000-coin mark this flight crosses refills 1 % of the tank, on the spot (never gradual)
+  if (runCoins > regenCoins) {
+    const was = flight.fuel;
+    flight.fuel = coinRegen(flight.fuel, flight.fuelMax, regenCoins, runCoins);
+    if (flight.fuel > was && !ejected) puffText(`BOOST +${Math.round(COIN_REGEN.share * 100)}%`);
+    regenCoins = runCoins;
+  }
   if (flight.ended && !ejected) { $('btn-boost').hidden = true; $('btn-eject').hidden = true; showSkills(false); }
   updateSkillButtons();
 

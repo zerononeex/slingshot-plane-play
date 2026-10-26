@@ -194,19 +194,20 @@ export const PILOT = {
 
 // LANDINGS, judged at the first ground contact (no eject).
 // Owner playtest 2026-10-25: PERFECT widened (−2 → −3 m/s, 10° → 14°), GOOD (−3.5 → −4.5, 18° → 22°), and a
-// rare SUPER PERFECT above it (+500, the landing's whole bonus — never stacked with PERFECT's +10). The impact
-// angle counts terrain slope at LANDING.slopeWeight (half) — physics.js touchGround.
+// rare SUPER PERFECT above it (its bonus is the landing's whole bonus — never stacked with PERFECT's). The impact
+// angle counts terrain slope at LANDING.slopeWeight (half) — physics.js touchGround. v2.2 retuned every rung (below).
 export const LANDING = {
   slopeWeight: 0.5,
-  super:   { minSink: -1,   maxAngleDeg: 3,  bonus: 500, text: 'SUPER PERFECT LANDING!' },
-  perfect: { minSink: -3,   maxAngleDeg: 14, bonus: 10, text: 'PERFECT LANDING!' },
-  good:    { minSink: -4.5, maxAngleDeg: 22, bonus: 5,  text: 'GREAT LANDING!' },
+  // v2.2 LADDER RETUNE (owner 2026-10-25): every rung a little kinder and worth far more.
+  super:   { minSink: -1.5, maxAngleDeg: 5,  bonus: 1000, text: 'SUPER PERFECT LANDING!' },
+  perfect: { minSink: -3.5, maxAngleDeg: 16, bonus: 200, text: 'PERFECT LANDING!' },
+  good:    { minSink: -5.5, maxAngleDeg: 26, bonus: 50,  text: 'GREAT LANDING!' },
   rough:   { bonus: 0, text: 'Bumpy landing' },
   bad:     { bonus: 0, text: 'Bonk! A wobbly tumble — you’re OK!' },
   // EJECT JACKPOT: the pilot's own touchdown graded on the same ladder (pilot.js pilotGrade).
   pilot:   { bonus: 5, text: 'PILOT LANDED SAFELY!' },
-  pilotPerfect: { bonus: 100, text: 'PERFECT EJECTION!' },
-  pilotSuper:   { bonus: 500, text: 'SUPER PERFECT LANDING!' },
+  pilotPerfect: { bonus: 200, text: 'PERFECT EJECTION!' },
+  pilotSuper:   { bonus: 1000, text: 'SUPER PERFECT LANDING!' },
   pilotRough:   { bonus: 0, text: 'Pilot landed — a bumpy one!' },
 };
 

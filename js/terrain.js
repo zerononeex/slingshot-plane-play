@@ -15,6 +15,10 @@ import { tailBumpablesFor } from './longrun.js';
 import { neonRunFor, LANE_PUSH, LANE_MIN } from './neon.js';
 import { megaRunFor } from './megarun.js';
 import { guideRingsFor } from './guiderings.js';
+
+// v2.2 FIRE BREATH: the obstacle kinds that burn (everything else is immune).
+export const BURN_COLUMNS = new Set(['tree', 'pine', 'cactus', 'pillar', 'basalt']);
+export const BURN_POSTS = new Set(['pine', 'giantTree', 'redwood', 'coral', 'asteroid', 'rockSpire', 'iceSpire', 'spire', 'redSpire']);
 import { SKILLS } from './physics.js';
 
 export const LOOP_RING_R = 4; // v1.9: a loop ring's opening (was 3)
@@ -428,16 +432,32 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     return sceneryHit(x, y, d, radius);
   }
 
+  // v2.2 FIRE BREATH: what can burn — natural, bonk-class obstacles only (trees, cacti, rock pillars, basalt, moon
+  // rocks, asteroids and the mega-stages' natural weave posts). Returns a key that is unique for the rest of the
+  // flight (lap-local things carry the lap), or null = immune (terrain, walls / structures, doors and key rings,
+  // gates, pylons and flags, shapes and rings, pocket structures, shooters and wild flyers).
+  const colIndex = new Map(columns.map((c, i) => [c, i])), astIndex = new Map(asteroids.map((a, i) => [a, i]));
+  function burnKey(o, d) {
+    if (!o) return null;
+    const lap = Math.floor(d / cycle);
+    if (colIndex.has(o)) return BURN_COLUMNS.has(o.kind) && !o.gate && !o.course && !o.diveGate ? `c${colIndex.get(o)}@${lap}` : null;
+    if (astIndex.has(o)) return `a${astIndex.get(o)}@${lap}`;
+    if (o.trunkH !== undefined || o.ry !== undefined) return `s${o.x.toFixed(2)}:${o.d.toFixed(2)}`; // scenery trees / moon rocks (absolute)
+    if (BURN_POSTS.has(o.kind) && o.r !== undefined && o.d !== undefined && !o.id) return `p${o.kind}:${o.x}:${o.d}`; // a mega weave post (absolute)
+    return null;
+  }
+
   // Gimmick forces at a point (one shared result object — no allocation per step).
-  const fx = { lift: 0, push: 0, pushMin: 0, gust: 0, updraft: null, water: null };
+  const fx = { lift: 0, push: 0, pushMin: 0, gust: 0, updraft: null, water: null, liftKind: null, pushKind: null }; // v2.2 kinds: the abilities' hooks
+  const ventKind = stage.theme?.lava ? 'lava' : 'updraft';
   function effectsAt(x, y, d) {
     const dl = local(d);
-    fx.lift = 0; fx.push = 0; fx.pushMin = 0; fx.gust = 0; fx.updraft = null;
+    fx.lift = 0; fx.push = 0; fx.pushMin = 0; fx.gust = 0; fx.updraft = null; fx.liftKind = null; fx.pushKind = null;
     for (const u of stage.updrafts) {
-      if (Math.abs(u.d - dl) < u.r && Math.hypot(u.x - x, u.d - dl) < u.r && y < 75) { fx.lift = u.lift; fx.updraft = u; }
+      if (Math.abs(u.d - dl) < u.r && Math.hypot(u.x - x, u.d - dl) < u.r && y < 75) { fx.lift = u.lift; fx.updraft = u; fx.liftKind = ventKind; }
     }
-    for (const t of stage.tailwinds) if (x >= t.x0 && x <= t.x1 && dl >= t.d0 && dl <= t.d1) fx.push = t.push;
-    if (neon && neon.laneAt(x, y, d)) { fx.push = LANE_PUSH; fx.pushMin = LANE_MIN; } // a SLIPSTREAM: the tailwind push, in a box, if you're fast
+    for (const t of stage.tailwinds) if (x >= t.x0 && x <= t.x1 && dl >= t.d0 && dl <= t.d1) { fx.push = t.push; fx.pushKind = 'wind'; }
+    if (neon && neon.laneAt(x, y, d)) { fx.push = LANE_PUSH; fx.pushMin = LANE_MIN; fx.pushKind = 'neon'; } // a SLIPSTREAM: the tailwind push, in a box, if you're fast
     for (const g of stage.gusts) if (x >= g.x0 && x <= g.x1 && dl >= g.d0 && dl <= g.d1) fx.gust = g.push;
     if (mega) mega.effects(x, y, d, fx); // v1.5 THERMALS (lift) and WAR-WIND lanes (push, if you're fast)
     return fx;
@@ -471,7 +491,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   const guideRings = guideRingsFor(stage, (x, d) => featuresAt(x, d, Infinity), mega);
   const terrainApi = {
     guideRings,
-    stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt,
+    stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt, burnKey,
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     gates, storms, bridges, slots, loopRings, loopRingAt, diveGates, bumpables, bumpAt, archways, courses, pockets: pocketList,
     edgeWalls: !!stage.edgeWalls, neon,

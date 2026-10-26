@@ -180,8 +180,8 @@ function build(data, stage = null) {
     const list = fx.get(Math.floor(d / B));
     if (!list) return out;
     for (const o of list) {
-      if (o.lift !== undefined) { if (Math.abs(o.d - d) < o.r && Math.hypot(o.x - x, o.d - d) < o.r && y < 75) { out.lift = o.lift; out.updraft = o; } }
-      else if (d >= o.d0 && d <= o.d1 && x >= o.x0 && x <= o.x1 && y >= o.y0 && y <= o.y1) { out.push = o.push; out.pushMin = o.min ?? 0; }
+      if (o.lift !== undefined) { if (Math.abs(o.d - d) < o.r && Math.hypot(o.x - x, o.d - d) < o.r && y < 75) { out.lift = o.lift; out.updraft = o; out.liftKind = 'thermal'; } }
+      else if (d >= o.d0 && d <= o.d1 && x >= o.x0 && x <= o.x1 && y >= o.y0 && y <= o.y1) { out.push = o.push; out.pushMin = o.min ?? 0; out.pushKind = 'wind'; }
     }
     return out;
   }
@@ -300,7 +300,7 @@ function build(data, stage = null) {
         hz.wave = 2;
         if (inCaveLane(s.x, s.y, s.d)) s.events.push('shelter');
         else {
-          s.speed = Math.max(P.minAirSpeed, s.speed * WAVE.keep);
+          s.speed = Math.max(P.minAirSpeed, s.speed * (P.waveKeep ?? WAVE.keep)); // v2.2 LAVA RIDER keeps 0.8
           s.vx -= (wave.from ?? 1) * WAVE.push; // swept away from the side it rolls in from
           s.shake = Math.max(s.shake ?? 0, WAVE.shake);
           s.hitGrace = Math.max(s.hitGrace ?? 0, HIT.grace);

@@ -4,6 +4,7 @@ import { WHEELS, LANDING, BOOST, boostCeilingMul, boostThrustAt } from './config
 import { steerGain } from './handling.js';
 import { SWING } from './pockets.js';
 import { FUN, brakeFloor } from './funlines.js';
+import { abilityParams } from './abilities.js';
 
 const DEG = Math.PI / 180;
 
@@ -127,7 +128,9 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
   const lowG = modifiers.lowGravity;
   const thin = modifiers.thinAir;           // Jetstream: drag × 0.5, lift × 0.85 for every plane
   const g = lowG ? lowG.gravityScale : 1;
+  const ab = abilityParams(plane); // v2.2 PLANE ABILITIES: the plane's own hooks (none = exactly as before)
   const P = {
+    ...ab,
     ...flight,
     gravity: flight.gravity * g,              // low gravity: climbing costs and diving gains soften
     gravityScale: g,
@@ -143,7 +146,7 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     driftSpeed: e.driftSpeed,
     // A plane's own stall speed (biplane 8, jet 16) replaces the stock 11; the tail lowers it by the same 9/11.
     stallSpeed: plane.stallSpeed ? plane.stallSpeed * (e.stallSpeed ?? flight.stallSpeed) / flight.stallSpeed : e.stallSpeed ?? flight.stallSpeed,
-    stallSink: flight.stallSink * e.stallSinkMul * g, // …and you sink slower
+    stallSink: flight.stallSink * e.stallSinkMul * g * (ab.stallSinkMul ?? 1), // …and you sink slower (v2.2 MOON GLIDE × 0.6)
     pitchRateDeg: flight.pitchRateDeg * e.responseMul * steer,
     lateralResponse: flight.lateralResponse * e.responseMul * steer,
     lateralSpeed: flight.lateralSpeed * (plane.steerMul ?? 1) * steer, // v1.2 the Void Runner steers × 1.1 (precision at 250 m/s)
@@ -155,7 +158,7 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     water: modifiers.water ?? null,
     topSpeed: band ? band.launchMax : 30,                                   // the plane's cap at this band level
     boostThrust: boostThrustAt(band?.level ?? 1) * (modifiers.warp ? modifiers.warp.thrustMul : 1), // v2.1 BIG BOOST (Space: the WARP TANK × 1.25)
-    boostCap: (band ? band.launchMax : 30) * boostCeilingMul(band?.level ?? 1), // v2.1: cap × 1.10 (band Lv1) → × 1.55 (Lv10)
+    boostCap: (band ? band.launchMax : 30) * (boostCeilingMul(band?.level ?? 1) + (ab.ceilingAdd ?? 0)), // v2.1: cap × 1.10 (band Lv1) → × 1.55 (Lv10); v2.2 HYPERDRIVE + 10 points
     windCap: (band ? band.launchMax : 30) + BOOST.windMargin,              // tailwinds: always + 10 (unchanged)
   };
   // v1.0 fun lines that touch the flight (only when owned: everything else is exactly as before).
@@ -307,7 +310,24 @@ function solidHit(s, env, P) {
   const hit = env.hitTest(s.x, s.y, s.d, P.clearance, spanOf(s, P), s.time);
   if (!hit) { if (s.bonkGrace <= 0 && s.bonkWithT <= 0) s.bonkWith = null; return null; }
   if (s.bonkGrace > 0 || hit === s.bonkWith) return null;
+  if (s.burned?.size && env.burnKey && s.burned.has(env.burnKey(hit, s.d))) return null; // v2.2 FIRE BREATH: burned away
   return hit;
+}
+
+// v2.2 FIRE BREATH: while boosting, a cone ahead (len m long, width m across at its end) burns every bonk-class
+// obstacle it touches for the rest of the flight (+coins each, 'burn'). The terrain decides what can burn
+// (env.burnKey → null = immune: terrain, walls / structures, doors, gates, shapes, rings, shooters).
+const BREATH_STEPS = 6;
+function breathe(s, P, env) {
+  if (!env.hitTest || !env.burnKey) return;
+  const F = P.fire;
+  s.burned ??= new Set();
+  for (let i = 1; i <= BREATH_STEPS; i++) {
+    const k = i / BREATH_STEPS, d = s.d + F.len * k;
+    const hit = env.hitTest(s.x, s.y, d, P.clearance + 1, (F.width / 2) * k + 1, s.time);
+    const key = hit ? env.burnKey(hit, d) : null;
+    if (key && !s.burned.has(key)) { s.burned.add(key); s.events.push('burn'); }
+  }
 }
 
 // SLALOM COURSES: gate 0 starts a chain; each next gate in order extends it; all 5 = COURSE CLEAR
@@ -325,6 +345,14 @@ function courseGate(s, c) {
 
 // hit = the obstacle (has x or cx), or null for a terrain face (bounce straight back).
 function bonk(s, hit, P) {
+  if (hit && P.shield && !s.shieldUsed) { // v2.2 SAND SHIELD: the first obstacle bonk of the flight is negated
+    s.shieldUsed = true;
+    s.bonkWith = hit;
+    s.bonkWithT = BONK.sameFor;
+    s.bonkGrace = BONK.grace;
+    s.events.push('shield');
+    return;
+  }
   s.bonkWith = hit;
   s.bonkWithT = BONK.sameFor;
   s.speed = Math.max(P.minAirSpeed, s.speed * BONK.keep);
@@ -414,11 +442,13 @@ function stepAir(s, input, dt, P, env) {
   let thrust = 0;
   if (input.boost && s.fuel > 0) {
     s.boosting = true;
-    s.fuel = Math.max(0, s.fuel - dt);
+    s.fuel = Math.max(0, s.fuel - dt * (P.boostDrainMul ?? 1)); // v2.2 HYPERDRIVE × 0.75
     if (s.speed < P.boostCap) thrust = P.boostThrust;
+    if (P.fire) breathe(s, P, env);
   }
+  if (P.laneSip && zone.pushKind === 'neon' && s.fuelMax > 0) s.fuel = Math.min(s.fuelMax, s.fuel + P.laneSip * dt); // v2.2 SLIPSTREAM SIPPER
   // Tailwind: a push forward (never past the boost cap). A v1.2 slipstream only catches a fast plane (pushMin).
-  const wind = zone.push > 0 && s.speed < P.windCap && s.speed >= (zone.pushMin ?? 0) ? zone.push : 0;
+  const wind = zone.push > 0 && s.speed < P.windCap && s.speed >= (zone.pushMin ?? 0) ? zone.push * (zone.pushKind === 'wind' ? P.windMul ?? 1 : 1) : 0; // v2.2 TAILWIND FRIEND
   s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust + wind) * dt);
   const pushCap = thrust > 0 ? P.boostCap : P.windCap; // v2.1: the boost's own ceiling; tailwinds keep + 10
   if ((thrust > 0 || wind > 0) && s.speed > pushCap) s.speed = Math.max(pushCap, s.speed - (thrust + wind) * dt);
@@ -431,7 +461,8 @@ function stepAir(s, input, dt, P, env) {
   const xPrev = s.x, dPrev = s.d, yPrev = s.y;
   const forward = s.speed * Math.cos(s.pitch);
   // Updraft: the stall sink is cancelled and the air lifts you — at no speed cost.
-  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1) * sinkK) + zone.lift - s.tiltT * SKILLS.tiltSink * sinkK + (wat ? wat.drift : 0); // tilted: lift fades to a gentle sink
+  const liftMul = zone.liftKind === 'lava' ? P.lavaLiftMul ?? 1 : zone.liftKind ? P.updraftMul ?? 1 : 1; // v2.2 LAVA RIDER / UPDRIFT ANGEL
+  s.vy = s.speed * Math.sin(s.pitch) - (inUp ? 0 : stallAmt * P.stallSink * (P.sinkMul ?? 1) * sinkK) + zone.lift * liftMul - s.tiltT * SKILLS.tiltSink * sinkK + (wat ? wat.drift : 0); // tilted: lift fades to a gentle sink
   // v1.0 HELIUM BALLOONS: a gentler sink during unpowered glide only (not boosting, not climbing).
   if (P.balloonSink && !s.boosting && s.vy < 0) s.vy *= 1 - P.balloonSink;
   const steer = s.tilted ? SKILLS.tiltSteer : 1;
@@ -555,8 +586,10 @@ function touchGround(s, forward, P, env, g) {
   const onWater = P.water && env.surfaceKind && env.surfaceKind(s.x, s.d, s.y) === 'water';
   if (verdict === 'bad') { if (onWater) s.events.push('bigSplash'); startTumble(s); return; }
   if (onWater) {
-    // Floats! Water never grades better than ROUGH: splash-bounce, or settle and float.
-    if (first) s.landing = 'rough';
+    // Floats! Water never grades better than ROUGH: splash-bounce, or settle and float. (v2.2 SEA LUCK: graded on
+    // the normal ladder — the fanfare and bonus only; the splash physics are the same.)
+    if (first) s.landing = P.seaLuck ? verdict : 'rough';
+    if (first && P.seaLuck && isGoodLanding(verdict)) s.events.push(verdict);
     s.events.push('splash');
     if (s.speed > P.bounceMinSpeed) {
       s.bounces++;

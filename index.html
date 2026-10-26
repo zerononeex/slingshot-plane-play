@@ -111,6 +111,14 @@
     background: var(--panel); border-radius: 28px 28px 0 0; padding: 1.8vh 16px max(14px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 0 rgba(0, 0, 0, 0.08); }
   .sr-status { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .sr-name { font-weight: 900; font-size: clamp(24px, 3.8vh, 36px); line-height: 1.05; }
+  .sr-ability { font-weight: 800; font-size: clamp(12px, 1.7vh, 15px); color: #7a4dd8; line-height: 1.25; }
+  .sr-ability span { display: block; }
+  .sr-card .sc-ab { font-size: 10px; font-weight: 900; color: #7a4dd8; line-height: 1.15; }
+  .sr-lineup { flex-shrink: 0; } /* v2.2: the cards carry a badge + an ability: never squeezed */
+  .sr-panel { overflow-y: auto; } #btn-sr-fly { position: sticky; bottom: 0; flex-shrink: 0; z-index: 1; } /* v2.2: a short phone scrolls the panel; FLY stays on screen */
+  .sr-card { gap: 3px; }
+  .sr-card .sc-swatch { height: 24px; }
+  .sr-card.locked .sc-ab { color: #c9a8ff; }
   .sr-stats { font-weight: 800; font-size: clamp(15px, 2.2vh, 20px); opacity: 0.8; }
   .sr-state { font-weight: 900; font-size: 14px; letter-spacing: 1px; padding: 4px 12px; border-radius: 12px; background: #e6f9ea; color: var(--go-dark); }
   .sr-state.ready { background: #e3f1ff; color: #2f7fd1; }
@@ -143,6 +151,13 @@
   .shop-title { display: flex; flex-direction: column; align-items: center; line-height: 1.05; color: #fff; text-shadow: 0 3px 0 var(--tint-dark); }
   .shop-title { min-width: 0; text-align: center; }
   .shop-title b { font-size: clamp(22px, min(4.4vh, 8vw), 44px); letter-spacing: 1px; }
+  /* v2.2 stage-plane labels */
+  .plane-line { font-size: clamp(11px, 1.5vh, 14px); font-weight: 700; text-align: center; margin-bottom: 5px; opacity: 0.85; }
+  .plane-line.native { color: #ffd23f; opacity: 1; }
+  .shop-sub { display: block; font-size: clamp(10px, min(1.4vh, 2.8vw), 14px); font-weight: 800; text-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 0 6px rgba(0,0,0,0.35); }
+  .sr-card .sc-badge { font-size: 10px; font-weight: 900; letter-spacing: 0.02em; color: #4fa8ff; line-height: 1.15; }
+  .sr-card.native { border-color: #ffd23f; }
+  .sr-card.native .sc-badge { color: #c98a00; }
   .shop-for { font-weight: 900; font-size: clamp(11px, min(1.8vh, 3.4vw), 19px); text-shadow: 0 2px 0 rgba(0,0,0,0.3); }
   .back-btn { min-height: 0; padding: 10px 18px; font-size: clamp(18px, 2.4vh, 24px); }
   .shop-top .back-btn { background: var(--tint); box-shadow: 0 6px 0 var(--tint-dark); flex: none; padding: 8px clamp(10px, 3vw, 18px); font-size: clamp(15px, min(2.4vh, 4.4vw), 24px); }
@@ -270,12 +285,24 @@
   @media (max-height: 799px) { .eject-btn { right: calc(max(16px, env(safe-area-inset-right)) + 126px); } }
   /* HUD */
   #hud { pointer-events: none; }
+  /* v2.2 speed-feel: a soft edge vignette (DOM, no post-processing) — main.js sets --vig-o / --vig-in. */
+  .speed-vignette { position: fixed; inset: 0; pointer-events: none; opacity: var(--vig-o, 0);
+    background: radial-gradient(ellipse at center, transparent var(--vig-in, 72%), rgba(10, 14, 30, 0.85) 100%); }
   .hud-top {
     position: absolute; left: 0; right: 0; top: max(12px, env(safe-area-inset-top));
     display: flex; justify-content: space-between; align-items: flex-start; padding: 0 14px;
   }
   .chip { background: var(--panel); border-radius: 20px; padding: 8px 16px; font-weight: 900; font-size: clamp(22px, 3.6vh, 36px); box-shadow: 0 4px 0 rgba(0,0,0,0.12); }
   #hud-dist { position: absolute; left: 50%; transform: translateX(-50%); font-size: clamp(30px, 5vh, 52px); }
+  /* v2.2 PLANE STAT BARS: five bars, fuller = better (a maxed THE DRAGON reads full); bars a purchase moved glow */
+  .stat-bars { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; width: 100%; max-width: 420px; margin: 0 auto 6px; }
+  .sb-label { font-weight: 900; font-size: 11px; letter-spacing: 1.5px; opacity: 0.75; text-align: right; }
+  .sb-track { display: block; height: 10px; border-radius: 6px; background: rgba(36, 50, 74, 0.14); overflow: hidden; }
+  .sb-fill { display: block; height: 100%; width: 0; border-radius: 6px; background: linear-gradient(90deg, #3ccf5a, #ffc61a); transition: width 0.45s cubic-bezier(.2, .8, .3, 1); }
+  .sb-track.moved { animation: sbGlow 0.9s ease-out; }
+  @keyframes sbGlow { 0% { box-shadow: 0 0 0 0 rgba(255, 198, 26, 0); } 25% { box-shadow: 0 0 10px 3px rgba(255, 198, 26, 0.95); } 100% { box-shadow: 0 0 0 0 rgba(255, 198, 26, 0); } }
+  /* v2.2 PRESS-AND-HOLD: the description tooltip (fixed: it never shifts the layout) */
+  .hold-tip { position: fixed; z-index: 50; max-width: min(78vw, 300px); padding: 10px 14px; border-radius: 14px; background: #1b2438; color: #fff; font-weight: 800; font-size: 16px; line-height: 1.25; box-shadow: 0 6px 18px rgba(0,0,0,0.35), inset 0 2px 0 var(--gold); pointer-events: none; }
   /* v2.1 THE SPEED READOUT: top-left under the coin chip — SPEED small, km/h big; gold past the cap (boosting) */
   .hud-speed { position: absolute; left: max(14px, env(safe-area-inset-left)); top: calc(max(12px, env(safe-area-inset-top)) + clamp(58px, 7.4vh, 76px)); display: flex; flex-direction: column; align-items: flex-start; line-height: 1; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.3), 0 0 8px rgba(0,0,0,0.25); font-weight: 900; }
   .hud-speed small { font-size: clamp(11px, 1.5vh, 15px); letter-spacing: 2px; opacity: 0.85; }
@@ -642,6 +669,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="speed-vignette" class="speed-vignette" aria-hidden="true"></div>
 
 <section id="title" class="screen home">
   <div class="home-hud">
@@ -678,6 +706,7 @@
     <div class="hangar-chips" id="hangar-chips"></div>
   </div>
   <div class="fly-bar">
+    <div class="plane-line" id="plane-line"></div>
     <button id="btn-fly" class="big"><span id="fly-label">FLY!</span></button>
   </div>
   <nav class="tabbar" id="tabbar">
@@ -697,7 +726,9 @@
     <div class="sr-status">
       <div class="sr-name" id="sr-name"></div>
       <div class="sr-stats" id="sr-stats"></div>
+      <div class="sr-ability" id="sr-ability"></div>
       <div class="sr-state" id="sr-state"></div>
+      <div class="stat-bars" id="sr-bars" aria-label="Plane stats"></div>
     </div>
     <div class="sr-lineup" id="sr-lineup"></div>
     <button id="btn-sr-fly" class="big sr-fly">FLY THIS PLANE</button>
@@ -707,11 +738,12 @@
 <section id="shop" class="screen" hidden>
   <div class="shop-top">
     <button id="btn-shop-back" class="alt back-btn">◀ BACK</button>
-    <div class="shop-title"><b>UPGRADES</b><span class="shop-for" id="shop-for"></span></div>
+    <div class="shop-title"><b>UPGRADES</b><span class="shop-for" id="shop-for"></span><span class="shop-sub" id="shop-sub"></span></div>
     <div class="chip wallet"><span class="coin-dot" id="shop-coin"></span><span id="shop-coins">0</span></div>
   </div>
   <div class="shop-stage"></div>
   <div class="shop-panel">
+    <div class="stat-bars" id="shop-bars" aria-label="Plane stats"></div>
     <div class="shop-grid" id="shop-grid"></div>
     <div class="shop-section" id="shop-sec-fun">FUN UPGRADES</div>
     <div class="shop-grid fun-grid" id="fun-grid"></div>
@@ -873,6 +905,7 @@
   </div>
 </section>
 
+<div id="hold-tip" class="hold-tip" role="tooltip" hidden></div>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>
