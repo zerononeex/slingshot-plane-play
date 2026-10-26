@@ -148,6 +148,7 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     pitchRateDeg: flight.pitchRateDeg * e.responseMul * steer,
     lateralResponse: flight.lateralResponse * e.responseMul * steer,
     lateralSpeed: flight.lateralSpeed * (plane.steerMul ?? 1) * steer, // v1.2 the Void Runner steers × 1.1 (precision at 250 m/s)
+    lateralMul: (plane.steerMul ?? 1) * steer, // (the multipliers alone: lateralCap scales the speed share by them too)
     steerGain: steer,
     bounceKeep: snow ? Math.min(0.97, wheels.keep + snow.keepBonus) : wheels.keep,
     bouncePop: wheels.pop,
@@ -252,9 +253,12 @@ export function stepFlight(s, input, dt, P, envIn) {
 export const laneOf = (s, P) => (s.lane ? { lo: s.lane.cx - s.lane.half, hi: s.lane.cx + s.lane.half } : { lo: -P.corridorHalfWidth, hi: P.corridorHalfWidth });
 
 // Returns true when the plane was pushed against the corridor edge this step (never in a pocket).
+// The sideways cap keeps up with speed (owner playtest 2026-10-25): max(lateralSpeed, lateralShare × the LIVE
+// forward speed), through the same plane × HANDLING multipliers — below ~144 m/s the 13 m/s floor rules, unchanged.
+export const lateralCap = (P, forward) => P.lateralSpeed * Math.max(1, ((P.lateralShare ?? 0) * forward) / ((P.lateralSpeed / (P.lateralMul ?? 1)) || 1));
 function steerLateral(s, input, dt, P, scale, drift = 0) {
   if (s.swing) return false; // the swing owns x
-  const target = clamp(input.x, -1, 1) * P.lateralSpeed * scale + drift;
+  const target = clamp(input.x, -1, 1) * lateralCap(P, s.speed * Math.cos(s.pitch)) * scale + drift;
   s.vx += (target - s.vx) * Math.min(1, P.lateralResponse * dt);
   s.x += s.vx * dt;
   const pushing = Math.abs(s.vx) > 1.5 && !s.lane;

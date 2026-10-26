@@ -15,7 +15,7 @@ export const LADDER = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, dese
 export const uniqueRun = (stageId) => LADDER[stageId] ?? 0;
 // v1.1 FAIRNESS RULE: each world's COMPLETION ZONE = min(unique run, its own v1.0 FULL-maxed corner).
 // All completion content (goal gates, secrets, the GOAL) lives inside it; beyond it is bonus country.
-export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17062, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 38490, dragonwar: 46848, starfox: 70000, starwars: 69828 }; // (2026-10-25 key rings moved the mega corners) v1.3: provisional for the new worlds until their corners are tuned
+export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17062, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 38520, dragonwar: 46738, starfox: 70000, starwars: 69772 }; // (2026-10-25 key rings moved the mega corners) v1.3: provisional for the new worlds until their corners are tuned
 export const completionZone = (stageId) => COMPLETION_ZONE[stageId] ?? 0;
 
 // One character zone per 1,000 m block (its name rides the zone's banner arch).

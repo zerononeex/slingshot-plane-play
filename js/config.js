@@ -31,7 +31,8 @@ export const FLIGHT = {
   maxClimbDeg: 30,
   maxDiveDeg: 40,
   pitchRateDeg: 70,     // how fast the nose follows the finger
-  lateralSpeed: 13,     // m/s sideways at full stick
+  lateralSpeed: 13,     // m/s sideways at full stick (the floor)…
+  lateralShare: 0.09,   // …or 9 % of the live forward speed, whichever is more (owner playtest 2026-10-25: steer by angle)
   lateralResponse: 4,
   corridorHalfWidth: 26,
   ceiling: 60,          // m, can't climb above this
