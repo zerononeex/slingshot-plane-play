@@ -383,7 +383,7 @@ STAGES.space = {
   ringBonus: 10, ringName: 'STAR RING',
   // WARP: boost pushes harder in Space: +7.5 m/s² (+6 elsewhere). The brief's +9 overshot maxed (7,957 m) and the +8 fallback
   // still did (7,711 m), so it is trimmed to +7.5 (7,586 m, inside 7,000–7,600). See BALANCE.md.
-  modifiers: { lowGravity: { gravityScale: 0.55, sinkBonus: 1.5 }, warp: { boostThrust: 7.5 } },
+  modifiers: { lowGravity: { gravityScale: 0.55, sinkBonus: 1.5 }, warp: { thrustMul: 1.25 } }, // v2.1: the WARP TANK = × 1.25 the band's boost thrust (it was 7.5 vs the stock 6)
   secrets: [
     { id: 'space-station', name: 'Inside the space station', x: -12, y: 3, d: 1291, coins: 14, radius: 5 },
     { id: 'space-asteroid', name: 'Behind the biggest asteroid', x: -18, y: 12, d: 1518, coins: 13, radius: 6 },

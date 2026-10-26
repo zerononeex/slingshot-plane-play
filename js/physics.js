@@ -1,6 +1,6 @@
 // Pure flight physics — no three.js, no DOM, so node tests can run it.
 // Coordinates: x = right, y = up, d = metres flown forward from the slingshot.
-import { WHEELS, LANDING, BOOST, boostMargin, boostThrustAt } from './config.js';
+import { WHEELS, LANDING, BOOST, boostCeilingMul, boostThrustAt } from './config.js';
 import { steerGain } from './handling.js';
 import { SWING } from './pockets.js';
 import { FUN, brakeFloor } from './funlines.js';
@@ -17,7 +17,7 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 // (needs 20 m/s); ROLL = a barrel roll that sweeps coins; DIVE (hold) = a steep, fast dive.
 export const SKILLS = {
   tiltTime: 0.35, tiltSink: 2.5, tiltSteer: 0.8, tiltSpan: 0.3, wingSpan: 1.6,
-  loopMinSpeed: 20, loopTime: 1.15, loopExitKeep: 0.95, loopRadius: (v) => clamp(7 + 0.1 * v, 8, 13), // exit was × 0.72
+  loopMinSpeed: 20, loopTime: 1.15, loopRadius: (v) => clamp(7 + 0.1 * v, 8, 13), // v2.1 FREE MANEUVERS: the loop exits at the speed it started (was × 0.95; × 0.72 before v1.9)
   rollTime: 0.6, rollCooldown: 1.0, rollPickupMul: 2.2, rollDrift: 3,
   diveDeg: -55, diveGravityMul: 1.6,
 };
@@ -92,8 +92,7 @@ function stepLoop(s, dt, P, env) {
   if (L.t >= SKILLS.loopTime) {
     s.loop = null;
     s.lastLoop = { d0: L.d0, y0: L.y0, R: L.R, x: L.x };
-    s.d = L.d0; s.y = L.y0; s.pitch = 0;
-    s.speed *= SKILLS.loopExitKeep;
+    s.d = L.d0; s.y = L.y0; s.pitch = 0; // (v2.1: no speed cost — the loop returns its entry speed exactly)
     s.events.push('loopEnd');
     // v1.9 PERFECT LOOP: every ring of one formation threaded inside ONE loop — once per flight per formation
     for (const [key, ks] of L.thread) if (ks.size >= LOOP_RINGS && !s.used.has(key + 'perfectLoop')) { s.used.add(key + 'perfectLoop'); s.events.push('perfectLoop'); }
@@ -154,9 +153,10 @@ export function flightParams(flight, engine, effects = null, { wheels = WHEELS[0
     bouncePop: wheels.pop,
     landingSinkBonus: (snow ? snow.sinkBonus : 0) + (lowG ? lowG.sinkBonus : 0),
     water: modifiers.water ?? null,
-    boostThrust: modifiers.warp ? modifiers.warp.boostThrust : boostThrustAt(band?.level ?? 1), // Space: the WARP TANK; v1.9: grows with the band level
-    boostCap: (band ? band.launchMax : 30) + boostMargin(band?.level ?? 1), // v1.9: the margin grows with the band level (Lv1: + 10, as before)
-    windCap: (band ? band.launchMax : 30) + BOOST.capOverBand,              // tailwinds: always + 10 (unchanged)
+    topSpeed: band ? band.launchMax : 30,                                   // the plane's cap at this band level
+    boostThrust: boostThrustAt(band?.level ?? 1) * (modifiers.warp ? modifiers.warp.thrustMul : 1), // v2.1 BIG BOOST (Space: the WARP TANK × 1.25)
+    boostCap: (band ? band.launchMax : 30) * boostCeilingMul(band?.level ?? 1), // v2.1: cap × 1.10 (band Lv1) → × 1.55 (Lv10)
+    windCap: (band ? band.launchMax : 30) + BOOST.windMargin,              // tailwinds: always + 10 (unchanged)
   };
   // v1.0 fun lines that touch the flight (only when owned: everything else is exactly as before).
   if (fun?.brakes) P.brakeDecel = FUN.brakes.decel[fun.brakes];
@@ -420,7 +420,7 @@ function stepAir(s, input, dt, P, env) {
   // Tailwind: a push forward (never past the boost cap). A v1.2 slipstream only catches a fast plane (pushMin).
   const wind = zone.push > 0 && s.speed < P.windCap && s.speed >= (zone.pushMin ?? 0) ? zone.push : 0;
   s.speed = Math.max(P.minAirSpeed, s.speed + (energy - bleed + thrust + wind) * dt);
-  const pushCap = thrust > 0 ? P.boostCap : P.windCap; // v1.9: the boost's own margin; tailwinds keep + 10
+  const pushCap = thrust > 0 ? P.boostCap : P.windCap; // v2.1: the boost's own ceiling; tailwinds keep + 10
   if ((thrust > 0 || wind > 0) && s.speed > pushCap) s.speed = Math.max(pushCap, s.speed - (thrust + wind) * dt);
   // v1.0 SPOILER BRAKES (held): strong drag, but never below stall + 2 m/s (it can't stall you out).
   if (P.brakeDecel) {
@@ -455,12 +455,11 @@ function stepAir(s, input, dt, P, env) {
       s.events.push(c.type === 'gate' ? (s.speed >= (P.gateFast ?? 40) ? 'gateFast' : 'gateSlow') : c.type);
     }
   }
-  // BUMPABLES: a soft bump — a little speed (× 0.90 / big × 0.85), never a bonk; once per flight each.
+  // BUMPABLES: smashed through for coins — v2.1: NO speed cost (was × 0.90 / big × 0.85), never a bonk; once per flight each.
   if (env.bumpAt) {
     const bp = env.bumpAt(s.x, s.y, s.d, P.clearance);
     if (bp && !s.used.has(bp.id + 'bump')) {
       s.used.add(bp.id + 'bump');
-      s.speed = Math.max(P.minAirSpeed, s.speed * bp.b.slow);
       s.bumps.push(bp);
       s.events.push('bump');
     }

@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { shotPos, SHOTS } from './shooters.js';
 import { doorOpenness, DOOR, KEY } from './loopdoors.js';
+import { GUIDE } from './guiderings.js';
 import { WEAVE_HALF, POST_TOP, TILT, GAP, wildPos, patrolX } from './megarun.js';
 import { buildFlyer } from './flyermodels.js';
 import { FLIGHT } from './config.js';
@@ -617,6 +618,9 @@ export function createMegaView(scene, fx) {
         fallsM.position.set(C.cx, (C.top + 4) / 2, -(C.d0 - 1.2)); caveG.add(fallsM);
         const pool = new THREE.Mesh(new THREE.CircleGeometry(wide * 0.6, 18).rotateX(-Math.PI / 2), basic(0xd8f6ff, { transparent: true, opacity: 0.7, depthWrite: false }));
         pool.position.set(C.cx, terrain.surfaceAt(C.cx, C.d0 - 8, Infinity) + 0.3, -(C.d0 - 8)); caveG.add(pool);
+        // v2.1 WATERFALL GUIDE RINGS (decoration): the safe line in through the curtain, along the tunnel and out
+        const guide = (terrain.guideRings?.abs ?? []).filter((r) => r.passage === C.name), guideMat = basic(GUIDE.color, { transparent: true, opacity: 0.75, depthWrite: false, fog: false }); // (no fog: they stay white-cyan, never gold)
+        for (const r of guide) { const m = new THREE.Mesh(new THREE.TorusGeometry(r.r, 0.08 * r.r, 5, 20), guideMat); m.position.set(r.x, r.y, -r.d); caveG.add(m); }
         caveG.visible = false; keepM(caveG);
         continue;
       }

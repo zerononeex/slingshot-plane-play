@@ -1,6 +1,7 @@
 // BUMPABLES (v0.6 part 2): soft, silly things in the flight corridor that PAY you for bumping
-// them. Never an obstacle: a bump costs a little speed (× 0.90, big ones × 0.85), plays a cartoon
-// set-piece (the animation IS the leaving), pays instantly, and is one-shot per flight.
+// them. Never an obstacle: v2.1 SMASH-THROUGH (owner playtest 2026-10-25: "remove any slow downs from
+// destroying something that you collide into for coins") — a bump costs NO speed (was × 0.90, big
+// × 0.85); it plays a cartoon set-piece (the animation IS the leaving), pays instantly, one-shot per flight.
 // Nobody gets hurt: every character ends up fine. Pure data + maths (no DOM / three.js).
 
 // leave = the set-piece (world.js animates it); sound = the synth voice (audio.js).
@@ -32,8 +33,6 @@ export const CAST = {
   weatherBalloon: { name: 'WEATHER BALLOON', reward: 10, r: 3, y: 18, big: true, leave: 'popChute', sound: 'pop' },
   skydiver:       { name: 'SKYDIVER', reward: 10, r: 1.6, y: 14, leave: 'chute', sound: 'boing' },
 };
-export const BUMP_SLOW = 0.9, BIG_BUMP_SLOW = 0.85;
-export const slowFor = (type) => (CAST[type].big ? BIG_BUMP_SLOW : BUMP_SLOW);
 
 // The results line: "Bumps: N (+M coins)" (null when there were none).
 export function bumpSummary(bumps) {

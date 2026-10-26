@@ -10,6 +10,7 @@ import { rng, makePatternPicker, patternCoins, featureCoins } from './coins.js';
 import { fillSceneryChunk, newSceneryChunk, TREE_SLOTS, ROCK_SLOTS, columnCap } from './scenery.js';
 import { buildCritter, animateCritter, resetCritter } from './critters.js';
 import { neonify, edgeMat } from './neonlook.js';
+import { GUIDE } from './guiderings.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -274,6 +275,8 @@ export function createWorld(scene) {
   // v0.7: a soft inner glow edge on every ring / star ring (same matrices, additive).
   const ringGlow = inst(new THREE.TorusGeometry(0.88, 0.07, 4, 24), new THREE.MeshBasicMaterial({ color: 0xfff1a0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }), 32, lapGroup);
   const loopRingMesh = inst(new THREE.TorusGeometry(1, 0.13, 6, 18), lam(0xff4fd8, { emissive: 0x6a1a5a }), 40, lapGroup);
+  // v2.1 WATERFALL GUIDE RINGS (decoration): soft white-cyan, thinner and a little smaller than a coin ring.
+  const guideRingMesh = inst(new THREE.TorusGeometry(1, 0.08, 5, 20), new THREE.MeshBasicMaterial({ color: GUIDE.color, transparent: true, opacity: 0.75, depthWrite: false, fog: false }), 40, lapGroup);
   const asteroidMesh = inst(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8d96), 96, lapGroup);
   const updraftRings = inst(new THREE.TorusGeometry(1, 0.05, 4, 16).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), 30, lapGroup);
   const updraftCols = [];
@@ -406,6 +409,10 @@ export function createWorld(scene) {
     for (let i = 0; i < 40; i++) loopRingMesh.setMatrixAt(i, ZERO);
     (terrain.loopRings ?? []).slice(0, 40).forEach((r, i) => setInst(loopRingMesh, i, r.x, r.y, r.d, r.r, r.r, r.r, 0, (r.k / 8) * Math.PI * 2));
     loopRingMesh.instanceMatrix.needsUpdate = true;
+    // WATERFALL GUIDE RINGS: a row along each waterfall pocket's safe line (lap-local; the mega caves' rows live in megaview).
+    for (let i = 0; i < 40; i++) guideRingMesh.setMatrixAt(i, ZERO);
+    (terrain.guideRings?.lap ?? []).slice(0, 40).forEach((r, i) => setInst(guideRingMesh, i, r.x, r.y, r.d, r.r, r.r, r.r));
+    guideRingMesh.instanceMatrix.needsUpdate = true;
     // DIVE GATES: a low blue banner between the posts.
     for (const g of terrain.diveGates ?? []) {
       const cv = document.createElement('canvas');

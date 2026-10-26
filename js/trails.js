@@ -101,8 +101,8 @@ export function createStreaks(scene, camera) {
     st.x = Math.cos(a) * half * camera.aspect * f; st.y = Math.sin(a) * half * f; st.on = true;
   }
   return {
-    update(speed, dt) {
-      const dens = streakDensity(speed);
+    update(speed, dt, over = 0) { // over: 0 at the cap → 1 at the boost ceiling (v2.1: denser, longer, brighter)
+      const dens = Math.min(1, streakDensity(speed) + over);
       const want = Math.round(N * dens);
       let live = 0;
       for (let i = 0; i < N; i++) {
@@ -116,12 +116,13 @@ export function createStreaks(scene, camera) {
           live++;
           _p.set(st.x, st.y, st.z).applyMatrix4(camera.matrixWorld);
           _q.copy(camera.quaternion);
-          _s.set(1, 1, 1.5 + speed * 0.04);
+          _s.set(1 + over, 1 + over, (1.5 + speed * 0.04) * (1 + 1.5 * over));
           _m.compose(_p, _q, _s);
           mesh.setMatrixAt(i, _m);
         } else mesh.setMatrixAt(i, zero);
       }
       mesh.instanceMatrix.needsUpdate = true;
+      mesh.material.opacity = 0.55 + 0.35 * over;
       mesh.visible = dens > 0;
     },
     hide() { mesh.visible = false; },

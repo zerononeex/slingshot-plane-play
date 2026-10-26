@@ -72,13 +72,14 @@ export const ENGINE = [
   { level: 3, decay: 0.66, cost: 80, propSpin: 1.5, cowl: 0x4fd1ff },
   { level: 4, decay: 0.54, cost: 150, propSpin: 1.8, cowl: 0xff8a3d },
   { level: 5, decay: 0.42, cost: 300, propSpin: 2.2, cowl: 0xffc61a },
-  // v1.0 LEVEL 10: Lv6–10 stacked on top (Lv1–5 frozen). Grid-trimmed from the × 0.93 starting curve
-  // to ≈ × 0.99 per level so the full-maxed corners land in the 1.25–1.40 band (BALANCE.md).
-  { level: 6, decay: 0.415, cost: 450, propSpin: 2.5, cowl: 0xe5e4e2 },
-  { level: 7, decay: 0.41, cost: 680, propSpin: 2.8, cowl: 0xb9f2ff },
-  { level: 8, decay: 0.405, cost: 1020, propSpin: 3.1, cowl: 0x9d7bff },
-  { level: 9, decay: 0.4, cost: 1530, propSpin: 3.4, cowl: 0xff6ad5 },
-  { level: 10, decay: 0.395, cost: 2300, propSpin: 3.8, cowl: 0xffffff, rainbow: true },
+  // v1.0 LEVEL 10: Lv6–10 stacked on top (Lv1–5 frozen). v2.1 ENGINE SCALE (owner playtest 2026-10-25: "make
+  // engine even better — improve the scale"): the top half no longer goes flat — Lv10 ≈ half of Lv5's 0.42
+  // (was 0.415 / 0.41 / 0.405 / 0.4 / 0.395, the v1.0 grid-trim). Prices and everything else unchanged.
+  { level: 6, decay: 0.375, cost: 450, propSpin: 2.5, cowl: 0xe5e4e2 },
+  { level: 7, decay: 0.330, cost: 680, propSpin: 2.8, cowl: 0xb9f2ff },
+  { level: 8, decay: 0.290, cost: 1020, propSpin: 3.1, cowl: 0x9d7bff },
+  { level: 9, decay: 0.250, cost: 1530, propSpin: 3.4, cowl: 0xff6ad5 },
+  { level: 10, decay: 0.210, cost: 2300, propSpin: 3.8, cowl: 0xffffff, rainbow: true },
 ];
 
 // RUBBER BAND (was "Slingshot") = "a stronger launch". launchMax = m/s at full
@@ -114,14 +115,18 @@ export const TANK = [
   { level: 9, seconds: 12.4,   cost: 3050, scale: 2.05 },
   { level: 10, seconds: 13, cost: 4580, scale: 2.15 },
 ];
+// v2.1 BIG BOOST (owner playtest 2026-10-25: "I want it to feel like a boost on screen"): the hold-boost takes
+// the plane BEYOND its cap — to cap × (1.10 + 0.05 × (band level − 1)): Lv1 + 10 %, Lv10 + 55 % — with a thrust
+// strong enough to get there (a maxed plane at band Lv10 reaches its ceiling from cap in ≤ 3 s). Keyed off the
+// RUBBER BAND level, as boost always was. The tank (fuel) is the limiter, unchanged: a mighty burst.
 export const BOOST = {
-  thrust: 6,            // m/s² while the BOOST button is held (band Lv1)
-  capOverBand: 10,      // boost can't push you faster than band cap + this (band Lv1; tailwinds always + 10)
-  thrustPerLevel: 0.5,  // v1.9 BOOSTS SCALE: + 0.5 m/s² per band level above 1 (Lv10 → 10.5)
-  capPerLevel: 2,       // v1.9: + 2 m/s of margin per band level above 1 (Lv10 → + 28)
+  ceiling: 1.10,        // × the cap at band Lv1…
+  ceilingPerLevel: 0.05, // …+ 0.05 per band level above 1 (Lv10 → × 1.55)
+  thrust: 20,   // m/s² while BOOST is held (band Lv1)…
+  thrustPerLevel: 4.5, // …+ this per band level above 1
+  windMargin: 10,       // tailwinds still push to cap + 10 m/s (unchanged)
 };
-// v1.9 the hold-boost at a band level: margin over the cap, and thrust (Space's WARP TANK keeps its own thrust).
-export const boostMargin = (bandLv) => BOOST.capOverBand + BOOST.capPerLevel * (Math.max(1, bandLv) - 1);
+export const boostCeilingMul = (bandLv) => BOOST.ceiling + BOOST.ceilingPerLevel * (Math.max(1, bandLv) - 1);
 export const boostThrustAt = (bandLv) => BOOST.thrust + BOOST.thrustPerLevel * (Math.max(1, bandLv) - 1);
 
 // LAUNCH RAMP: taller pad + steeper launch angle (launch speed unchanged).

@@ -276,6 +276,12 @@
   }
   .chip { background: var(--panel); border-radius: 20px; padding: 8px 16px; font-weight: 900; font-size: clamp(22px, 3.6vh, 36px); box-shadow: 0 4px 0 rgba(0,0,0,0.12); }
   #hud-dist { position: absolute; left: 50%; transform: translateX(-50%); font-size: clamp(30px, 5vh, 52px); }
+  /* v2.1 THE SPEED READOUT: top-left under the coin chip — SPEED small, km/h big; gold past the cap (boosting) */
+  .hud-speed { position: absolute; left: max(14px, env(safe-area-inset-left)); top: calc(max(12px, env(safe-area-inset-top)) + clamp(58px, 7.4vh, 76px)); display: flex; flex-direction: column; align-items: flex-start; line-height: 1; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.3), 0 0 8px rgba(0,0,0,0.25); font-weight: 900; }
+  .hud-speed small { font-size: clamp(11px, 1.5vh, 15px); letter-spacing: 2px; opacity: 0.85; }
+  .hud-speed b { font-size: clamp(30px, 5vh, 50px); font-variant-numeric: tabular-nums; }
+  .hud-speed i { font-style: normal; font-size: clamp(11px, 1.5vh, 15px); opacity: 0.8; }
+  .hud-speed.gold b { color: #ffd23f; text-shadow: 0 0 12px rgba(255, 190, 30, 0.95), 0 2px 0 rgba(0,0,0,0.35); }
   #btn-pause { pointer-events: auto; min-height: 0; width: 60px; height: 60px; padding: 0; font-size: 26px; border-radius: 18px; background: var(--panel); color: var(--ink); box-shadow: 0 4px 0 rgba(0,0,0,0.15); }
   .speed { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(18px, env(safe-area-inset-bottom)); width: min(70vw, 420px); }
   .speed-label { font-weight: 900; font-size: 18px; text-align: center; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
@@ -591,6 +597,44 @@
     h1 { font-size: 11vh; }
     .big { font-size: 8vh; padding: 1.6vh 40px; }
   }
+  /* ---------- v2.1 LANDSCAPE LAYOUT (the owner plays portrait; the kids play sideways) ----------
+     Every rule below is landscape-only: portrait is exactly as before. The canvas fills the wide screen at
+     the same vertical field of view (main.js resize), so landscape simply sees more to the sides. */
+  @media (orientation: landscape) {
+    /* flight top bar, full width: SPEED top-left, the distance centred, the coin pill top-right beside pause */
+    .hud-top { padding: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); }
+    .hud-top > .chip:first-child { order: 2; margin-left: auto; margin-right: 12px; }
+    .hud-top > #btn-pause { order: 3; }
+    .hud-speed { top: max(12px, env(safe-area-inset-top)); }
+  }
+  /* Short landscape (phones on their side): the buttons become one bottom-right cluster — BOOST in the corner,
+     the skills a grid beside it (BRAKE next to BOOST), EJECT top-right under the pause button — and the speed
+     bar moves to the bottom-left, so every button stays on screen. */
+  @media (orientation: landscape) and (max-height: 600px) {
+    .boost-btn { bottom: max(12px, env(safe-area-inset-bottom)); }
+    .skills { right: calc(max(16px, env(safe-area-inset-right)) + 130px); bottom: max(12px, env(safe-area-inset-bottom)); width: 280px;
+      flex-flow: row wrap; justify-content: flex-end; align-content: flex-end; gap: 8px; }
+    .skill-btn { width: 88px; height: 48px; font-size: 18px; }
+    .eject-btn { right: calc(max(16px, env(safe-area-inset-right)) + 10px); }
+    .speed { left: max(14px, env(safe-area-inset-left)); transform: none; width: min(22vw, 240px); bottom: max(12px, env(safe-area-inset-bottom)); }
+    /* Home: the scene on the left; the hangar chips and FLY on the right; the tab bar along the bottom */
+    #title.home { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 46%); grid-template-rows: auto minmax(0, 1fr) auto auto;
+      grid-template-areas: "hud dock" "scene dock" "scene fly" "tabs tabs"; }
+    #title.home .home-hud { grid-area: hud; }
+    #title.home .home-scene { grid-area: scene; min-height: 0; }
+    #title.home .hangar { grid-area: dock; align-self: stretch; border-radius: 0 0 0 22px; overflow-y: auto; }
+    #title.home .hangar .hangar-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #title.home .fly-bar { grid-area: fly; padding-top: 6px; }
+    #title.home .tabbar { grid-area: tabs; }
+    /* WORLDS / MORE: the sheet takes the whole screen above the tab bar (it was a sliver over the scene) */
+    #title.home .sheet-wrap { position: fixed; left: 0; right: 0; top: 0; bottom: calc(56px + max(6px, env(safe-area-inset-bottom))); }
+    .worlds-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    /* THE HANGAR: the turntable on the left, the status + lineup + FLY THIS PLANE on the right */
+    .showroom { flex-direction: row; }
+    .sr-view { flex: 1 1 50%; }
+    .sr-panel { flex: 0 0 min(50%, 440px); max-height: none; justify-content: center; border-radius: 28px 0 0 28px; overflow-y: auto;
+      padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) 16px; }
+  }
 </style>
 <script type="importmap">
   { "imports": { "three": "./vendor/three.module.min.js" } }
@@ -624,6 +668,7 @@
           <button id="btn-transfer" class="sheet-row">🏦 TRANSFER COINS</button>
           <button id="btn-codes" class="sheet-row">💾 SAVE CODES</button>
           <button id="btn-music" class="sheet-row music-btn">🎵 MUSIC: ON</button>
+          <button id="btn-steer" class="sheet-row">🕹️ STEERING: NORMAL</button>
         </div>
       </div>
     </div>
@@ -702,6 +747,7 @@
     </div>
   </div>
   <div id="hud-flight" hidden>
+    <div class="hud-speed" id="hud-speed"><small>SPEED</small><b id="hud-kmh">0</b><i>km/h</i></div>
     <div class="speed">
       <div class="speed-label">SPEED <span id="hud-updraft" class="updraft" hidden>▲ UPDRAFT</span></div>
       <div class="bar"><div id="speed-fill"></div></div>
@@ -734,6 +780,7 @@
     <div class="pause-row">
       <button id="btn-pause-codes" class="alt small">🔑 SAVE CODES</button>
       <button id="btn-pause-music" class="alt small music-btn">🎵 MUSIC ON</button>
+      <button id="btn-pause-steer" class="alt small">🕹️ NORMAL</button>
     </div>
   </div>
 </section>

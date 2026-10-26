@@ -5,6 +5,7 @@ import {
   PLANE_TUNE, LAUNCH, FLIGHT, PARTS, PART_PHYSICS, RENDER, COINS, PILOT, LANDING, PAINTS, EJECT,
 } from './config.js';
 import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects, toggleTilt, tryLoop, tryRoll, pickupRadiusFor, SKILLS, isGoodLanding } from './physics.js';
+import { speedFov, overCap, speedReadout } from './speedfeel.js';
 import { stepPilot, tryEject, runDistance, runOver, pilotParams, pilotGrade, pilotPayout } from './pilot.js';
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
@@ -17,7 +18,7 @@ import {
   trackStats, nextCost, canBuyTrack, buyTrack, maxLevel, minLevel,
   nextPart, canBuyPart, buyPart, canBuyEject, buyEject, buyOrWearPaint, runPayout, newSecrets,
 } from './economy.js';
-import { loadSave, writeSave, getStage, setStage, isUnlocked, selectStage, setPrefs } from './save.js';
+import { loadSave, writeSave, getStage, setStage, isUnlocked, selectStage, setPrefs, sensitivityGain, nextSteerSetting, steerSetting, steerInput } from './save.js';
 import { planeFor, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRecord, walletOf } from './planes.js';
 import { buildPlane } from './plane.js';
 import { createTurntable } from './hangarview.js';
@@ -127,12 +128,12 @@ stars.visible = false;
 scene.add(stars);
 
 let baseFov = 55;
-let viewShift = 0; // Home projection offset (px), see frameView()
+let viewShift = 0, viewShiftX = 0; // Home projection offset (px), see frameView()
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  camera.fov = baseFov = camera.aspect < 1 ? 68 : 55; // portrait needs a taller view
+  camera.fov = baseFov = 68; // v2.1: the same vertical view in both orientations — landscape sees wider (was 55 there)
   camera.updateProjectionMatrix();
   viewShift = NaN; // re-frame the Home scene for the new size
 }
@@ -1185,6 +1186,21 @@ function toggleMusic() {
 }
 $('btn-music').addEventListener('click', toggleMusic);
 $('btn-pause-music').addEventListener('click', toggleMusic);
+// v2.1 STEERING SENSITIVITY: Chill × 0.85 · Normal × 1.00 · Zippy × 1.30 — applies at once (read every step).
+const steerIn = { x: 0, y: 0, boost: false, dive: false, brake: false };
+function renderSteerButtons() {
+  const name = steerSetting(save.prefs).toUpperCase();
+  $('btn-steer').textContent = `🕹️ STEERING: ${name}`;
+  $('btn-pause-steer').textContent = `🕹️ ${name}`;
+}
+function cycleSteer() {
+  save = setPrefs(save, { steer: nextSteerSetting(save.prefs) });
+  writeSave(save);
+  renderSteerButtons();
+}
+$('btn-steer').addEventListener('click', cycleSteer);
+$('btn-pause-steer').addEventListener('click', cycleSteer);
+renderSteerButtons();
 
 // ---------- save codes ----------
 let codesFromPause = false;
@@ -1426,7 +1442,7 @@ function speedFx(dt) {
   if (mode === 'fly' && flight && !flight.ended && !ejected) {
     plane.trailPoints(_tl, _tr);
     trails.update(_tl, _tr, flight.speed, flight.boosting, dt, camera.position);
-    streaks.update(flight.speed, dt);
+    streaks.update(flight.speed, dt, overCap(flight.speed, params.topSpeed, params.boostCap)); // v2.1: harder past the cap
   } else {
     trails.update(_tl, _tr, 0, false, dt);
     streaks.hide();
@@ -1499,11 +1515,15 @@ function cameraTarget(out, look) {
 // v0.8 Home: frame the plane in the middle of the SCENE area (between the HUD strip and the chips),
 // not the whole screen. A projection offset only: the camera itself does not move.
 function frameView() {
-  let want = 0;
-  if (mode === 'title') { const r = $('home-scene').getBoundingClientRect(); if (r.height > 0) want = Math.round(window.innerHeight / 2 - (r.top + r.height / 2)); }
-  if (want === viewShift) return;
-  viewShift = want;
-  if (want) camera.setViewOffset(window.innerWidth, window.innerHeight, 0, want, window.innerWidth, window.innerHeight);
+  let want = 0, wantX = 0;
+  if (mode === 'title') {
+    const r = $('home-scene').getBoundingClientRect();
+    if (r.height > 0) want = Math.round(window.innerHeight / 2 - (r.top + r.height / 2));
+    if (r.width > 0) wantX = Math.round(window.innerWidth / 2 - (r.left + r.width / 2)); // v2.1 landscape: the scene is the left column (0 in portrait)
+  }
+  if (want === viewShift && wantX === viewShiftX) return;
+  viewShift = want; viewShiftX = wantX;
+  if (want || wantX) camera.setViewOffset(window.innerWidth, window.innerHeight, wantX, want, window.innerWidth, window.innerHeight);
   else camera.clearViewOffset();
 }
 
@@ -1531,6 +1551,9 @@ function updateHud() {
   $('hud-dist').textContent = `${Math.floor(distanceNow())} m`;
   $('hud-coins').textContent = runCoins;
   const sp = flight ? flight.speed : 0;
+  const rd = speedReadout(sp, params ? params.topSpeed : Infinity); // v2.1: live km/h, gold past the cap
+  $('hud-kmh').textContent = rd.kmh;
+  $('hud-speed').classList.toggle('gold', rd.gold);
   const fill = $('speed-fill');
   fill.style.width = `${Math.min(100, (sp / topSpeed()) * 100)}%`;
   $('hud-updraft').hidden = !(flight && flight.inUpdraft && !ejected);
@@ -1723,19 +1746,20 @@ function stepGame(dt) {
   input.brake = (brakeHeld || brakeKey) && !ejected; // v1.0 SPOILER BRAKES
   updateFun(dt);
   if (Math.abs(input.x) > 0.25) lastSteer = Math.sign(input.x); // ROLL goes the way you last steered
+  steerInput(input, sensitivityGain(save.prefs), steerIn); // v2.1 STEERING SENSITIVITY: the player's stick × the setting
   if (puffTimer > 0 && (puffTimer -= dt) <= 0) $('puff-text').hidden = true;
   flightSound.dive(!!flight.diving);
   acc += dt;
   let n = 0;
   while (acc >= STEP && n < 6) {
     // After an eject the empty plane noses down and flies on by itself.
-    stepFlight(flight, ejected ? { x: 0, y: -0.4, boost: false } : input, STEP, params, terrain);
+    stepFlight(flight, ejected ? { x: 0, y: -0.4, boost: false } : steerIn, STEP, params, terrain);
     stepGoals();
     if (!ejected) {
       collect(flight, { magnetRadius: lo.magnet.radius, pickupRadius: pickupRadiusFor(flight, COINS.pickupRadius), speed: flight.speed });
     } else {
       const wasLanded = pilot.landed;
-      stepPilot(pilot, input, STEP, chutePilot, terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
+      stepPilot(pilot, steerIn, STEP, chutePilot, terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
       collect(pilot, { pickupRadius: PILOT.pickupRadius });
       if (pilot.landed && !wasLanded) { // EJECT JACKPOT: the pilot's touchdown, graded
         const pay = pilotPayout(pilotGrade(pilot, params.landingSinkBonus ?? 0));
@@ -1857,16 +1881,15 @@ function stepGame(dt) {
   const wob = onGround ? 0 : effects.wobbleDeg * DEG;
   let bank = onGround ? 0 : (steerVx / params.lateralSpeed) * bankMax - effects.rollDeg * DEG + wob * Math.sin(clock * 2.3);
   bank += -flight.tiltT * (Math.PI / 2 - bank * 0.5); // TILT: knife-edge (left wing down)
-  // FOV kick: the sub-area swing's +6 and the speed kick (+4 from 45 m/s up) take the MAX, never stack;
-  // eased so it returns smoothly on landing.
+  // FOV kick (speedfeel.js): the sub-area swing's +6 and the speed kick (+4 from 45 m/s up) take the MAX, never
+  // stack; v2.1: past the cap the BIG BOOST widens it, + 18° at the ceiling. Eased, so it returns smoothly.
   let swingKick = 0;
   if (flight.swing) { // SUB-AREAS: bank HARD toward the turn
     const k = Math.min(1, flight.swing.t / SWING.time), dir = Math.sign(flight.swing.to - flight.swing.from);
     bank += dir * SWING.bankDeg * DEG * Math.sin(Math.PI * k);
     swingKick = SWING.fovKick * Math.sin(Math.PI * k);
   }
-  const sk = Math.min(1, Math.max(0, (flight.speed - 45) / 40)), speedKick = flight.ended ? 0 : 4 * sk * sk * (3 - 2 * sk);
-  const fovWant = baseFov + Math.max(swingKick, speedKick);
+  const fovWant = speedFov(baseFov, flight.speed, params.topSpeed, params.boostCap, swingKick, !!flight.ended);
   if (Math.abs(camera.fov - fovWant) > 0.01) { camera.fov += (fovWant - camera.fov) * Math.min(1, (swingKick ? 14 : 5) * dt); camera.updateProjectionMatrix(); }                                         // TILT: knife-edge (left wing down)
   if (flight.rollT > 0) bank += flight.rollDir * Math.PI * 2 * (1 - flight.rollT / SKILLS.rollTime); // ROLL: a barrel roll
   const yaw = -Math.atan2(flight.vx, Math.max(1, flight.speed)) * 0.6;

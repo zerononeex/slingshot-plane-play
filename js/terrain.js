@@ -9,11 +9,12 @@ import { LAUNCH, WORLD } from './config.js';
 import { STAGES, DEFAULT_STAGE } from './stages.js';
 import { rng } from './rng.js';
 import { columnCap, fillSceneryChunk, newSceneryChunk } from './scenery.js';
-import { CAST, slowFor } from './bumpables.js';
+import { CAST } from './bumpables.js';
 import { pocketRects, rectWeight } from './pockets.js';
 import { tailBumpablesFor } from './longrun.js';
 import { neonRunFor, LANE_PUSH, LANE_MIN } from './neon.js';
 import { megaRunFor } from './megarun.js';
+import { guideRingsFor } from './guiderings.js';
 import { SKILLS } from './physics.js';
 
 export const LOOP_RING_R = 4; // v1.9: a loop ring's opening (was 3)
@@ -363,7 +364,7 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   const tail = tailBumpablesFor(stage.id).map((b) => ({ ...b, d: b.d % cycle, tailLap: Math.floor(b.d / cycle) }));
   const bumpables = [...stage.bumpables, ...pocketList.flatMap((p) => p.bumpables.map((b) => ({ ...b, pocket: p.index }))), ...tail].map((b, i) => {
     const c = CAST[b.type];
-    return { ...b, id: i, cast: c, r: c.r, slow: slowFor(b.type), cy: featuresAt(b.x, b.d, -Infinity) + (b.y ?? c.y) };
+    return { ...b, id: i, cast: c, r: c.r, cy: featuresAt(b.x, b.d, -Infinity) + (b.y ?? c.y) };
   });
   function bumpAt(x, y, d, radius = 0.6) {
     const lap = Math.floor(d / cycle), dl = local(d);
@@ -466,7 +467,10 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
   const floorAt = (x, d) => featuresAt(x, d, -Infinity);
   // surfaceAt = the ground without the launch deck (what the terrain mesh draws).
   // (The scenery colliders read it too: local, surfaceAt, surfaceKind.)
+  // v2.1 WATERFALL GUIDE RINGS: decoration only (nothing here reads them) — { lap: lap-local, abs: absolute }.
+  const guideRings = guideRingsFor(stage, (x, d) => featuresAt(x, d, Infinity), mega);
   const terrainApi = {
+    guideRings,
     stage, groundAt, surfaceAt: featuresAt, surfaceKind, ceilingAt, hitTest, effectsAt, crossings, devilAt,
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     gates, storms, bridges, slots, loopRings, loopRingAt, diveGates, bumpables, bumpAt, archways, courses, pockets: pocketList,

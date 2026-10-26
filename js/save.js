@@ -67,9 +67,25 @@ export function derivePlanes(unlocked, stored = []) {
 }
 // v1.4 REWARD FLYERS: earned by ★s, derived (never stored — a ★ never goes away, so neither does its flyer).
 export const flyersUnlocked = (stages) => FLYER_ORDER.filter((id) => FLYER_STARS[id].every((w) => stages?.[w]?.complete === true));
+// v2.1 STEERING SENSITIVITY (a setting; owner playtest 2026-10-25: "make the left, up down and left turns even more
+// sensitive"): a gain on the PLAYER's stick, both axes, before physics — on top of HANDLING and the sideways scaling.
+// The scripted pilot never sees it. Stored only when not Normal (absent = Normal = today's exact feel).
+export const SENSITIVITY = { chill: 0.85, normal: 1, zippy: 1.3 };
+export const SENSITIVITY_ORDER = ['chill', 'normal', 'zippy'];
+export const steerSetting = (prefs) => (prefs && prefs.steer in SENSITIVITY ? prefs.steer : 'normal');
+export const sensitivityGain = (prefs) => SENSITIVITY[steerSetting(prefs)];
+export const nextSteerSetting = (prefs) => SENSITIVITY_ORDER[(SENSITIVITY_ORDER.indexOf(steerSetting(prefs)) + 1) % SENSITIVITY_ORDER.length];
+// The player's input scaled by the setting into `out` (the physics clamps each axis to ±1 as always).
+export function steerInput(input, gain, out) {
+  out.x = input.x * gain; out.y = input.y * gain;
+  out.boost = input.boost; out.dive = input.dive; out.brake = input.brake;
+  return out;
+}
 // prefs.musicLast = { world: 1–3 } — the rotating flight song played last per world (only when set).
+// prefs.steer = 'chill' | 'zippy' (v2.1; Normal is stored as absent).
 function cleanPrefs(raw) {
   const out = { music: !(isObj(raw) && raw.music === false) };
+  if (isObj(raw) && (raw.steer === 'chill' || raw.steer === 'zippy')) out.steer = raw.steer;
   if (isObj(raw) && isObj(raw.musicLast)) {
     const last = {};
     for (const [w, n] of Object.entries(raw.musicLast)) if (STAGE_ORDER.includes(w) && [1, 2, 3].includes(n)) last[w] = n;

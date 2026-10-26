@@ -14,8 +14,10 @@ import { SW_ZONES, SW_HEROES, starWarsPieces } from './starwars.js';
 export const LADDER = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 20000, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 40000, dragonwar: 50000, starfox: 70000, starwars: 70000 };
 export const uniqueRun = (stageId) => LADDER[stageId] ?? 0;
 // v1.1 FAIRNESS RULE: each world's COMPLETION ZONE = min(unique run, its own v1.0 FULL-maxed corner).
+// v2.1: FROZEN at the corners before ENGINE SCALE (§3) — the owner wants the kids to reach the end, so the stronger
+// top-half engine makes the same gates and goal EASIER to reach; completion content does not move further away.
 // All completion content (goal gates, secrets, the GOAL) lives inside it; beyond it is bonus country.
-export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17062, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 38520, dragonwar: 46738, starfox: 70000, starwars: 69772 }; // (2026-10-25 key rings moved the mega corners) v1.3: provisional for the new worlds until their corners are tuned
+export const COMPLETION_ZONE = { plains: 2000, canyon: 3000, city: 4000, snow: 5000, desert: 6000, ocean: 7000, space: 10000, jetstream: 17116, volcano: 12000, jungle: 14000, skyislands: 16000, neonvoid: 38545, dragonwar: 46747, starfox: 70000, starwars: 69797 }; // (2026-10-25 key rings moved the mega corners) v1.3: provisional for the new worlds until their corners are tuned
 export const completionZone = (stageId) => COMPLETION_ZONE[stageId] ?? 0;
 
 // One character zone per 1,000 m block (its name rides the zone's banner arch).
