@@ -15,7 +15,7 @@
 // Built once per world; per frame only what is near the plane is placed. No per-frame allocation.
 import * as THREE from 'three';
 import { shotPos, SHOTS } from './shooters.js';
-import { doorOpenness, DOOR, DOOR_LOOP_R, LOOP_R_MIN } from './loopdoors.js';
+import { doorOpenness, DOOR, KEY } from './loopdoors.js';
 import { WEAVE_HALF, POST_TOP, TILT, GAP, wildPos, patrolX } from './megarun.js';
 import { buildFlyer } from './flyermodels.js';
 import { FLIGHT } from './config.js';
@@ -270,7 +270,7 @@ export function createMegaView(scene, fx) {
     tilts.push({ g, t });
   }
   // A LOOP DOOR: flanking towers, a wall beam above, two gate leaves (they slide into the towers), the
-  // name banner, and ahead of it the two golden KEY RINGS on the loop circle (+ their glow rails).
+  // name banner, and 1,000+ m ahead of it its one giant golden KEY RING with the key floating at its centre.
   function buildDoor(o, arc) {
     const look = DOOR_LOOK[o.look]; // v1.6 Star Fox's gates: a warp frame, a sunken gate, a corona gate, the fortress door
     const g = new THREE.Group(), stone = look ? look[0] : arc.id === 'snowfields' ? 0xc8d4e2 : arc.id === 'skycastles' ? 0xf4f2ec : 0x8a8478, roof = look ? look[1] : arc.id === 'skycastles' ? 0x2f6fe8 : 0xc0392b;
@@ -289,22 +289,22 @@ export function createMegaView(scene, fx) {
     }
     const glowMat = basic(0xfff2a8, { transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(DOOR.half * 2, DOOR.top), glowMat); glow.position.set(0, DOOR.top / 2, 2); g.add(glow);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(46, 14), new THREE.MeshBasicMaterial({ map: signTexture([o.name, 'LOOP THROUGH BOTH KEYS!']), side: THREE.DoubleSide }));
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(46, 14), new THREE.MeshBasicMaterial({ map: signTexture([o.name, 'FLY THROUGH THE KEY RING!']), side: THREE.DoubleSide }));
     sign.position.set(0, DOOR.top + 22, 1); g.add(sign);
     g.position.set(0, 0, -o.d);
     keepM(g);
-    // the key rings (gold, facing the plane) at the circle's mark, and glow rails along their windows
-    const kg = new THREE.Group(), keyMat = basic(0xffd23f), railMat = basic(0xfff2a8, { transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
-    const yb = o.y, ytop = o.y + LOOP_R_MIN + DOOR_LOOP_R, len = DOOR.before + DOOR.after;
-    const rings = [];
-    for (const [y, sy] of [[yb, 1], [ytop, (DOOR_LOOP_R - LOOP_R_MIN + DOOR.keyR) / DOOR.keyR]]) {
-      const r = new THREE.Mesh(new THREE.TorusGeometry(DOOR.keyR, 0.45, 8, 28), keyMat); r.scale.set(1, sy, 1); r.position.set(o.x, y, 0); kg.add(r); rings.push(r);
-      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, len, 6).rotateX(Math.PI / 2), railMat); rail.position.set(o.x, y - DOOR.keyR * sy, -(DOOR.after - DOOR.before) / 2); kg.add(rail);
-      const tooth = new THREE.Mesh(box(1.2, 2.4, 0.6), keyMat); tooth.position.set(o.x + DOOR.keyR + 1, y - 1, 0); kg.add(tooth);
-    }
-    kg.position.set(0, 0, -o.loopD);
+    // the giant KEY RING (gold, facing the plane, a soft glow disc inside) and the key floating at its centre
+    const kg = new THREE.Group(), keyMat = basic(0xffd23f), discMat = basic(0xfff2a8, { transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(KEY.R, 1.1, 10, 64), keyMat); ring.position.set(o.key.x, o.key.y, 0); kg.add(ring);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(KEY.R - 1, 48), discMat); disc.position.set(o.key.x, o.key.y, 0); kg.add(disc);
+    const key = new THREE.Group(); // the key: a round bow, a shaft and two teeth (~11 m long)
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.8, 8, 20), keyMat); bow.position.y = 3.6; key.add(bow);
+    const shaft = new THREE.Mesh(box(1, 8, 1), keyMat); shaft.position.y = -2.4; key.add(shaft);
+    for (const [ty, tw] of [[-5.4, 2.6], [-3.4, 1.8]]) { const tooth = new THREE.Mesh(box(tw, 1, 1), keyMat); tooth.position.set(0.5 + tw / 2, ty, 0); key.add(tooth); }
+    key.position.set(o.key.x, o.key.y, 0); kg.add(key);
+    kg.position.set(0, 0, -o.key.d);
     keepM(kg);
-    doors.push({ g, kg, o, leaves, glowMat, rings, flash: 0, wasOpen: 0 });
+    doors.push({ g, kg, o, leaves, glowMat, ring, key, flash: 0, wasOpen: 0 });
   }
   // A trebuchet (an arm on a pivot; it winds back, then throws).
   function buildTreb(sh) {
@@ -715,14 +715,16 @@ export function createMegaView(scene, fx) {
     const states = flight?.hz?.doors ?? null;
     doors.forEach((it, i) => {
       it.g.visible = it.o.d > lo && it.o.d < hi + 200;
-      it.kg.visible = it.o.loopD + DOOR.after > lo && it.o.loopD - DOOR.before < hi;
       const st = states ? states[i] : null, k = st ? doorOpenness(st, t) : 0;
+      it.kg.visible = it.o.key.d + KEY.R > lo && it.o.key.d < hi + 200;
+      it.key.visible = !(st && st.state === 1); // the key is gone once taken
       for (const { leaf, sx } of it.leaves) leaf.position.x = sx * k * (DOOR.half + 2);
       if (st && st.state === 1 && !it.wasOpen) it.flash = 1;
       it.wasOpen = st ? st.state : 0;
       it.flash = Math.max(0, it.flash - dt * 0.8);
       it.glowMat.opacity = it.flash * 0.9;
-      for (const r of it.rings) { r.rotation.y = clock * 1.6; r.material.color.setHex(st && st.state === 1 ? 0xffffff : 0xffd23f); }
+      it.key.rotation.y = clock * 1.6; it.key.position.y = it.o.key.y + Math.sin(clock * 2) * 0.8;
+      it.ring.material.color.setHex(st && st.state === 1 ? 0xffffff : 0xffd23f);
     });
     // trebuchets: wind back during the telegraph, throw at launch
     for (const tb of trebs) {

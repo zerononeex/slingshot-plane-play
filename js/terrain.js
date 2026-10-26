@@ -471,9 +471,8 @@ export function makeTerrain(stage = STAGES[DEFAULT_STAGE], { deckHeight = LAUNCH
     columns, trunks: columns, asteroids, blocks, arches, rings, devils, local, deckStart, deckHeight, cycle,
     gates, storms, bridges, slots, loopRings, loopRingAt, diveGates, bumpables, bumpAt, archways, courses, pockets: pocketList,
     edgeWalls: !!stage.edgeWalls, neon,
-    // v1.5 the mega layer: hazards stepped from stepFlight (shots, doors), door key rings during a loop.
+    // v1.5 the mega layer: hazards stepped from stepFlight (shots, doors and their giant key rings).
     mega, stepHazards: mega ? (s, dt, P) => mega.stepHazards(s, dt, P, floorAt) : null,
-    keyRingAt: mega ? mega.keyRingAt : null, loopDone: mega ? mega.loopDone : null,
   };
   return terrainApi;
 }

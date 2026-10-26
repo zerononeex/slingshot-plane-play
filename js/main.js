@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import {
   PLANE_TUNE, LAUNCH, FLIGHT, PARTS, PART_PHYSICS, RENDER, COINS, PILOT, LANDING, PAINTS, EJECT,
 } from './config.js';
-import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects, toggleTilt, tryLoop, tryRoll, pickupRadiusFor, SKILLS } from './physics.js';
-import { stepPilot, tryEject, runDistance, runOver, pilotParams } from './pilot.js';
+import { createFlight, stepFlight, flightParams, launchSpeedFor, partEffects, toggleTilt, tryLoop, tryRoll, pickupRadiusFor, SKILLS, isGoodLanding } from './physics.js';
+import { stepPilot, tryEject, runDistance, runOver, pilotParams, pilotGrade, pilotPayout } from './pilot.js';
 import { makeTerrain } from './terrain.js';
 import { STAGES, STAGE_ORDER, stageBand, planeEntry, EXTRA_PLANES } from './stages.js';
 import { stepCoins, reachSecrets, reachStashes, secretY } from './coins.js';
@@ -869,7 +869,7 @@ function finishRun() {
   $('res-newbest').hidden = !(dist > prevBest && dist > 0);
   $('res-glide-box').hidden = !ejected;
   if (ejected) $('res-glide').textContent = Math.round(pilot.d - pilot.ejectD);
-  const verdict = ejected ? LANDING.pilot : LANDING[flight.landing ?? 'rough'];
+  const verdict = ejected ? pilotPayout(pilotGrade(pilot, params.landingSinkBonus ?? 0)) : LANDING[flight.landing ?? 'rough'];
   $('res-verdict').textContent = verdict.bonus ? `${verdict.text} +${verdict.bonus}` : verdict.text;
   const bs = bumpSummary(bumpsRun);
   $('res-bumps').hidden = !bs;
@@ -1621,7 +1621,7 @@ function animatePilot(dt) {
     }
   } else if (pilotDizzy) {
     pg.group.rotation.set(0, Math.sin(clock * 3) * 0.4, Math.sin(clock * 5) * 0.15);
-  } else if (flight && (flight.landing === 'perfect' || flight.landing === 'good') && flight.mode !== 'air') {
+  } else if (flight && isGoodLanding(flight.landing) && flight.mode !== 'air') {
     pg.group.position.y = 0.02 + 0.18 + Math.abs(Math.sin(clock * 8)) * 0.15; // cheering
     pg.arms[0].rotation.z = -2.8;
     pg.arms[1].rotation.z = 2.8;
@@ -1693,12 +1693,12 @@ function collect(pos, opts) {
   }
 }
 
-// v1.5 the mega-stages: the door the plane is keying / passing, and the arc + spectacle banners.
+// v1.5 the mega-stages: the door whose key ring the plane just flew through, and the arc + spectacle banners.
 function megaDoorNear() {
   const m = terrain.mega;
   if (!m) return null;
   let best = null;
-  for (const d of m.doors) if (!best || Math.abs(d.loopD - flight.d) < Math.abs(best.loopD - flight.d)) best = d;
+  for (const d of m.doors) if (!best || Math.abs(d.key.d - flight.d) < Math.abs(best.key.d - flight.d)) best = d;
   return best;
 }
 let megaArc = -1;
@@ -1737,10 +1737,11 @@ function stepGame(dt) {
       const wasLanded = pilot.landed;
       stepPilot(pilot, input, STEP, chutePilot, terrain, flight.lane ?? FLIGHT.corridorHalfWidth);
       collect(pilot, { pickupRadius: PILOT.pickupRadius });
-      if (pilot.landed && !wasLanded) {
-        landingBonus += LANDING.pilot.bonus;
-        banner(`${LANDING.pilot.text} +${LANDING.pilot.bonus}`, 2.2);
-        sfx.cheer();
+      if (pilot.landed && !wasLanded) { // EJECT JACKPOT: the pilot's touchdown, graded
+        const pay = pilotPayout(pilotGrade(pilot, params.landingSinkBonus ?? 0));
+        landingBonus += pay.bonus;
+        banner(pay.bonus ? `${pay.text} +${pay.bonus}` : pay.text, 2.2);
+        if (pay.bonus) sfx.cheer();
       }
     }
     acc -= STEP;
@@ -1748,7 +1749,7 @@ function stepGame(dt) {
   }
   if (n === 6) acc = 0;
   for (const ev of flight.events) {
-    if (ev === 'bounce' || ev === 'touchdown' || ev === 'perfect' || ev === 'good') { // touchdown dust, scaled by the impact
+    if (ev === 'bounce' || ev === 'touchdown' || isGoodLanding(ev)) { // touchdown dust, scaled by the impact
       plane.root.getWorldPosition(_v);
       const k = Math.min(1, flight.speed / 30);
       fx.dust(_v.x, _v.y - 0.5, _v.z, DUST[stageId] ?? 0xd8c8a8, Math.round(6 + 12 * k), 0.6 + 0.6 * k);
@@ -1770,7 +1771,7 @@ function stepGame(dt) {
       bonkWobble = 0.6;
     }
     if (ev === 'scrape') sfx.scrape();
-    if ((ev === 'perfect' || ev === 'good') && !ejected) {
+    if (isGoodLanding(ev) && !ejected) { // judged once (first contact): SUPER PERFECT's +500 replaces PERFECT's +10
       landingBonus += LANDING[ev].bonus;
       banner(`${LANDING[ev].text} +${LANDING[ev].bonus}`, 2.2);
       sfx.cheer();
@@ -1808,7 +1809,7 @@ function stepGame(dt) {
     if (ev === 'hit') { sfx.fireHit(); plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y + 0.3, _v.z - 1, 0xff8a1f, 0xffd23f); bonkWobble = Math.max(bonkWobble, 0.3); }
     if (ev === 'boulderHit') puffText('BOULDER!');
     if (ev === 'dodge') { sfx.dodge(); puffText('DODGED!'); }
-    if (ev === 'keyRing') { sfx.keyRing(); puffText(flight.loop?.keys?.size >= 2 ? 'BOTH KEYS!' : 'KEY!'); }
+    if (ev === 'keyRing') { sfx.keyRing(); puffText('KEY!'); }
     if (ev === 'doorOpen') { const dr = megaDoorNear(); sfx.doorOpen(); banner(`${dr ? dr.name : 'THE GATE'} OPENS!`, 2.4); if (dr) fx.goalBurst(dr.x, dr.y + 12, -dr.d, 2); }
     if (ev === 'doorBonk') { sfx.doorBonk(); setTimeout(() => sfx.grind(), 150); banner('CLONK! THE GATE GRINDS OPEN…', 2.2); bonkWobble = 0.9; plane.root.getWorldPosition(_v); fx.bits(_v.x, _v.y, _v.z - 2, 0x6b4423, 0x2a2d36); }
     if (ev === 'tiltSector') { runCoins += 10; banner('KNIFE EDGE! +10', 1.6); sfx.slot(); }
@@ -1921,7 +1922,7 @@ function stepGame(dt) {
     if (runOver(session, flight)) { endTimer += dt; if (endTimer > 2.2) finishRun(); }
   } else if (runOver(session, flight)) {
     endTimer += dt;
-    const wait = flight.landing === 'bad' ? 3.2 : flight.landing === 'perfect' || flight.landing === 'good' ? 1.8 : 1.2;
+    const wait = flight.landing === 'bad' ? 3.2 : isGoodLanding(flight.landing) ? 1.8 : 1.2;
     if (endTimer > wait) finishRun();
   }
   updateHud();

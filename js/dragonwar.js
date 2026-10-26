@@ -134,6 +134,9 @@ const WEAVE = LAP_PLAN.flatMap((plan, lap) => [...plan].flatMap((w) => {
 const TILTS = [[5300, 0, 'THE ICE NEEDLE'], [26500, 8, 'THE ARROW SLIT'], [35300, -8, 'THE OBSIDIAN BLADE']];
 // LOOP DOORS: [door d, loop mark d, lane x, bottom key height (abs), name] — the teacher, the war gate, the sky gate.
 const DOORS = [[7900, 7760, 0, 22, 'THE ICE GATE'], [23900, 23760, 0, 22, 'IRONGATE'], [41400, 41270, 0, 22, 'THE SKY GATE']];
+// KEY RINGS (owner playtest 2026-10-25, no loop): per door [ring d, x, y] — one giant ring ≥ 1,000 m before its
+// door, off the centreline (|x| ≥ 40 % of the corridor's half-width), a different spot for every door.
+const DOOR_KEYS = [[6860, 12, 31], [22860, 15, 29], [40100, 13, 33]]; // (right of the line: the left sits behind base-lap rock)
 
 // SHOOTERS. Dragons: [d, x, y (muzzle, abs), aim ('plane' or [x, y] = the line they guard), patrol?]
 // Trebuchets: [d, x (side, outside the corridor), aimX (the ground line the boulder lands on)].
@@ -234,7 +237,7 @@ export const MEGA_DATA = {
     run: DW_RUN,
     weave: WEAVE,
     tilts: TILTS.map(([d, x, name]) => ({ d, x, name })),
-    doors: DOORS.map(([d, loopD, x, y, name]) => ({ d, loopD, x, y, name })),
+    doors: DOORS.map(([d, loopD, x, y, name], i) => ({ d, loopD, x, y, name, key: { d: DOOR_KEYS[i][0], x: DOOR_KEYS[i][1], y: DOOR_KEYS[i][2] } })),
     shooters: [
       ...DRAGONS.map(([d, x, y, aim, patrol]) => ({ kind: 'dragon', d, x, y, aim, ...(patrol ? { patrol } : {}) })),
       ...TREBUCHETS.map(([d, x, aimX]) => ({ kind: 'trebuchet', d, x, y: 0, aim: [aimX, 0] })),

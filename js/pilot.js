@@ -1,6 +1,8 @@
 // Pure parachute-pilot physics for the EJECTOR SEAT (no three.js).
 // The pilot inherits the plane's velocity, pops up, then glides under the canopy.
 // Drag left/right to steer; drag up = flare (float flatter); drag down = dive faster.
+import { LANDING } from './config.js';
+import { gradeTouchdown } from './physics.js';
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -56,6 +58,9 @@ export function stepPilot(p, input, dt, PILOT, envIn, corridor = 26) {
   const g = env.groundAt(p.x, p.d, p.y);
   if (p.y <= g + 0.5) {
     p.y = g + 0.5;
+    // EJECT JACKPOT: the touchdown as it happened (graded by pilotGrade, on the landings' own ladder).
+    const slope = Math.atan((env.groundAt(p.x, p.d + 1, p.y) - env.groundAt(p.x, p.d - 1, p.y)) / 2);
+    p.touch = { vy: p.vy, gradeDeg: (Math.atan2(p.vy, Math.max(p.vd, 0.01)) - slope * LANDING.slopeWeight) * 180 / Math.PI, water: !!(env.surfaceKind && env.surfaceKind(p.x, p.d, p.y) === 'water') };
     p.landed = true;
     p.vd = 0;
     p.vx = 0;
@@ -63,6 +68,16 @@ export function stepPilot(p, input, dt, PILOT, envIn, corridor = 26) {
   }
   return p;
 }
+
+// The pilot's touchdown on the landings' ladder: 'super' | 'perfect' | 'good' (safe) | 'rough'. Water floats
+// the pilot safely but never grades better than a safe landing (no PERFECT on water, as for planes).
+export function pilotGrade(p, sinkBonus = 0) {
+  if (!p.touch) return 'good';
+  const g = gradeTouchdown(p.touch.vy, p.touch.gradeDeg, sinkBonus);
+  return p.touch.water && (g === 'super' || g === 'perfect') ? 'good' : g;
+}
+// The LANDING row an ejection pays: SUPER PERFECT +500, PERFECT +100, safe +5, rough 0.
+export const pilotPayout = (grade) => LANDING[{ super: 'pilotSuper', perfect: 'pilotPerfect', good: 'pilot' }[grade] ?? 'pilotRough'];
 
 // ---- the eject rules for one flight (pure, so they can be tested) ----
 // session = { ownsSeat, ejected: false, pilot: null }

@@ -80,12 +80,6 @@ function stepLoop(s, dt, P, env) {
     if (!L.thread.has(key)) L.thread.set(key, new Set());
     L.thread.get(key).add(lr.ring.k);
   }
-  // v1.5 LOOP DOORS: the door key rings this loop threads (both = the door opens when the loop ends).
-  const kr = env.keyRingAt ? env.keyRingAt(s.x, s.y, s.d) : null;
-  if (kr) {
-    const key = `${kr.i}:${kr.key}`;
-    if (!(L.keys ??= new Set()).has(key)) { L.keys.add(key); s.events.push('keyRing'); }
-  }
   const hit = solidHit(s, env, P);
   const g = env.groundAt(s.x, s.d, s.y);
   if (hit || s.y - P.clearance < g) { // clipped something: the loop breaks off
@@ -103,7 +97,6 @@ function stepLoop(s, dt, P, env) {
     s.events.push('loopEnd');
     // v1.9 PERFECT LOOP: every ring of one formation threaded inside ONE loop — once per flight per formation
     for (const [key, ks] of L.thread) if (ks.size >= LOOP_RINGS && !s.used.has(key + 'perfectLoop')) { s.used.add(key + 'perfectLoop'); s.events.push('perfectLoop'); }
-    if (L.keys && env.loopDone) env.loopDone(s, L.keys); // v1.5: a keyed loop opens its door in advance
   }
 }
 
@@ -213,7 +206,7 @@ export function createFlight({ speed, y, pitchDeg = 0, x = 0, d = 0, momentum = 
     fuelMax: fuel,
     boosting: false,
     peakSpeed: speed,
-    landing: null,          // null | perfect | good | rough | bad — judged at first contact
+    landing: null,          // null | super | perfect | good | rough | bad — judged at first contact
     crashFX: false,         // fire + smoke only for a BAD crash
     scrapeCool: 0,
     used: new Set(),        // arches / rings / dust devils already used this flight
@@ -531,14 +524,22 @@ function slopeAt(x, d, y, env) {
 
 // Landing classification (first contact) + bounce / roll / tumble.
 // Soft snow widens the sink limits by P.landingSinkBonus m/s.
-export function classifyTouchdown(vy, impactDeg, speed, P) {
-  if (impactDeg < -P.crashAngleDeg && speed > P.crashSpeed) return 'bad';
-  const a = Math.abs(impactDeg);
-  const bonus = P.landingSinkBonus ?? 0;
-  if (vy >= LANDING.perfect.minSink - bonus && a <= LANDING.perfect.maxAngleDeg) return 'perfect';
-  if (vy >= LANDING.good.minSink - bonus && a <= LANDING.good.maxAngleDeg) return 'good';
+// gradeDeg = the impact angle the grade reads (terrain slope at half weight); the BAD crash test keeps
+// the full-slope impactDeg (unchanged).
+export function gradeTouchdown(vy, gradeDeg, sinkBonus = 0) {
+  const a = Math.abs(gradeDeg);
+  for (const g of ['super', 'perfect', 'good']) if (vy >= LANDING[g].minSink - sinkBonus && a <= LANDING[g].maxAngleDeg) return g;
   return 'rough';
 }
+export function classifyTouchdown(vy, impactDeg, speed, P, gradeDeg = impactDeg) {
+  if (impactDeg < -P.crashAngleDeg && speed > P.crashSpeed) return 'bad';
+  return gradeTouchdown(vy, gradeDeg, P.landingSinkBonus ?? 0);
+}
+export const isGoodLanding = (v) => v === 'super' || v === 'perfect' || v === 'good';
+// What the touchdown DOES (settle and roll vs bounce) stays on the pre-2026-10-25 window (the old GOOD,
+// full-slope impact): the grades are coin fanfare only, so widening them moves no distance.
+export const ROLL_WINDOW = { minSink: -3.5, maxAngleDeg: 18 };
+const rollsOn = (vy, impactDeg, P) => vy >= ROLL_WINDOW.minSink - (P.landingSinkBonus ?? 0) && Math.abs(impactDeg) <= ROLL_WINDOW.maxAngleDeg;
 
 function touchGround(s, forward, P, env, g) {
   const slope = slopeAt(s.x, s.d, s.y, env);
@@ -546,7 +547,7 @@ function touchGround(s, forward, P, env, g) {
   const impact = path - slope; // negative = into the ground
   s.y = g + P.clearance;
 
-  const verdict = classifyTouchdown(s.vy, impact / DEG, s.speed, P);
+  const verdict = classifyTouchdown(s.vy, impact / DEG, s.speed, P, (path - slope * LANDING.slopeWeight) / DEG);
   const first = s.landing === null;
   const onWater = P.water && env.surfaceKind && env.surfaceKind(s.x, s.d, s.y) === 'water';
   if (verdict === 'bad') { if (onWater) s.events.push('bigSplash'); startTumble(s); return; }
@@ -565,11 +566,11 @@ function touchGround(s, forward, P, env, g) {
     return;
   }
   if (first) s.landing = verdict;
+  if (first && isGoodLanding(verdict)) s.events.push(verdict); // the fanfare (main.js pays it once)
 
-  if (first && (verdict === 'perfect' || verdict === 'good')) {
+  if (first && rollsOn(s.vy, impact / DEG, P)) {
     s.mode = 'ground';
     s.pitch = slope;
-    s.events.push(verdict);
   } else if (s.speed > P.bounceMinSpeed && s.bounces < P.maxBounces && impact < -P.bounceMinAngleDeg * DEG) {
     s.bounces++;
     s.speed *= P.bounceKeep;

@@ -1,10 +1,12 @@
 // v1.5 LOOP DOORS — shared by the mega-stages. A Loop Door blocks a chokepoint (the whole corridor,
-// above the ceiling). Ahead of it a LOOP CIRCLE of coins marks the move, with two glowing KEY RINGS:
-// one at the BOTTOM of the circle and one at the TOP, placed with the real loop geometry from
-// physics.js (a loop started at (d0, y0) runs d = d0 + R sin θ, y = y0 + R (1 − cos θ): its top is
-// straight above its start, 2R up). One full LOOP through both opens the door in advance (fanfare);
-// arriving unopened is the heaviest bonk in the game (× 0.4 + shake) and the door grinds open over
-// 1.5 s — the flight always goes on. Door + key state is per flight (s.hz.doors), never saved.
+// above the ceiling). KEY RINGS (owner playtest 2026-10-25: "the loop to get the key is a little too
+// difficult" at mega-stage speeds): no loop any more — ONE giant gold KEY RING (radius KEY.R, the key
+// floating at its centre) stands off the corridor's centreline at least KEY.runway m before its door.
+// Flying through its disc collects the key and the door starts opening on the spot (it is wide open long
+// before a plane at full speed arrives); the stretch from the ring to the door is a clear lane (megarun.js
+// clears it). Missing the ring is the player's problem: arriving unopened is the heaviest bonk in the
+// game (× 0.4 + shake) and the door grinds open over 1.5 s — the flight always goes on. The circle of
+// coins ahead of the door stays (coins only). Door + key state is per flight (s.hz.doors), never saved.
 // Pure data + maths (no DOM / three.js).
 import { SKILLS } from './physics.js';
 
@@ -16,26 +18,15 @@ export const DOOR = {
   half: 30,         // the door spans x ±30 (the corridor is ±26)
   top: 80,          // and reaches above the 60 m ceiling: no flying over it
   depth: 3,
-  // The KEY RINGS are long glowing capsules along d (a loop at 150 m/s is a split-second
-  // decision, so the window is generous): a loop started anywhere from `before` m short of the
-  // circle's mark to `after` m past it, at the bottom ring's height (± keyR), threads both.
-  keyR: 4.5, before: 18, after: 46,
 };
-// The loop radius depends on speed (R = 7 + 0.1 v, 8 → 13 m): the circle of coins is drawn for a fast
-// plane (13 m), and the TOP key is tall enough to catch the top of any loop (2 × 8 → 2 × 13 m up).
+// The giant KEY RING: radius R (a coin ring is a few metres), at least `runway` m before its door, off the
+// centreline by at least `offCentre` of the corridor's half-width; `clear` m in front of it stay clear too.
+export const KEY = { R: 25, runway: 1000, offCentre: 0.4, clear: 100 };
+// The coin circle ahead of each door (centre = its mark, R = DOOR_LOOP_R) — coins only.
 export const DOOR_LOOP_R = SKILLS.loopRadius(60);
 export const LOOP_R_MIN = SKILLS.loopRadius(0);
 
-// door = { id, d (the door plane), loopD (the circle's mark), x (lane), y (bottom key height, absolute) }
-// → the two key rings { key: 'bottom' | 'top', x, y, d0, d1 } (capsules along d).
-export function keyRings(door) {
-  const d0 = door.loopD - DOOR.before, d1 = door.loopD + DOOR.after;
-  return [
-    { key: 'bottom', x: door.x, y: door.y, y0: door.y - DOOR.keyR, y1: door.y + DOOR.keyR, d0, d1 },
-    { key: 'top', x: door.x, y: door.y + LOOP_R_MIN + DOOR_LOOP_R, y0: door.y + 2 * LOOP_R_MIN - DOOR.keyR, y1: door.y + 2 * DOOR_LOOP_R + DOOR.keyR, d0, d1 },
-  ];
-}
-// The loop circle of coins that marks the move (centre = the mark, R = DOOR_LOOP_R).
+// The circle of coins ahead of the door (centre = the mark, R = DOOR_LOOP_R).
 export function loopCircleCoins(door, n = 16) {
   const out = [];
   for (let i = 0; i < n; i++) {
@@ -45,13 +36,12 @@ export function loopCircleCoins(door, n = 16) {
   return out;
 }
 
-// Which key ring (if any) the point is inside.
-export function keyRingHit(door, x, y, d) {
-  if (d < door.loopD - DOOR.before - DOOR.keyR || d > door.loopD + DOOR.after + DOOR.keyR) return null;
-  if (Math.abs(x - door.x) > DOOR.keyR) return null;
-  if (Math.abs(y - door.y) < DOOR.keyR) return 'bottom';
-  if (y > door.y + 2 * LOOP_R_MIN - DOOR.keyR && y < door.y + 2 * DOOR_LOOP_R + DOOR.keyR) return 'top';
-  return null;
+// Did the step (x0, y0, d0) → (x1, y1, d1) cross the door's key ring disc? (door.key = { d, x, y })
+export function keyRingCrossed(door, x0, y0, d0, x1, y1, d1) {
+  const k = door.key;
+  if (!(d0 < k.d && d1 >= k.d)) return false;
+  const f = (k.d - d0) / Math.max(1e-6, d1 - d0);
+  return Math.hypot(x0 + (x1 - x0) * f - k.x, y0 + (y1 - y0) * f - k.y) <= KEY.R;
 }
 
 // Per-flight door state: 0 closed · 1 opened by the keys · 2 grinding open after a bonk. t = when.
@@ -62,12 +52,12 @@ export function doorOpenness(st, t) {
   return Math.min(1, (t - st.t) / (st.state === 1 ? DOOR.open : DOOR.grind));
 }
 
-// A finished loop: every door whose BOTH key rings it threaded slides open in advance.
-export function openByLoop(doors, states, keys, s) {
+// Through a shut door's key ring: the key is collected and the door starts opening this instant.
+export function crossKeys(doors, states, s, x0, y0, d0) {
   for (let i = 0; i < doors.length; i++) {
-    if (states[i].state !== 0 || !keys.has(`${i}:bottom`) || !keys.has(`${i}:top`)) continue;
+    if (states[i].state !== 0 || !keyRingCrossed(doors[i], x0, y0, d0, s.x, s.y, s.d)) continue;
     states[i].state = 1; states[i].t = s.time;
-    s.events.push('doorOpen');
+    s.events.push('keyRing', 'doorOpen');
   }
 }
 

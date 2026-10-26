@@ -3,7 +3,7 @@
 //   WEAVE rows   — posts (trees, towers, spires) across the corridor every 16 m; they bonk, the lanes
 //                  between them are clear, and successive rows shift so the clean line weaves.
 //   TILT sectors — a tall wall across the corridor with one knife-edge slot: clean only when tilted.
-//   LOOP DOORS   — loopdoors.js (a gate across the chokepoint, opened in advance by a keyed loop).
+//   LOOP DOORS   — loopdoors.js (a gate across the chokepoint, opened in advance through its giant key ring).
 //   SHOOTERS     — shooters.js (fire-breathing dragons, trebuchets) on a deterministic schedule.
 //   WILD flyers  — big bonk critters on sine paths (wild dragons): x/y follow the flight clock.
 //   THE HALL     — an indoor sector: a raised stone floor, a facade with one doorway, side walls,
@@ -15,7 +15,7 @@
 // Everything is a bonk at worst: nothing is one-hit, and a flight never ends at a door.
 // Pure data + maths (no DOM / three.js).
 import { createShotPool, fireShot, stepShots, shotTime, SHOTS, HIT } from './shooters.js';
-import { keyRingHit, createDoorStates, openByLoop, crossDoors, DOOR } from './loopdoors.js';
+import { createDoorStates, crossKeys, crossDoors, KEY } from './loopdoors.js';
 import { MEGA_DATA } from './dragonwar.js';
 import { SF_MEGA } from './starfox.js';
 import { SW_MEGA } from './starwars.js';
@@ -73,7 +73,7 @@ function build(data, stage = null) {
   // move forward, just past it (pockets.js), never into an interior, a door's run-in, a tilt sector or a
   // cave.
   if (stage) {
-    const busy = [...(data.halls ?? (data.hall ? [data.hall] : [])).map((h) => [h.d0 - 30, h.d1 + 10]), ...data.doors.map((o) => [o.loopD - 250, o.d + 50]),
+    const busy = [...(data.halls ?? (data.hall ? [data.hall] : [])).map((h) => [h.d0 - 30, h.d1 + 10]), ...data.doors.map((o) => [o.key.d - KEY.clear - 150, o.d + 50]),
       ...[...data.tilts, ...(data.hallTilts ?? [])].map((t) => [t.d - 40, t.d + 20]), ...(data.caves ?? (data.cave ? [data.cave] : [])).map((c) => [c.d0 - 80, c.d1 + 20])];
     const avoid = (d) => busy.some(([a, b]) => d > a && d < b);
     data = { ...data,
@@ -82,6 +82,10 @@ function build(data, stage = null) {
       wild: shiftOutOfPockets(data.wild.map((w) => ({ ...w })), stage, stage.cycle).map(({ movedFrom, ...w }) => w),
     };
   }
+  // KEY RINGS (owner playtest 2026-10-25): from KEY.clear m before each key ring to its door is a CLEAR LANE —
+  // no weave row, wild flyer or shooter there (thermals and wind lanes stay: they never knock a plane).
+  const runway = (d) => data.doors.some((o) => d >= o.key.d - KEY.clear && d <= o.d + 15);
+  data = { ...data, weave: data.weave.filter((w) => !runway(w.d)), shooters: data.shooters.filter((sh) => !runway(sh.d)), wild: data.wild.filter((w) => !runway(w.d)) };
   const rows = data.weave.map((w, i) => ({ ...w, id: i, posts: null }));
   for (const r of rows) r.posts = weavePosts(r);
   const tilts = [...data.tilts, ...(data.hallTilts ?? []).map((t) => ({ ...t, hall: true, top: 60 }))].map((t, i) => ({ gap: TILT.gap, ...t, id: i, kind: 'tiltWall' }));
@@ -123,7 +127,7 @@ function build(data, stage = null) {
   for (const s of shooters) for (let k = Math.floor((s.d - 1500) / B); k <= Math.floor(s.d / B); k++) put(fire, k, s);
   const features = [
     ...rows.map((r) => ({ d: r.d, kind: `weave:${r.kind}` })), ...tilts.map((t) => ({ d: t.d, kind: 'tilt' })),
-    ...doors.flatMap((d) => [{ d: d.loopD, kind: 'loopKeys' }, { d: d.d, kind: 'loopDoor' }]),
+    ...doors.flatMap((d) => [{ d: d.key.d, kind: 'keyRing' }, { d: d.d, kind: 'loopDoor' }]),
     ...shooters.map((s) => ({ d: s.d, kind: s.kind })), ...wild.map((w) => ({ d: w.d, kind: 'wild' })),
     ...thermals.map((u) => ({ d: u.d, kind: 'thermal' })), ...lanes.map((l) => ({ d: l.d0, kind: 'windLane' })),
     ...gaps.map((g) => ({ d: g.d, kind: `gap:${g.move}` })), ...halls.map((h) => ({ d: h.d0, kind: 'hall' })),
@@ -200,12 +204,12 @@ function build(data, stage = null) {
     }
     return null;
   }
-  // The next shut door whose loop mark is within `reach` m (or still under the plane): { d (mark), x, y, i }.
+  // The next shut door whose key ring is within `reach` m ahead: { d, x, y (the ring's centre), i }.
   function doorAhead(d, reach, states = null) {
     for (let i = 0; i < doors.length; i++) {
       const o = doors[i];
       if (states && states[i].state !== 0) continue;
-      if (o.loopD + DOOR.after > d && o.loopD - DOOR.before - reach < d) return { d: o.loopD, x: o.x, y: o.y, i };
+      if (o.key.d > d && o.key.d - reach < d) return { d: o.key.d, x: o.key.x, y: o.key.y, i };
     }
     return null;
   }
@@ -216,12 +220,6 @@ function build(data, stage = null) {
   // The shelter tunnel within `reach` m (until its exit): { d (mouth), x, y }.
   function caveAhead(d, reach) {
     for (const c of caves) if (d <= c.d1 && d >= c.d0 - reach) return { d: c.d0, x: (c.lane[0] + c.lane[1]) / 2, y: c.cruise, glide: !!c.clearApproach };
-    return null;
-  }
-
-  // Which door key ring a point is inside (during a loop): { door index, key } or null.
-  function keyRingAt(x, y, d) {
-    for (let i = 0; i < doors.length; i++) { const k = keyRingHit(doors[i], x, y, d); if (k) return { i, key: k }; }
     return null;
   }
 
@@ -282,6 +280,7 @@ function build(data, stage = null) {
     if (!s.ended) fireDue(hz, s, floor);
     stepShots(hz.shots, s, dt, P, hz.prevX, hz.prevY, hz.prevD);
     if (s.mode === 'air') {
+      crossKeys(doors, hz.doors, s, hz.prevX, hz.prevY, hz.prevD);
       crossDoors(doors, hz.doors, s, P, hz.prevD);
       for (const t of tilts) {
         if (hz.tiltsPassed[t.id] || !(hz.prevD < t.d && s.d >= t.d)) continue;
@@ -312,14 +311,11 @@ function build(data, stage = null) {
     hz.prevD = s.d; hz.prevX = s.x; hz.prevY = s.y;
   }
 
-  // A finished loop opens every door whose two keys it threaded.
-  function loopDone(s, keys) { if (keys && keys.size) openByLoop(doors, (s.hz ??= createHazards()).doors, keys, s); }
-
   // v1.6: a pocket's portal is shut inside an interior or a cave (the walls are in the way).
   const noPortal = (d) => !!hallAt(d, 30) || !!caveAt(d, 30);
   return { rows, tilts, doors, shooters, wild, thermals, lanes, features, spectacles: data.spectacles ?? [], hall, gaps, cave, wave, golden: data.golden ?? null,
     halls, caves, water, waterAt, hallAt, caveAt, noPortal, transitions: data.transitions ?? [], skin: data.skin ?? null, fortress: data.fortress ?? null, port,
-    hit, effects, openingAhead, doorAhead, caveAhead, portAhead, inHall, inCaveLane, floorAt, ceilingAt, keyRingAt, stepHazards, loopDone, createHazards, run: data.run };
+    hit, effects, openingAhead, doorAhead, caveAhead, portAhead, inHall, inCaveLane, floorAt, ceilingAt, stepHazards, createHazards, run: data.run };
 }
 
 export function megaRunFor(stageId) {

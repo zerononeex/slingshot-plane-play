@@ -179,6 +179,9 @@ const DOORS = [
   [15900, 15760, 0, 22, 'THE DOCKING GATE', 'dockingGate'], [45900, 45760, 0, 22, 'THE BUNKER DOOR', 'bunkerDoor'],
   [55900, 55760, 0, 22, 'THE WRECK AIRLOCK', 'airlock'], [63900, 63760, 0, 22, 'THE TRENCH GATE', 'trenchGate'],
 ];
+// KEY RINGS (owner playtest 2026-10-25, no loop): per door [ring d, x, y] — one giant ring ≥ 1,000 m before its
+// door, off the centreline (|x| ≥ 40 % of the corridor's half-width), a different spot for every door.
+const DOOR_KEYS = [[14860, -13, 33], [44860, -11, 29], [54860, -14, 31], [62860, -16, 29]]; // (left of the line: a 30 m block stands right of it)
 
 // THE INTERIORS (Great-Hall tech): a raised floor, a facade with one doorway, side walls, DIVE / CLIMB
 // shafts (gap walls) and knife-edge doorways. THE ICE CAVE (crystal halls; THE HIDDEN HANGAR beside it),
@@ -272,7 +275,7 @@ export const SW_MEGA = {
     weave: WEAVE,
     tilts: TILTS.map(([d, x, name]) => ({ d, x, name })),
     hallTilts: HALL_TILTS.map(([d, x, name]) => ({ d, x, name })),
-    doors: DOORS.map(([d, loopD, x, y, name, look]) => ({ d, loopD, x, y, name, look })),
+    doors: DOORS.map(([d, loopD, x, y, name, look], i) => ({ d, loopD, x, y, name, look, key: { d: DOOR_KEYS[i][0], x: DOOR_KEYS[i][1], y: DOOR_KEYS[i][2] } })),
     shooters: [
       ...PLASMA.map(([d, x, y, aim, look, patrol]) => ({ kind: 'dragon', d, x, y, aim, look, ...(patrol ? { patrol } : {}) })),
       ...BOLTS.map(([d, x, y, aim, look]) => ({ kind: 'archer', d, x, y, aim, look })),
