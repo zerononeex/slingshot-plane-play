@@ -204,7 +204,6 @@
   .card.locked { opacity: 0.55; filter: grayscale(1); }
   .card:disabled { cursor: default; transform: none; color: var(--ink); }
   .card.poor:disabled, .card.locked:disabled { background: #fff; box-shadow: 0 5px 0 #c3ccd4; }
-  .card.bounce, .swatch.bounce { animation: happy 0.55s cubic-bezier(.3,1.8,.5,1); }
   @keyframes happy { 30% { transform: scale(1.12) rotate(-2deg); } 60% { transform: scale(0.96) rotate(1deg); } }
   @keyframes glow { 50% { box-shadow: 0 5px 0 #e59f00, 0 0 18px 4px rgba(255, 198, 26, 0.85); } }
   .paints { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }

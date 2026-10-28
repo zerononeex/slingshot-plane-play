@@ -503,27 +503,19 @@ function card({ key, icon, iconBg, name, pips = '', effect, price, state, onBuy 
   b.disabled = state !== 'buyable';
   b.innerHTML = `<span class="icon" style="${iconBg ? `background:${iconBg}` : ''}">${icon}</span>
     <span class="name">${name}</span><span class="effect">${effect}</span><span class="price">${pips}${price}</span>`;
-  b.addEventListener('click', () => { lastBought = key; onBuy(); });
+  b.addEventListener('click', () => onBuy());
   return holdable(b, describe(key));
 }
-let lastBought = null; // which card/swatch gets the happy bounce after the screen rebuilds
 
 // One purchase path for the shop AND the title quick cards (one source of truth: the stage record).
+// (2026-10-28, the owner's son: "every time I press upgrade the screen shakes", and fast taps turned it white) — a
+// purchase is calm: the coin sound, the wallet count and the stat bars' glow only. No card bounce, no plane pop, no
+// sparkle burst (fast taps stacked the additive sparkles in front of the camera into a white-out).
 function purchase(next) {
   if (!next) return;
   commit(next);
   sfx.coin();
-  if (mode === 'shop') { refreshShop(); celebrateBuy(); } else refreshTitle();
-}
-
-// The plane pops and sparkles; the bought card bounces.
-let shopPop = 0;
-function celebrateBuy() {
-  shopPop = 0.5;
-  plane.root.getWorldPosition(_v);
-  fx.sparkleBurst(_v.x, _v.y + 0.6, _v.z);
-  const el = lastBought && document.querySelector(`#shop [data-key="${lastBought}"]`);
-  if (el) { el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce'); }
+  if (mode === 'shop') refreshShop(); else refreshTitle();
 }
 // (The hangar chips go through planes.hangarBuy → the same buyTrack/buyPart on the same record.)
 
@@ -660,7 +652,7 @@ function refreshShop() {
     b.disabled = poor;
     const fancy = p.rainbow ? 'rainbow-dot' : p.nebula ? 'nebula-dot' : p.tron ? 'tron-dot' : p.dragonwings ? 'dragon-dot' : p.starfire ? 'starfire-dot' : p.hyperdrive ? 'hyperdrive-dot' : '';
     b.innerHTML = `<span class="dot ${fancy}" style="${fancy ? '' : `background:${hex(p.color)}`}"></span>${p.name}<b>${owned ? (rec.paints.current === p.id ? 'ON' : 'WEAR') : coinBtn(p.cost)}</b>`;
-    b.addEventListener('click', () => { lastBought = `paint:${p.id}`; purchase(buyOrWearPaint(rec, p.id, planeId)); });
+    b.addEventListener('click', () => purchase(buyOrWearPaint(rec, p.id, planeId)));
     paints.appendChild(holdable(b, describe(`paint:${p.id}`)));
   }
   applyLooks();
@@ -1691,10 +1683,8 @@ function frame(now) {
     } else if (mode === 'shop' || mode === 'title' || mode === 'codes' || mode === 'transfer') {
       plane.root.rotation.y += dt * 0.6; // turntable
     }
-    // Upgrades: a gentle bob, and a pop when something is bought.
-    shopPop = Math.max(0, shopPop - dt);
+    // Upgrades: a gentle bob (a purchase no longer pops the plane — 2026-10-28).
     plane.model.position.y = mode === 'shop' ? Math.sin(clock * 1.8) * 0.15 : 0;
-    plane.model.scale.setScalar(1 + Math.sin((shopPop / 0.5) * Math.PI) * 0.18);
     if (mode !== 'aim') world.setBands(world.restPoint);
     world.update(Math.max(0, -plane.root.position.z), plane.root.position.x, dt, camera.position);
     const flying = mode === 'fly' && flight && !flight.ended;
