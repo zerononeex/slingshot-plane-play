@@ -591,12 +591,20 @@
   #results #res-complete { color: #c98200; }
   /* v2.3 the still-missing gates (sequential numbers) */
   #results .res-missing { font-size: clamp(13px, 1.9vh, 17px); font-weight: 900; color: #7a3df0; margin: 2px 0; }
-  .stage-card .st-missing { display: block; font-size: 11px; font-weight: 800; opacity: 0.85; white-space: normal; line-height: 1.2; }
-  .world-tile .wt-missing { display: block; font-size: 11px; font-weight: 800; color: #7a3df0; line-height: 1.2; }
-  .world-tile.neon .wt-missing { color: #ff7bff; }
+  /* v2.5 THE RING TABLE: blocks of rows side by side (2 across in portrait, 4–5 in landscape) */
+  .gates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px 10px; align-items: start; }
+  .gt-block { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; border: 2px solid #e3e6f0; }
+  .gt-row { display: grid; grid-template-columns: 2.1em 1fr 1.1em; align-items: center; gap: 4px; padding: 2px 7px; font-size: 13px; font-weight: 800; line-height: 1.25; }
+  .gt-row:nth-child(even) { background: #f1f3f9; }
+  .gt-row b { color: #7a3df0; font-weight: 900; }
+  .gt-row span { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .gt-row i { font-style: normal; color: #2fae4c; font-weight: 900; text-align: center; }
+  .gt-row.got { background: #e4f7e8; }
+  .gt-row.got b { color: #2fae4c; }
+  .gates-hint { margin: 8px 2px 0; font-size: 12px; font-weight: 700; opacity: 0.6; }
+  .gates-hint:empty { display: none; }
   /* v2.4 the quiet radar hint under the missing list */
   #results .res-radar-hint { font-size: clamp(11px, 1.5vh, 13px); font-weight: 700; opacity: 0.6; margin: 0; }
-  .stage-card .st-hint, .world-tile .wt-hint { display: block; font-size: 10px; font-weight: 700; opacity: 0.6; white-space: normal; line-height: 1.2; }
   #results #res-beat { color: #c98200; font-size: 1.25em; } /* v1.2: the game is beaten */
   #results .stat-row { flex-wrap: nowrap; gap: 5px; width: 100%; }
   #results .stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 3px; border-radius: 4px 12px 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1); line-height: 1.15; }
@@ -695,6 +703,13 @@
       <div class="home-sheet">
         <div class="sheet-head"><b>WORLDS</b><button class="sheet-x" data-close aria-label="Close">✕</button></div>
         <div class="worlds-grid" id="worlds-grid"></div>
+      </div>
+    </div>
+    <div class="sheet-wrap" id="gates-wrap" hidden>
+      <div class="home-sheet">
+        <div class="sheet-head"><b id="gates-title">RINGS</b><button class="sheet-x" data-close aria-label="Close">✕</button></div>
+        <div class="gates-grid" id="gates-grid"></div>
+        <p class="gates-hint" id="gates-hint"></p>
       </div>
     </div>
     <div class="sheet-wrap" id="more-wrap" hidden>

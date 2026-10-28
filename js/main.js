@@ -28,7 +28,7 @@ import { planeFor, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRe
 import { buildPlane } from './plane.js';
 import { createTurntable } from './hangarview.js';
 import { createHangar } from './hangar.js';
-import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal, gateRank, missingLines, BEAT_LINE } from './goals.js';
+import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal, gateRank, missingLines, gateTable, gateBlockRows, gateDistance, radarRevealsGates, RADAR_HINT, BEAT_LINE } from './goals.js';
 import { createGoalView } from './goalview.js';
 import { shapesFor, createShapeRun, stepShapeRun, shapeY, shapeScale, SHAPES } from './shapes.js';
 import { createShapesView } from './shapesview.js';
@@ -190,8 +190,9 @@ function buildCarousel() {
     b.dataset.stage = id;
     const sky = hex(st.theme.sky), base = hex(st.theme.base);
     b.innerHTML = `<span class="st-art" style="background:linear-gradient(180deg, ${sky} 0%, ${sky} 55%, ${base} 56%, ${hex(st.theme.rock)} 100%)"><span class="st-motif">${MOTIF[id] ?? '✈️'}</span></span>
-      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span><span class="st-gates"></span></span><span class="st-missing"></span><span class="st-hint"></span><span class="st-lock"></span></span>`;
-    b.addEventListener('click', () => scrollToCard(STAGE_ORDER.indexOf(id)));
+      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span><span class="st-gates"></span></span><span class="st-lock"></span></span>`;
+    // v2.5: a tap on the centred (selected) world opens its RING TABLE; any other card just scrolls to it
+    b.addEventListener('click', () => { const i = STAGE_ORDER.indexOf(id); if (i === carouselIndex && isUnlocked(save, id)) setPanel('gates', id); else scrollToCard(i); });
     row.appendChild(b);
   }
   carouselIndex = STAGE_ORDER.indexOf(stageId);
@@ -219,9 +220,6 @@ function updateCarousel() {
     b.querySelector('.st-best').textContent = open ? `Best ${r.best} m` : '';
     b.querySelector('.st-secrets').textContent = open ? `Secrets ${r.secrets.length}/${st.secrets.length}` : '';
     b.querySelector('.st-gates').textContent = open ? `⛳ ${gatesOf(r).length}/${gateTotal(id)}` : ''; // v0.9 goal gates
-    const ml = open ? missingLines(id, r) : { line: '', hint: '' }; // v2.3: which ones (sequential numbers); v2.4: + distances at max radar
-    b.querySelector('.st-missing').textContent = ml.line;
-    b.querySelector('.st-hint').textContent = ml.hint;
     b.classList.toggle('complete', open && isComplete(r));
     b.querySelector('.st-lock').textContent = open ? '' : lockLine(id);
   }
@@ -236,13 +234,40 @@ function lockLine(id) {
 }
 
 // v0.8 Home panels: WORLDS / MORE slide up over the scene; the tab bar shows which is open.
-let homePanel = null; // null (the FLY view) | 'worlds' | 'more'
-function setPanel(name) {
+let homePanel = null; // null (the FLY view) | 'worlds' | 'more' | 'gates' (v2.5: the selected world's RING TABLE)
+function setPanel(name, world = stageId) {
   homePanel = name;
   $('worlds-wrap').hidden = name !== 'worlds';
   $('more-wrap').hidden = name !== 'more';
-  for (const t of $('tabbar').children) t.classList.toggle('on', t.dataset.tab === (name ?? 'fly'));
+  $('gates-wrap').hidden = name !== 'gates';
+  for (const t of $('tabbar').children) t.classList.toggle('on', t.dataset.tab === (name === 'gates' ? 'fly' : name ?? 'fly'));
   if (name === 'worlds') renderWorlds();
+  if (name === 'gates') renderGates(world);
+}
+
+// v2.5 THE RING TABLE: every goal gate of a world in flight order — its number, its distance, ✓ once you have it — in
+// blocks of 10 (or 20 past 50 rings) side by side. Distances need SECRET RADAR Lv5 in that world (v2.4); below it a
+// dash and the radar hint.
+function renderGates(id) {
+  const r = getStage(save, id), rows = gateTable(id, r), per = gateBlockRows(rows.length), reveal = radarRevealsGates(r);
+  $('gates-title').textContent = `${STAGES[id].name.toUpperCase()} RINGS · ${rows.filter((g) => g.got).length}/${rows.length}`;
+  const grid = $('gates-grid');
+  grid.textContent = '';
+  for (let k = 0; k < rows.length; k += per) {
+    const block = document.createElement('div');
+    block.className = 'gt-block';
+    for (const g of rows.slice(k, k + per)) {
+      const row = document.createElement('div');
+      row.className = `gt-row ${g.got ? 'got' : 'miss'}`;
+      row.innerHTML = '<b></b><span></span><i></i>';
+      row.children[0].textContent = g.n;
+      row.children[1].textContent = reveal ? gateDistance(g.at) : '—';
+      row.children[2].textContent = g.got ? '✓' : '';
+      block.appendChild(row);
+    }
+    grid.appendChild(block);
+  }
+  $('gates-hint').textContent = reveal ? '' : RADAR_HINT;
 }
 
 // WORLDS: every world at a glance; tapping an open one selects it (the same selection the swipe makes).
@@ -255,13 +280,10 @@ function renderWorlds() {
     b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}${open && isComplete(r) ? ' complete' : ''}${st.theme.neon ? ' neon' : ''}`;
     b.dataset.world = id;
     b.style.setProperty('--wt', hex(st.theme.sky));
-    b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span><span class="wt-missing"></span><span class="wt-hint"></span>';
+    b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span>';
     b.querySelector('.wt-name').textContent = open ? `${isComplete(r) ? '★ ' : ''}${st.name}` : `🔒 ${st.name}`;
     b.querySelector('.wt-sub').textContent = st.plane.name;
     b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length} · ⛳ ${gatesOf(r).length}/${gateTotal(id)}` : lockLine(id);
-    const ml = open ? missingLines(id, r) : { line: '', hint: '' }; // v2.3: the still-missing gates; v2.4: + distances at max radar
-    b.querySelector('.wt-missing').textContent = ml.line;
-    b.querySelector('.wt-hint').textContent = ml.hint;
     if (open && isComplete(r)) b.insertAdjacentHTML('beforeend', '<span class="wt-done">★ COMPLETE</span>');
     b.addEventListener('click', () => {
       if (!open) { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); return; }

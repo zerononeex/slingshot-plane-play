@@ -861,6 +861,16 @@ export function missingLine(stageId, rec, distances = radarRevealsGates(rec)) {
   if (!m.length) return 'ALL GATES!';
   return m.length <= MISSING_SHOWN ? `STILL TO GET: ${m.join(' · ')}` : `STILL TO GET (${m.length}): ${m.slice(0, MISSING_SHOWN).join(' · ')} …`;
 }
+// v2.5 THE RING TABLE (owner 2026-10-27: "press into the map … a table: the ring's number, its distance, and whether
+// you've gotten it"): every gate of a stage in sequential order → [{ n, at (m along the run), got }]. Blocks of
+// gateBlockRows(total) rows sit side by side (10 a block up to 50 rings, else 20), so landscape shows 5 × 10 or 4 × 20.
+export function gateTable(stageId, rec) {
+  const owned = new Set(gatesOf(rec));
+  return (GOALS[stageId]?.gates ?? []).map((g) => ({ n: gateRank(stageId, g.n), at: g.at, got: owned.has(g.n) })).sort((a, b) => a.n - b.n);
+}
+export const gateBlockRows = (total) => (total <= 50 ? 10 : 20);
+export const gateDistance = (m) => metres(m);
+
 // What a screen shows: the list line, and the radar hint (only when gates are missing and the radar is below max).
 export function missingLines(stageId, rec) {
   const reveal = radarRevealsGates(rec), any = missingGateList(stageId, rec).length > 0;
