@@ -28,7 +28,7 @@ import { planeFor, creditRun, hangarChips, hangarBuy, planeRecord, commitPlaneRe
 import { buildPlane } from './plane.js';
 import { createTurntable } from './hangarview.js';
 import { createHangar } from './hangar.js';
-import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal, BEAT_LINE } from './goals.js';
+import { goalsFor, createGoalRun, stepGoalRun, gateY, goalLines, gatesOf, isComplete, gateTotal, gateRank, missingLine, BEAT_LINE } from './goals.js';
 import { createGoalView } from './goalview.js';
 import { shapesFor, createShapeRun, stepShapeRun, shapeY, shapeScale, SHAPES } from './shapes.js';
 import { createShapesView } from './shapesview.js';
@@ -190,7 +190,7 @@ function buildCarousel() {
     b.dataset.stage = id;
     const sky = hex(st.theme.sky), base = hex(st.theme.base);
     b.innerHTML = `<span class="st-art" style="background:linear-gradient(180deg, ${sky} 0%, ${sky} 55%, ${base} 56%, ${hex(st.theme.rock)} 100%)"><span class="st-motif">${MOTIF[id] ?? '✈️'}</span></span>
-      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span><span class="st-gates"></span></span><span class="st-lock"></span></span>`;
+      <span class="st-banner"><span class="st-name"></span><span class="st-plane"></span><span class="st-meta"><span class="st-best"></span><span class="st-secrets"></span><span class="st-gates"></span></span><span class="st-missing"></span><span class="st-lock"></span></span>`;
     b.addEventListener('click', () => scrollToCard(STAGE_ORDER.indexOf(id)));
     row.appendChild(b);
   }
@@ -219,6 +219,7 @@ function updateCarousel() {
     b.querySelector('.st-best').textContent = open ? `Best ${r.best} m` : '';
     b.querySelector('.st-secrets').textContent = open ? `Secrets ${r.secrets.length}/${st.secrets.length}` : '';
     b.querySelector('.st-gates').textContent = open ? `⛳ ${gatesOf(r).length}/${gateTotal(id)}` : ''; // v0.9 goal gates
+    b.querySelector('.st-missing').textContent = open ? missingLine(id, r) : ''; // v2.3: which ones (sequential numbers)
     b.classList.toggle('complete', open && isComplete(r));
     b.querySelector('.st-lock').textContent = open ? '' : lockLine(id);
   }
@@ -252,10 +253,11 @@ function renderWorlds() {
     b.className = `world-tile${id === stageId && !lockedView ? ' selected' : ''}${open ? '' : ' locked'}${open && isComplete(r) ? ' complete' : ''}${st.theme.neon ? ' neon' : ''}`;
     b.dataset.world = id;
     b.style.setProperty('--wt', hex(st.theme.sky));
-    b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span>';
+    b.innerHTML = '<span class="wt-name"></span><span class="wt-sub"></span><span class="wt-meta"></span><span class="wt-missing"></span>';
     b.querySelector('.wt-name').textContent = open ? `${isComplete(r) ? '★ ' : ''}${st.name}` : `🔒 ${st.name}`;
     b.querySelector('.wt-sub').textContent = st.plane.name;
     b.querySelector('.wt-meta').textContent = open ? `Best ${r.best} m · Secrets ${r.secrets.length}/${st.secrets.length} · ⛳ ${gatesOf(r).length}/${gateTotal(id)}` : lockLine(id);
+    b.querySelector('.wt-missing').textContent = open ? missingLine(id, r) : ''; // v2.3: the still-missing gates
     if (open && isComplete(r)) b.insertAdjacentHTML('beforeend', '<span class="wt-done">★ COMPLETE</span>');
     b.addEventListener('click', () => {
       if (!open) { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); return; }
@@ -758,7 +760,7 @@ function onGoalEvent(ev, goals) {
     goalView.setCollected(ev.n);
     fx.sparkleBurst(g.x, goalYs[i], -g.at);
     sfx.goalGate();
-    banner(`GOAL GATE ${ev.n} — ${ev.count}/${goals.gates.length}!`, 2.2);
+    banner(`GOAL GATE ${gateRank(stageId, ev.n)} — ${ev.count}/${goals.gates.length}!`, 2.2); // v2.3: the sequential number
   } else if (ev.type === 'gateRepass') sfx.goalTick();
   else if (ev.type === 'goalOpen') { // the 10th gate: THE GOAL appears (burst at the goal + at the plane)
     goalView.showGoal(true);
@@ -932,6 +934,7 @@ function finishRun() {
   if (bs) $('res-bumps').textContent = bs.text;
   const gl = goalRun ? goalLines(goalRun) : { gates: null, complete: null }; // v0.9 STAGE GOALS
   $('res-gates').textContent = gl.gates ?? '';
+  $('res-missing').textContent = missingLine(stageId, getStage(save, stageId)); // v2.3: after this flight's credit
   $('res-complete').textContent = gl.complete ?? '';
   $('res-beat').hidden = !beatGame; // v1.2: completing Neon Void with every other world ★
   if (beatGame) { $('res-beat').textContent = BEAT_LINE; plane.root.getWorldPosition(_v); fx.confetti(_v.x, _v.y, _v.z); sfx.secret(); }

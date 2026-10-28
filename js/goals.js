@@ -14,7 +14,8 @@ export const GOAL_PRIZE = 250;
 
 // ───────────────────────── placement (lap-free absolute distances) ─────────────────────────
 // gate = { n, at (m from the slingshot), x, height (m above the floor at that spot), size (ring radius),
-//          special?: 'pocket' | 'signature', note }. Numbers run in distance order.
+//          special?: 'pocket' | 'signature', note }. n is the gate's identity (the save stores it); the number a player
+//          sees is its rank by distance (v2.3 gateRanks).
 // Spread 8 % → 80 % of each world's scripted MAXED corner; the goal sits at ≈ 88 %.
 // (Authored with tools-side validation; the table is printed in BALANCE.md.)
 const G = (n, at, x, height, size, note, special) => ({ n, at, x, height, size, note, ...(special ? { special } : {}) });
@@ -703,6 +704,26 @@ GOALS.starwars = {
   goal: { at: 60900, x: 0, height: 28, size: 13 },
 };
 
+// ───────────────────────── v2.3 §2 THE UNREACHABLE GATES (owner playtest 2026-10-27) ─────────────────────────
+// The route audit (gateroutes.js) found two gates whose container route could not be flown on the same run as a
+// neighbour's. Each moves onto the main line near where it was; its id (the save's identity) is kept, and the
+// container keeps its secret / stash, just not the gate.
+//   Star Fox 50: was inside THE BURIED TOMB (45,505 m, x −72) — the tomb's portal (45,300 m) is 20 m after THE GREAT
+//     PYRAMID's exit (45,280 m), so a flight leaving the pyramid (gate 52 inside it) can never line up for it.
+//   Plains 5: was inside THE MUSHROOM GROTTO (1,175 m, x −72) — the grotto's span (portal 960 m → 1,460 m) swallows
+//     ROCK TUNNEL #2 (1,030 → 1,130 m, gate 4 inside it): one flight can be in one or the other, never both.
+export const MOVED_V23 = {
+  starfox: { 50: { at: 45505, x: -6, height: 14, size: 9, note: 'mid, after THE GREAT PYRAMID (v2.3: out of the BURIED TOMB)' } },
+  plains: { 5: { at: 1175, x: 0, height: 7, size: 5.5, note: 'skimming low (v2.3: out of the MUSHROOM GROTTO pocket)' } },
+};
+for (const [id, moves] of Object.entries(MOVED_V23)) {
+  for (const [n, to] of Object.entries(moves)) {
+    const g = GOALS[id].gates.find((x) => x.n === Number(n));
+    Object.assign(g, to);
+    delete g.special; // a main-line gate now
+  }
+}
+
 // ───────────────────────── geometry ─────────────────────────
 // The ring's centre height (absolute y). In a tunnel lane the floor is the lane floor.
 export const gateY = (terrain, g) => terrain.surfaceAt(g.x, g.at, -Infinity) + g.height;
@@ -804,6 +825,34 @@ export function goalLines(run) {
 }
 
 export const goalsFor = (stageId) => GOALS[stageId] ?? null;
+
+// v2.3 SEQUENTIAL NUMBERS (owner playtest 2026-10-27: "make sure these rings are in sequential order"): the number a
+// player SEES on a gate is its rank by distance — the first gate a flight meets is 1, the next 2, … Display only: the
+// gate ids (`n`) stay the save's identity (stored gates[], SP1 codes, completion), so no profile is touched.
+// gateRanks(goals) → Map(id → rank), a pure function of the stage's gate list (ties: the lower id first).
+export function gateRanks(goals) {
+  const order = [...(goals?.gates ?? [])].sort((a, b) => a.at - b.at || a.n - b.n);
+  return new Map(order.map((g, i) => [g.n, i + 1]));
+}
+const RANKS = new Map();
+export const gateRank = (stageId, n) => {
+  if (!RANKS.has(stageId)) RANKS.set(stageId, gateRanks(GOALS[stageId]));
+  return RANKS.get(stageId).get(n) ?? n;
+};
+
+// v2.3 §3 SEEING WHAT YOU MISSED: the stage's still-missing gates as their sequential numbers (ascending), read from
+// a record's collected ids — and the one line the results and stage screens show. Up to MISSING_SHOWN numbers are
+// listed; beyond that, the count and the first MISSING_SHOWN with "…".
+export const MISSING_SHOWN = 8;
+export function missingGates(stageId, rec) {
+  const owned = new Set(gatesOf(rec));
+  return (GOALS[stageId]?.gates ?? []).filter((g) => !owned.has(g.n)).map((g) => gateRank(stageId, g.n)).sort((a, b) => a - b);
+}
+export function missingLine(stageId, rec) {
+  const m = missingGates(stageId, rec);
+  if (!m.length) return 'ALL GATES!';
+  return m.length <= MISSING_SHOWN ? `STILL TO GET: ${m.join(' · ')}` : `STILL TO GET (${m.length}): ${m.slice(0, MISSING_SHOWN).join(' · ')} …`;
+}
 
 // v1.2 THE FINAL FLOURISH: the flight that completes NEON VOID while every other world is already ★
 // beats the game — once ever (the save's gameComplete flag; the stars stay the permanent record).

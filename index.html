@@ -589,6 +589,11 @@
   #results .msg { font-size: clamp(13px, 1.8vh, 16px); line-height: 1.25; }
   #results .res-goal { font-weight: 900; color: #6a35d9; }
   #results #res-complete { color: #c98200; }
+  /* v2.3 the still-missing gates (sequential numbers) */
+  #results .res-missing { font-size: clamp(13px, 1.9vh, 17px); font-weight: 900; color: #7a3df0; margin: 2px 0; }
+  .stage-card .st-missing { display: block; font-size: 11px; font-weight: 800; opacity: 0.85; white-space: normal; line-height: 1.2; }
+  .world-tile .wt-missing { display: block; font-size: 11px; font-weight: 800; color: #7a3df0; line-height: 1.2; }
+  .world-tile.neon .wt-missing { color: #ff7bff; }
   #results #res-beat { color: #c98200; font-size: 1.25em; } /* v1.2: the game is beaten */
   #results .stat-row { flex-wrap: nowrap; gap: 5px; width: 100%; }
   #results .stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 3px; border-radius: 4px 12px 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1); line-height: 1.15; }
@@ -884,6 +889,7 @@
     <p class="msg" id="res-msg"></p>
     <p class="msg res-bumps" id="res-bumps" hidden></p>
     <p class="msg res-goal" id="res-gates"></p>
+    <p class="msg res-missing" id="res-missing"></p>
     <p class="msg res-goal" id="res-complete"></p>
     <p class="msg res-goal" id="res-beat" hidden></p>
     <div class="stat-row res-money">
