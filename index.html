@@ -594,6 +594,9 @@
   .stage-card .st-missing { display: block; font-size: 11px; font-weight: 800; opacity: 0.85; white-space: normal; line-height: 1.2; }
   .world-tile .wt-missing { display: block; font-size: 11px; font-weight: 800; color: #7a3df0; line-height: 1.2; }
   .world-tile.neon .wt-missing { color: #ff7bff; }
+  /* v2.4 the quiet radar hint under the missing list */
+  #results .res-radar-hint { font-size: clamp(11px, 1.5vh, 13px); font-weight: 700; opacity: 0.6; margin: 0; }
+  .stage-card .st-hint, .world-tile .wt-hint { display: block; font-size: 10px; font-weight: 700; opacity: 0.6; white-space: normal; line-height: 1.2; }
   #results #res-beat { color: #c98200; font-size: 1.25em; } /* v1.2: the game is beaten */
   #results .stat-row { flex-wrap: nowrap; gap: 5px; width: 100%; }
   #results .stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 3px; border-radius: 4px 12px 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1); line-height: 1.15; }
@@ -890,6 +893,7 @@
     <p class="msg res-bumps" id="res-bumps" hidden></p>
     <p class="msg res-goal" id="res-gates"></p>
     <p class="msg res-missing" id="res-missing"></p>
+    <p class="msg res-radar-hint" id="res-radar-hint" hidden></p>
     <p class="msg res-goal" id="res-complete"></p>
     <p class="msg res-goal" id="res-beat" hidden></p>
     <div class="stat-row res-money">

@@ -6,6 +6,7 @@
 // Pure data + maths (no DOM / three.js).
 import { FLIGHT } from './config.js';
 import { STAGE_ORDER } from './stages.js';
+import { funLevel, FUN_MAX } from './funlines.js';
 
 export const GATE_COUNT = 20;           // v1.0 (was 10 in v0.9)
 export const V09_GATES = 10;             // gates 1–10: the v0.9 collection, grandfathered
@@ -841,17 +842,29 @@ export const gateRank = (stageId, n) => {
 };
 
 // v2.3 §3 SEEING WHAT YOU MISSED: the stage's still-missing gates as their sequential numbers (ascending), read from
-// a record's collected ids — and the one line the results and stage screens show. Up to MISSING_SHOWN numbers are
+// a record's collected ids — and the one line the results and stage screens show. Up to MISSING_SHOWN entries are
 // listed; beyond that, the count and the first MISSING_SHOWN with "…".
+// v2.4 RADAR GATE DISTANCES (owner playtest 2026-10-27): SECRET RADAR at Lv5 (max) in that world's record adds each
+// missing gate's run distance ("50 — 45,505 m"); below max the list stays numbers-only with one hint line under it.
 export const MISSING_SHOWN = 8;
-export function missingGates(stageId, rec) {
+export const RADAR_HINT = 'SECRET RADAR Lv5 in this world reveals gate distances.';
+export const radarRevealsGates = (rec) => funLevel(rec, 'radar') >= FUN_MAX;
+const metres = (m) => `${Math.round(m).toLocaleString('en-US')} m`; // like the game's other distances: "45,505 m"
+// → [{ n (the sequential number), at (m along the run) }], ascending.
+export function missingGateList(stageId, rec) {
   const owned = new Set(gatesOf(rec));
-  return (GOALS[stageId]?.gates ?? []).filter((g) => !owned.has(g.n)).map((g) => gateRank(stageId, g.n)).sort((a, b) => a - b);
+  return (GOALS[stageId]?.gates ?? []).filter((g) => !owned.has(g.n)).map((g) => ({ n: gateRank(stageId, g.n), at: g.at })).sort((a, b) => a.n - b.n);
 }
-export function missingLine(stageId, rec) {
-  const m = missingGates(stageId, rec);
+export const missingGates = (stageId, rec) => missingGateList(stageId, rec).map((g) => g.n);
+export function missingLine(stageId, rec, distances = radarRevealsGates(rec)) {
+  const m = missingGateList(stageId, rec).map((g) => (distances ? `${g.n} — ${metres(g.at)}` : `${g.n}`));
   if (!m.length) return 'ALL GATES!';
   return m.length <= MISSING_SHOWN ? `STILL TO GET: ${m.join(' · ')}` : `STILL TO GET (${m.length}): ${m.slice(0, MISSING_SHOWN).join(' · ')} …`;
+}
+// What a screen shows: the list line, and the radar hint (only when gates are missing and the radar is below max).
+export function missingLines(stageId, rec) {
+  const reveal = radarRevealsGates(rec), any = missingGateList(stageId, rec).length > 0;
+  return { line: missingLine(stageId, rec, reveal), hint: any && !reveal ? RADAR_HINT : '' };
 }
 
 // v1.2 THE FINAL FLOURISH: the flight that completes NEON VOID while every other world is already ★
