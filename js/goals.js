@@ -856,10 +856,13 @@ export function missingGateList(stageId, rec) {
   return (GOALS[stageId]?.gates ?? []).filter((g) => !owned.has(g.n)).map((g) => ({ n: gateRank(stageId, g.n), at: g.at })).sort((a, b) => a.n - b.n);
 }
 export const missingGates = (stageId, rec) => missingGateList(stageId, rec).map((g) => g.n);
+// (2026-10-30, owner's pick: with the distances revealed the list shows EVERY missing gate — no trim; the
+// numbers-only list keeps the first MISSING_SHOWN + "…".)
 export function missingLine(stageId, rec, distances = radarRevealsGates(rec)) {
   const m = missingGateList(stageId, rec).map((g) => (distances ? `${g.n} — ${metres(g.at)}` : `${g.n}`));
   if (!m.length) return 'ALL GATES!';
-  return m.length <= MISSING_SHOWN ? `STILL TO GET: ${m.join(' · ')}` : `STILL TO GET (${m.length}): ${m.slice(0, MISSING_SHOWN).join(' · ')} …`;
+  if (m.length <= MISSING_SHOWN) return `STILL TO GET: ${m.join(' · ')}`;
+  return distances ? `STILL TO GET (${m.length}): ${m.join(' · ')}` : `STILL TO GET (${m.length}): ${m.slice(0, MISSING_SHOWN).join(' · ')} …`;
 }
 // v2.5 THE RING TABLE (owner 2026-10-27: "press into the map … a table: the ring's number, its distance, and whether
 // you've gotten it"): every gate of a stage in sequential order → [{ n, at (m along the run), got }]. Blocks of
@@ -872,8 +875,11 @@ export const gateBlockRows = (total) => (total <= 50 ? 10 : 20);
 export const gateDistance = (m) => metres(m);
 
 // What a screen shows: the list line, and the radar hint (only when gates are missing and the radar is below max).
-export function missingLines(stageId, rec) {
-  const reveal = radarRevealsGates(rec), any = missingGateList(stageId, rec).length > 0;
+// rec = the WORLD's record (its gate collection). reveal = whether the distances show: the caller passes the radar of
+// the plane SELECTED for that world (2026-10-30 fix: the shop sells the radar into, and flight reads it from, that
+// plane's record — planes.js planeRecord — not the world's).
+export function missingLines(stageId, rec, reveal = radarRevealsGates(rec)) {
+  const any = missingGateList(stageId, rec).length > 0;
   return { line: missingLine(stageId, rec, reveal), hint: any && !reveal ? RADAR_HINT : '' };
 }
 

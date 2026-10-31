@@ -246,10 +246,10 @@ function setPanel(name, world = stageId) {
 }
 
 // v2.5 THE RING TABLE: every goal gate of a world in flight order — its number, its distance, ✓ once you have it — in
-// blocks of 10 (or 20 past 50 rings) side by side. Distances need SECRET RADAR Lv5 in that world (v2.4); below it a
+// blocks of 10 (or 20 past 50 rings) side by side. Distances need SECRET RADAR Lv5 on the plane selected for that world; below it a
 // dash and the radar hint.
 function renderGates(id) {
-  const r = getStage(save, id), rows = gateTable(id, r), per = gateBlockRows(rows.length), reveal = radarRevealsGates(r);
+  const r = getStage(save, id), rows = gateTable(id, r), per = gateBlockRows(rows.length), reveal = radarRevealsGates(planeRecord(save, id)); // the SELECTED plane's radar (2026-10-30)
   $('gates-title').textContent = `${STAGES[id].name.toUpperCase()} RINGS · ${rows.filter((g) => g.got).length}/${rows.length}`;
   const grid = $('gates-grid');
   grid.textContent = '';
@@ -952,7 +952,7 @@ function finishRun() {
   if (bs) $('res-bumps').textContent = bs.text;
   const gl = goalRun ? goalLines(goalRun) : { gates: null, complete: null }; // v0.9 STAGE GOALS
   $('res-gates').textContent = gl.gates ?? '';
-  const ml = missingLines(stageId, getStage(save, stageId)); // v2.3: after this flight's credit; v2.4: + distances at max radar
+  const ml = missingLines(stageId, getStage(save, stageId), radarRevealsGates(planeRecord(save, stageId))); // v2.3: after this flight's credit; distances at the SELECTED plane's max radar
   $('res-missing').textContent = ml.line;
   $('res-radar-hint').textContent = ml.hint;
   $('res-radar-hint').hidden = !ml.hint;
